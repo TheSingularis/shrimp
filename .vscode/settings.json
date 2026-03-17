@@ -1,0 +1,12 @@
+{
+    "actionButtons": {
+        "reloadButton": "↻",
+        "commands": [
+            {
+                "name": "Run Nix-Shell",
+                "color": "lightblue",
+                "command": "nix-shell"
+            }
+        ]
+    }
+}
