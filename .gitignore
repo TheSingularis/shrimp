@@ -1,0 +1,18 @@
+# python
+backend/.venv/
+backend/__pycache__/
+backend/chroma_db/
+*.pyc
+
+# config has local paths in it
+backend/config.py
+
+# ollama logs
+.ollama/
+
+# node
+frontend/node_modules/
+frontend/dist/
+
+# electron
+frontend/out/
