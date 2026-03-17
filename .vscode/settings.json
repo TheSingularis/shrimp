@@ -5,7 +5,7 @@
             {
                 "name": "Run Nix-Shell",
                 "color": "lightblue",
-                "command": "nix-shell"
+                "command": "cd \"${workspaceFolder}\" && nix-shell"
             }
         ]
     }
