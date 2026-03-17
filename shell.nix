@@ -4,7 +4,10 @@ pkgs.mkShell {
   packages = with pkgs; [
     ollama
     python311
-    python311Packages.pip
+    python311Packages.fastapi
+    python311Packages.uvicorn
+    python311Packages.httpx
+    python311Packages.python-dotenv
     nodejs_20
   ];
 
