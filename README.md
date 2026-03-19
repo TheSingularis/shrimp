@@ -129,11 +129,14 @@ tail -f .ollama/frontend.log   # Vite
 
 ---
 
-## Indexed file types
+
+## Indexed file types & exclusions
 
 SHRIMP indexes the following extensions:
 
 `.md` `.py` `.ts` `.tsx` `.js` `.jsx` `.json` `.yaml` `.yml` `.toml` `.txt` `.env.example`
+
+**It automatically skips common junk and dependency folders** like `node_modules`, `.git`, `.venv`, `dist`, `build`, `out`, `chroma_db`, and more. This makes indexing large projects fast and avoids embedding thousands of irrelevant files.
 
 ---
 

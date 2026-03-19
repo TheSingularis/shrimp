@@ -21,6 +21,8 @@ All notable changes to SHRIMP* will be documented in this file.
 - Full dev environment managed by a single `nix-shell` command — starts Ollama, the backend, and the frontend automatically
 - Indexed file types: `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.env.example`
 
+- **New:** Indexing now automatically skips common dependency and junk folders (`node_modules`, `.git`, `.venv`, `dist`, `build`, `out`, `chroma_db`, etc.) for much faster indexing of large projects.
+
 ---
 
 [v0.1.0]: https://github.com/TheSingularis/shrimp/releases/tag/v0.1.0
