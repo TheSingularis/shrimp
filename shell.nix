@@ -57,24 +57,22 @@ pkgs.mkShell {
     fi
 
     # ── python venv ───────────────────────────────────────────
-    if [ ! -d "$SHRIMP_DIR/backend/.venv" ]; then
-      echo "[shrimp] Creating Python venv..."
-      python -m venv "$SHRIMP_DIR/backend/.venv"
-    fi
+    # Always rebuild the venv so the LD_LIBRARY_PATH wrapper is always current
+    # and pip packages are always fresh. Fast on repeat runs (pip uses cache).
+    echo "[shrimp] Rebuilding Python venv..."
+    rm -rf "$SHRIMP_DIR/backend/.venv"
+    python -m venv "$SHRIMP_DIR/backend/.venv"
 
     source "$SHRIMP_DIR/backend/.venv/bin/activate"
 
-    if [ ! -f "$SHRIMP_DIR/backend/.venv/.deps-installed" ]; then
-      echo "[shrimp] Installing Python dependencies..."
-      pip install --quiet \
-        fastapi uvicorn httpx \
-        llama-index \
-        llama-index-llms-ollama \
-        llama-index-embeddings-ollama \
-        llama-index-vector-stores-chroma \
-        chromadb
-      touch "$SHRIMP_DIR/backend/.venv/.deps-installed"
-    fi
+    echo "[shrimp] Installing Python dependencies..."
+    pip install --quiet \
+      fastapi uvicorn httpx \
+      llama-index \
+      llama-index-llms-ollama \
+      llama-index-embeddings-ollama \
+      llama-index-vector-stores-chroma \
+      chromadb
 
     # Wrap the venv Python binary so LD_LIBRARY_PATH is set before the dynamic
     # linker runs — this is the only approach that works for uvicorn --reload

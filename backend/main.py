@@ -67,7 +67,8 @@ def write_config(scopes: list[dict], model: str):
         current,
     )
     config_path.write_text(current)
-    log.info("config.py written: model=%s  scopes=%s", model, [s["name"] for s in scopes])
+    log.info("config.py written: model=%s  scopes=%s",
+             model, [s["name"] for s in scopes])
 
 # ── routes: health ────────────────────────────────────────────────────────────
 
@@ -186,6 +187,7 @@ async def set_model(update: ModelUpdate):
 async def index_all():
     """Trigger a full re-index of all enabled scopes. Runs in background."""
     log.info("index_all: triggered")
+
     async def run():
         try:
             await asyncio.get_event_loop().run_in_executor(None, rag.build_all_indexes)
@@ -205,6 +207,7 @@ async def index_one(name: str):
             status_code=404, detail=f"Scope '{name}' not found")
 
     log.info("index_one: scope=%s  path=%s", name, scope["path"])
+
     async def run():
         try:
             await asyncio.get_event_loop().run_in_executor(None, rag.build_index, scope)
