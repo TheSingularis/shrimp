@@ -3,10 +3,12 @@
         "reloadButton": "↻",
         "commands": [
             {
-                "name": "Run Nix-Shell",
+                "name": "$(play) Run Nix-Shell",
                 "color": "lightblue",
-                "command": "cd \"${workspaceFolder}\" && nix-shell"
+                "command": "echo \"Running Nix-Shell...\" && sleep 0.5 && nix-shell",
+                "singleInstance": false
             }
         ]
-    }
+    },
+    "python.REPL.enableREPLSmartSend": false
 }

@@ -5,7 +5,7 @@ backend/chroma_db/
 *.pyc
 
 # config has local paths in it
-backend/config.py
+# backend/config.py
 
 # ollama logs
 .ollama/
