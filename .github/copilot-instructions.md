@@ -108,16 +108,22 @@ WATCHED_DIRS: list[dict] = [
 
 ### `rag.py` — key functions
 
-| Function | Description |
-|---|---|
-| `build_index(scope: dict) -> dict` | Drops and rebuilds the ChromaDB collection for one scope. Expands `~`, checks path exists, loads files matching `SUPPORTED_EXTENSIONS`, embeds, returns status dict. |
-| `build_all_indexes() -> list[dict]` | Iterates all enabled scopes, calls `build_index` on each, catches per-scope errors. |
-| `get_index(name: str) -> VectorStoreIndex \| None` | Loads an existing Chroma collection into a LlamaIndex `VectorStoreIndex`. Returns `None` if not yet indexed. |
-| `query_scopes(question, scope_names) -> str` | Retrieves top-5 chunks from each named scope and returns them as a formatted string for injection into the chat system prompt. |
-| `get_status() -> list[dict]` | Returns index status for all configured scopes. `last_indexed` is `None` if a scope has never been indexed. |
+| Function                                           | Description                                                                                                                                                          |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_index(scope: dict) -> dict`                 | Drops and rebuilds the ChromaDB collection for one scope. Expands `~`, checks path exists, loads files matching `SUPPORTED_EXTENSIONS`, embeds, returns status dict. |
+| `build_all_indexes() -> list[dict]`                | Iterates all enabled scopes, calls `build_index` on each, catches per-scope errors.                                                                                  |
+| `get_index(name: str) -> VectorStoreIndex \| None` | Loads an existing Chroma collection into a LlamaIndex `VectorStoreIndex`. Returns `None` if not yet indexed.                                                         |
+| `query_scopes(question, scope_names) -> str`       | Retrieves top-5 chunks from each named scope and returns them as a formatted string for injection into the chat system prompt.                                       |
+| `get_status() -> list[dict]`                       | Returns index status for all configured scopes. `last_indexed` is `None` if a scope has never been indexed.                                                          |
 
 **Supported file extensions** (indexed by `SimpleDirectoryReader`):
 `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.env.example`
+
+**Excluded directories:**
+SHRIMP automatically skips common dependency, build, and VCS folders when indexing:
+`node_modules`, `.git`, `.venv`, `venv`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.tox`, `dist`, `build`, `out`, `.next`, `.nuxt`, `.svelte-kit`, `target`, `.gradle`, `.idea`, `.vscode`, `chroma_db`, `.ollama`, `coverage`, `.nyc_output`
+
+This prevents accidental embedding of thousands of irrelevant files in large projects.
 
 ### Logging
 
@@ -133,19 +139,19 @@ Both `main.py` and `rag.py` use the standard `logging` module with loggers named
 
 ## API routes
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Returns `{ status, model }` |
-| `POST` | `/chat` | RAG query + streamed LLM response |
-| `GET` | `/scopes` | Returns all configured scopes |
-| `GET` | `/settings/scopes` | Same as `/scopes` (settings context) |
-| `POST` | `/settings/scopes` | Saves full scope list, writes `config.py` |
-| `DELETE` | `/settings/scopes/{name}` | Removes one scope, writes `config.py` |
-| `GET` | `/models` | Lists Ollama models + active model |
-| `POST` | `/settings/model` | Sets active model, updates LlamaIndex LLM, writes `config.py` |
-| `POST` | `/index` | Triggers background re-index of all enabled scopes |
-| `POST` | `/index/{name}` | Triggers background re-index of one scope by name |
-| `GET` | `/index/status` | Returns `list[{ name, path, file_count, last_indexed }]` |
+| Method   | Path                      | Description                                                   |
+| -------- | ------------------------- | ------------------------------------------------------------- |
+| `GET`    | `/health`                 | Returns `{ status, model }`                                   |
+| `POST`   | `/chat`                   | RAG query + streamed LLM response                             |
+| `GET`    | `/scopes`                 | Returns all configured scopes                                 |
+| `GET`    | `/settings/scopes`        | Same as `/scopes` (settings context)                          |
+| `POST`   | `/settings/scopes`        | Saves full scope list, writes `config.py`                     |
+| `DELETE` | `/settings/scopes/{name}` | Removes one scope, writes `config.py`                         |
+| `GET`    | `/models`                 | Lists Ollama models + active model                            |
+| `POST`   | `/settings/model`         | Sets active model, updates LlamaIndex LLM, writes `config.py` |
+| `POST`   | `/index`                  | Triggers background re-index of all enabled scopes            |
+| `POST`   | `/index/{name}`           | Triggers background re-index of one scope by name             |
+| `GET`    | `/index/status`           | Returns `list[{ name, path, file_count, last_indexed }]`      |
 
 ---
 
@@ -158,45 +164,61 @@ Both `main.py` and `rag.py` use the standard `logging` module with loggers named
 
 ### `api.ts` — exported functions
 
-| Function | Returns | Notes |
-|---|---|---|
-| `getScopes()` | `Promise<Scope[]>` | `GET /scopes` |
-| `setScopes(scopes)` | `Promise<Scope[]>` | `POST /settings/scopes` |
-| `deleteScope(name)` | `Promise<Scope[]>` | `DELETE /settings/scopes/:name` |
-| `getModels()` | `Promise<{ models, active }>` | `GET /models` |
-| `setModel(model)` | `Promise<void>` | `POST /settings/model` |
-| `sendChat(message, scopes, history, onToken)` | `Promise<void>` | Streams tokens via `onToken` callback |
-| `getIndexStatus()` | `Promise<IndexStatus[]>` | `GET /index/status` |
-| `triggerIndexAll()` | `Promise<void>` | `POST /index` |
-| `triggerIndexOne(name)` | `Promise<void>` | `POST /index/:name` |
+| Function                                      | Returns                       | Notes                                 |
+| --------------------------------------------- | ----------------------------- | ------------------------------------- |
+| `getScopes()`                                 | `Promise<Scope[]>`            | `GET /scopes`                         |
+| `setScopes(scopes)`                           | `Promise<Scope[]>`            | `POST /settings/scopes`               |
+| `deleteScope(name)`                           | `Promise<Scope[]>`            | `DELETE /settings/scopes/:name`       |
+| `getModels()`                                 | `Promise<{ models, active }>` | `GET /models`                         |
+| `setModel(model)`                             | `Promise<void>`               | `POST /settings/model`                |
+| `sendChat(message, scopes, history, onToken)` | `Promise<void>`               | Streams tokens via `onToken` callback |
+| `getIndexStatus()`                            | `Promise<IndexStatus[]>`      | `GET /index/status`                   |
+| `triggerIndexAll()`                           | `Promise<void>`               | `POST /index`                         |
+| `triggerIndexOne(name)`                       | `Promise<void>`               | `POST /index/:name`                   |
 
 ### Key interfaces
 
 ```ts
-interface Scope        { name: string; path: string; enabled: boolean }
-interface Message      { role: "user" | "assistant"; content: string }
-interface IndexStatus  { name: string; path: string; file_count: number | null; last_indexed: string | null }
+interface Scope {
+  name: string;
+  path: string;
+  enabled: boolean;
+}
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+interface IndexStatus {
+  name: string;
+  path: string;
+  file_count: number | null;
+  last_indexed: string | null;
+}
 ```
 
 ### Component map
 
 **`App.tsx`**
+
 - Owns the global `scopes: Scope[]` and `selectedScopes: string[]` state
 - Fetches scopes on mount via `getScopes()`; defaults `selectedScopes` to all enabled scopes
 - Passes `onScopesChanged` down to `SettingsDrawer` to keep state in sync when the user adds/removes/toggles scopes
 
 **`ChatPanel.tsx`**
+
 - Renders conversation history as `user` / `assistant` messages
 - Streams responses from `POST /chat` via `sendChat()` — tokens are appended to the last assistant message in state
 - Enter sends, Shift+Enter inserts a newline
 - Auto-scrolls to bottom on new content
 
 **`ScopeSelector.tsx`**
+
 - Renders one pill-button per scope in the header
 - Disabled if the scope's `enabled` flag is false
 - Toggling a pill updates `selectedScopes` in `App` — it does NOT toggle the scope's `enabled` flag, only the active selection for the current chat
 
 **`SettingsDrawer.tsx`**
+
 - Slide-in drawer opened by the ⚙ button
 - **Model section**: lists all Ollama models as pill-buttons; clicking one calls `setModel()` immediately
 - **Scopes section**: lists all scopes with name, path, index status (file count + time), and three action buttons: re-index (`↻`), enable/disable toggle, delete
@@ -214,7 +236,6 @@ interface IndexStatus  { name: string; path: string; file_count: number | null; 
 - Do not suggest using `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
 - Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `nix-shell`
 - Do not add packages to the Python venv by hand — add them to the `pip install` block in `shell.nix` and delete `backend/.venv/.deps-installed` to force reinstall
-
 
 SHRIMP (Self-Hosted RAG Intelligence Model Project) is a local-first AI assistant with two layers:
 
