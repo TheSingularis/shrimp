@@ -145,6 +145,89 @@ main {
     background: var(--surface);
 }
 
+/* markdown rendering in chat */
+.content p {
+    margin: 0 0 0.75rem;
+}
+
+.content p:last-child {
+    margin-bottom: 0;
+}
+
+.content h1,
+.content h2,
+.content h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 1rem 0 0.5rem;
+    color: var(--text);
+}
+
+.content code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85em;
+    padding: 0.15em 0.4em;
+}
+
+.content pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+}
+
+.content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.content ul,
+.content ol {
+    padding-left: 1.5rem;
+    margin: 0 0 0.75rem;
+}
+
+.content li {
+    margin: 0.2rem 0;
+}
+
+.content blockquote {
+    border-left: 2px solid var(--accent);
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    color: var(--text-muted);
+}
+
+.content a {
+    color: var(--accent);
+}
+
+.content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+}
+
+.content th,
+.content td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+}
+
+.content th {
+    color: var(--accent);
+}
+
 textarea {
     flex: 1;
     background: var(--bg);

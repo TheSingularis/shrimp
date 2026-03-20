@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { type Message, sendChat } from "../api";
+import ReactMarkdown from "react-markdown";
 
 interface Props {
     scopes: string[];
@@ -50,7 +51,9 @@ export function ChatPanel({ scopes }: Props) {
                 {history.map((msg, i) => (
                     <div key={i} className={`message ${msg.role}`}>
                         <span className="role-label">{msg.role}</span>
-                        <pre className="content">{msg.content}</pre>
+                        <pre className="content">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </pre>
                     </div>
                 ))}
                 {streaming && <div className="typing-indicator">▋</div>}
