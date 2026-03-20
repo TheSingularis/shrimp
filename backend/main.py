@@ -3,11 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
+from sse_starlette.sse import EventSourceResponse
 import httpx
 import json
 import logging
 import re
 import asyncio
+import queue
+import threading
 import config
 import rag
 
@@ -77,6 +80,19 @@ def write_config(scopes: list[dict], model: str):
 async def health():
     return {"status": "ok", "model": config.OLLAMA_MODEL}
 
+
+@app.get("/debug/prompt")
+async def debug_prompt():
+    scope_names = [s["name"] for s in config.WATCHED_DIRS if s.get("enabled")]
+    file_tree = rag.get_structural_summary(scope_names)
+    context = rag.query_scopes("test", scope_names)
+    return {
+        "scope_names": scope_names,
+        "file_tree_length": len(file_tree),
+        "file_tree_preview": file_tree[:500],
+        "context_preview": context[:500],
+    }
+
 # ── routes: chat ──────────────────────────────────────────────────────────────
 
 
@@ -92,26 +108,91 @@ async def chat(req: ChatRequest):
 
     scope_names = [s["name"] for s in active]
     log.info("chat: scopes=%s  message=%r", scope_names, req.message[:80])
+    file_tree = rag.get_structural_summary(scope_names, max_files=150)
 
-    # retrieve context from RAG indexes
-    context = await asyncio.get_event_loop().run_in_executor(
-        None, rag.query_scopes, req.message, scope_names
+    # ── step 1: ask LLM if it needs specific files ────────────────────────────
+    file_selection_prompt = (
+        "You are a file selection assistant. Given a file tree and a user question, "
+        "decide if answering the question requires reading specific files.\n\n"
+        "Rules:\n"
+        "- If the question is conversational, general, or doesn't need file content, "
+        'respond with: {"needs_files": false}\n'
+        "- If specific files would help, respond with the most relevant file paths. "
+        'Example: {"needs_files": true, "files": {"code": ["src/main.py"], "obsidian": ["Notes/auth.md"]}}\n'
+        "- Only include files that actually exist in the tree below.\n"
+        "- Maximum 5 files total across all scopes.\n"
+        "- Respond with JSON only. No explanation, no markdown.\n\n"
+        f"FILE TREE:\n{file_tree}\n\n"
+        f"USER QUESTION: {req.message}"
     )
 
-    # build prompt with injected context
+    selected_files: dict[str, list[str]] = {}
+    needs_files = False
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{config.OLLAMA_HOST}/api/chat",
+                json={
+                    "model": config.OLLAMA_MODEL,
+                    "messages": [{"role": "user", "content": file_selection_prompt}],
+                    "stream": False,
+                    "format": "json",
+                },
+            )
+            raw = resp.json().get("message", {}).get("content", "{}")
+            parsed = json.loads(raw)
+            needs_files = parsed.get("needs_files", False)
+            if needs_files:
+                selected_files = parsed.get("files", {})
+                log.info("chat: file selection — %s", selected_files)
+            else:
+                log.info("chat: LLM decided no files needed")
+    except Exception as e:
+        log.warning(
+            "chat: file selection pass failed (%s) — falling back to vector index", e)
+
+    # ── step 2: gather context ────────────────────────────────────────────────
+    context_chunks = []
+
+    if needs_files and selected_files:
+        for scope_name, paths in selected_files.items():
+            if not paths:
+                continue
+            chunk = await asyncio.get_event_loop().run_in_executor(
+                None, rag.query_on_demand, req.message, scope_name, paths
+            )
+            if chunk:
+                context_chunks.append(chunk)
+    else:
+        context = await asyncio.get_event_loop().run_in_executor(
+            None, rag.query_scopes, req.message, scope_names
+        )
+        if context:
+            context_chunks.append(context)
+
+    context = "\n\n".join(context_chunks)
+
+    # ── step 3: build final prompt and stream answer ──────────────────────────
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files. "
-        "Answer using the provided file context where relevant. "
         "When proposing file edits, always specify the full file path and provide "
-        "the complete new file content inside a fenced code block.\n\n"
-        f"FILE CONTEXT:\n{context}"
+        "the complete new file content inside a fenced code block."
     )
+
+    augmented_message = f"Here is a map of all files you have access to:\n\n{file_tree}\n\n"
+    if context:
+        augmented_message += f"Here is relevant file content:\n\n{context}\n\n"
+    augmented_message += f"Now answer this question:\n{req.message}"
 
     messages = [
         {"role": "system", "content": system_prompt},
         *req.history,
-        {"role": "user", "content": req.message},
+        {"role": "user", "content": augmented_message},
     ]
+
+    log.info("chat: streaming response — scopes=%s needs_files=%s",
+             scope_names, needs_files)
 
     async def stream():
         async with httpx.AsyncClient(timeout=120) as client:
@@ -130,6 +211,16 @@ async def chat(req: ChatRequest):
                             break
 
     return StreamingResponse(stream(), media_type="text/plain")
+
+# ── startup ────────────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup():
+    log.info("Server process startup - hydrating state...")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, rag._hydrate_status)
+    await loop.run_in_executor(None, rag.build_all_structural_maps)
+    log.info("Startup complete - structural maps and index status ready")
 
 # ── routes: scopes ────────────────────────────────────────────────────────────
 
@@ -183,41 +274,76 @@ async def set_model(update: ModelUpdate):
 # ── routes: indexing ──────────────────────────────────────────────────────────
 
 
+@app.get("/index/status")
+async def index_status():
+    return rag.get_status()
+
+
 @app.post("/index")
 async def index_all():
-    """Trigger a full re-index of all enabled scopes. Runs in background."""
     log.info("index_all: triggered")
 
-    async def run():
-        try:
-            await asyncio.get_event_loop().run_in_executor(None, rag.build_all_indexes)
-        except Exception as e:
-            log.exception("index_all: background task failed: %s", e)
-
-    asyncio.create_task(run())
+    def run():
+        rag.build_all_indexes()
+    threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started"}
 
 
 @app.post("/index/{name}")
 async def index_one(name: str):
-    """Trigger re-index of a single scope by name."""
     scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
     if not scope:
         raise HTTPException(
             status_code=404, detail=f"Scope '{name}' not found")
 
-    log.info("index_one: scope=%s  path=%s", name, scope["path"])
-
-    async def run():
-        try:
-            await asyncio.get_event_loop().run_in_executor(None, rag.build_index, scope)
-        except Exception as e:
-            log.exception("index_one[%s]: background task failed: %s", name, e)
-
-    asyncio.create_task(run())
+    def run():
+        rag.build_index(scope)
+    threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started", "scope": name}
 
 
-@app.get("/index/status")
-async def index_status():
-    return rag.get_status()
+@app.get("/index/{name}/stream")
+async def index_stream(name: str):
+    scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
+    if not scope:
+        raise HTTPException(
+            status_code=404, detail=f"Scope '{name}' not found")
+
+    q: queue.Queue = queue.Queue()
+
+    def callback(current: int, total: int, filename: str):
+        q.put({"current": current, "total": total,
+              "file": filename, "done": False})
+
+    def run_index():
+        try:
+            rag.build_index(scope, progress_callback=callback)
+        except Exception as e:
+            q.put({"error": str(e), "done": True})
+        finally:
+            q.put({"done": True})
+
+    threading.Thread(target=run_index, daemon=True).start()
+
+    async def event_generator():
+        while True:
+            try:
+                event = q.get(timeout=0.1)
+                yield {"data": json.dumps(event)}
+                if event.get("done"):
+                    break
+            except queue.Empty:
+                yield {"data": json.dumps({"ping": True})}
+            await asyncio.sleep(0.05)
+
+    return EventSourceResponse(event_generator())
+
+
+@app.post("/index/structural")
+async def refresh_structural():
+    def run():
+        for scope in config.WATCHED_DIRS:
+            if scope.get("enabled"):
+                rag.build_structural_map(scope)
+    threading.Thread(target=run, daemon=True).start()
+    return {"status": "structural map refresh started"}

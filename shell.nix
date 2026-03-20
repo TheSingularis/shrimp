@@ -72,7 +72,8 @@ pkgs.mkShell {
       llama-index-llms-ollama \
       llama-index-embeddings-ollama \
       llama-index-vector-stores-chroma \
-      chromadb
+      chromadb \
+      sse-starlette
 
     # Wrap the venv Python binary so LD_LIBRARY_PATH is set before the dynamic
     # linker runs — this is the only approach that works for uvicorn --reload
@@ -112,9 +113,36 @@ WRAPPER
       echo "[shrimp] Shutting down..."
       kill $BACKEND_PID $OLLAMA_PID $FRONTEND_PID 2>/dev/null
       wait $BACKEND_PID $OLLAMA_PID $FRONTEND_PID 2>/dev/null
+      echo ""
+      echo "[shrimp] Shutting down..."
+      kill $BACKEND_PID $OLLAMA_PID $FRONTEND_PID 2>/dev/null
+      wait $BACKEND_PID $OLLAMA_PID $FRONTEND_PID 2>/dev/null
     }
     trap cleanup EXIT
 
+    # wait for Vite to report its URL, then extract the actual port
+    echo "[shrimp] Waiting for frontend..."
+    for i in $(seq 1 20); do
+      vite_url=$(grep -o 'http://localhost:[0-9]*' "$SHRIMP_DIR/.ollama/frontend.log" 2>/dev/null | head -1)
+      [ -n "$vite_url" ] && break
+      sleep 0.5
+    done
+    vite_url="''${vite_url:-http://localhost:5173}"
+
+    echo ""
+    echo "┌─────────────────────────────────────────┐"
+    echo "│           SHRIMP* is running            │"
+    echo "│                                         │"
+    echo "│  Ollama   →  http://127.0.0.1:11434     │"
+    echo "│  API      →  http://127.0.0.1:8000      │"
+    echo "│  API docs →  http://127.0.0.1:8000/docs │"
+    printf  "│  UI       →  %-27s│\n" "$vite_url"
+    echo "│                                         │"
+    echo "│  logs: .ollama/serve.log                │"
+    echo "│        .ollama/backend.log              │"
+    echo "│        .ollama/frontend.log             │"
+    echo "└─────────────────────────────────────────┘"
+    echo ""
     # wait for Vite to report its URL, then extract the actual port
     echo "[shrimp] Waiting for frontend..."
     for i in $(seq 1 20); do

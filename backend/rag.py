@@ -1,3 +1,12 @@
+from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.core import (
+    VectorStoreIndex,
+    SimpleDirectoryReader,
+    StorageContext,
+    Settings,
+)
 import config
 import chromadb
 import logging
@@ -9,15 +18,6 @@ from datetime import datetime
 # but floods the log. Suppress it at the source.
 logging.getLogger("llama_index.core.readers.file.base").setLevel(logging.ERROR)
 
-from llama_index.core import (
-    VectorStoreIndex,
-    SimpleDirectoryReader,
-    StorageContext,
-    Settings,
-)
-from llama_index.llms.ollama import Ollama
-from llama_index.embeddings.ollama import OllamaEmbedding
-from llama_index.vector_stores.chroma import ChromaVectorStore
 
 log = logging.getLogger("shrimp.rag")
 
@@ -31,14 +31,48 @@ Settings.embed_model = OllamaEmbedding(model_name=config.EMBED_MODEL)
 chroma_client = chromadb.PersistentClient(path=config.CHROMA_PATH)
 log.info("ChromaDB client ready at %s", config.CHROMA_PATH)
 
-# tracks last index time and file count per scope
+# ── constants ──────────────────────────────────────────────────────────────────
+
+SUPPORTED_EXTENSIONS = [
+    ".md", ".py", ".ts", ".tsx", ".js", ".jsx",
+    ".json", ".yaml", ".yml", ".toml", ".txt",
+    ".env.example", ".sh", ".rs", ".go", ".java", ".c", ".cpp", ".h",
+]
+
+EXCLUDED_DIRS = {
+    # deps
+    "node_modules", ".pnp", ".yarn",
+    # python
+    ".venv", "venv", "__pycache__", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache", ".tox", "*.egg-info",
+    # build output
+    "dist", "build", "out", ".next", ".nuxt", ".svelte-kit",
+    "target", ".gradle",
+    # vcs / editors
+    ".git", ".idea", ".vscode",
+    # shrimp own dirs
+    "chroma_db", ".ollama",
+    # test coverage
+    "coverage", ".nyc_output",
+    # os
+    ".DS_Store", "Thumbs.db",
+}
+
+MAX_FILE_BYTES = 500 * 1024  # 500 KB — skip binary/generated files
+
+# ── runtime state ──────────────────────────────────────────────────────────────
+
 index_status: dict[str, dict] = {}
+index_progress: dict[str, dict] = {}
+structural_maps: dict[str, list[dict]] = {}
+
+# ── startup ────────────────────────────────────────────────────────────────────
 
 
 def _hydrate_status() -> None:
     """
     Populate index_status from existing ChromaDB collections on startup.
-    This survives uvicorn --reload restarts where in-memory state is lost.
+    Survives uvicorn --reload restarts where in-memory state is lost.
     """
     scope_map = {s["name"]: s for s in config.WATCHED_DIRS}
     try:
@@ -59,23 +93,71 @@ def _hydrate_status() -> None:
         log.exception("Failed to hydrate index status from ChromaDB")
 
 
-_hydrate_status()
+def build_structural_map(scope: dict) -> list[dict]:
+    """
+    Fast first pass — walk the directory and collect file metadata + preview.
+    No embedding. Runs in seconds even on large repos.
+    """
+    name = scope["name"]
+    path = Path(scope["path"]).expanduser()
 
-SUPPORTED_EXTENSIONS = [
-    ".md", ".py", ".ts", ".tsx", ".js", ".jsx",
-    ".json", ".yaml", ".yml", ".toml", ".txt", ".env.example"
-]
+    if not path.exists():
+        log.warning("[%s] structural map: path not found: %s", name, path)
+        return []
 
-# Directories to skip entirely during indexing — build artifacts, deps, VCS, etc.
-EXCLUDED_DIRS = [
-    "node_modules", ".git", ".venv", "venv", "__pycache__",
-    ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
-    "dist", "build", "out", ".next", ".nuxt", ".svelte-kit",
-    "target",          # Rust / Java / Scala
-    ".gradle", ".idea", ".vscode",
-    "chroma_db", ".ollama",
-    "coverage", ".nyc_output",
-]
+    files = []
+    for f in sorted(path.rglob("*")):
+        if not f.is_file():
+            continue
+        if f.suffix not in SUPPORTED_EXTENSIONS:
+            continue
+        if f.stat().st_size > MAX_FILE_BYTES:
+            continue
+        if any(ex in f.parts for ex in EXCLUDED_DIRS):
+            continue
+        try:
+            preview = f.read_text(errors="ignore")[:300].strip()
+        except Exception:
+            preview = ""
+        files.append({
+            "path": str(f.relative_to(path)),
+            "size": f.stat().st_size,
+            "modified": f.stat().st_mtime,
+            "preview": preview,
+        })
+
+    structural_maps[name] = files
+    log.info("[%s] Structural map built: %d files", name, len(files))
+    return files
+
+
+def build_all_structural_maps() -> None:
+    """Build structural maps for all enabled scopes. Called on startup."""
+    for scope in config.WATCHED_DIRS:
+        if scope.get("enabled"):
+            build_structural_map(scope)
+
+
+def get_structural_summary(scope_names: list[str], max_files: int = 150) -> str:
+    """
+    Render a compact file tree string for injection into the chat system prompt.
+    Truncates to max_files to avoid blowing the context window.
+    """
+    lines = []
+    for name in scope_names:
+        files = structural_maps.get(name, [])
+        if not files:
+            lines.append(
+                f"[scope '{name}': no structural map yet — run index first]")
+            continue
+        lines.append(f"--- scope: {name} ({len(files)} files total) ---")
+        for f in files[:max_files]:
+            lines.append(f["path"])
+        if len(files) > max_files:
+            lines.append(
+                f"... and {len(files) - max_files} more files not shown")
+    return "\n".join(lines)
+
 
 # ── index management ───────────────────────────────────────────────────────────
 
@@ -96,7 +178,7 @@ def get_index(collection_name: str) -> VectorStoreIndex | None:
         return None
 
 
-def build_index(scope: dict) -> dict:
+def build_index(scope: dict, progress_callback=None) -> dict:
     """
     Index a directory into a named Chroma collection.
     Deletes and rebuilds the collection if it already exists.
@@ -111,7 +193,6 @@ def build_index(scope: dict) -> dict:
         log.error("[%s] Directory not found: %s", name, path)
         raise FileNotFoundError(f"Directory not found: {path}")
 
-    # drop and recreate collection for a clean re-index
     try:
         chroma_client.delete_collection(name)
         log.debug("[%s] Dropped existing Chroma collection", name)
@@ -122,7 +203,6 @@ def build_index(scope: dict) -> dict:
     vector_store = ChromaVectorStore(chroma_collection=collection)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-    # Build absolute exclude paths so SimpleDirectoryReader skips them entirely
     exclude_paths = [
         str(Path(path) / d)
         for d in EXCLUDED_DIRS
@@ -137,7 +217,17 @@ def build_index(scope: dict) -> dict:
         recursive=True,
         required_exts=SUPPORTED_EXTENSIONS,
         exclude=exclude_paths,
+        file_metadata=lambda fp: {"file_path": fp},
     ).load_data()
+
+    before = len(docs)
+    docs = [
+        d for d in docs
+        if Path(d.metadata.get("file_path", "")).stat().st_size <= MAX_FILE_BYTES
+    ]
+    dropped = before - len(docs)
+    if dropped:
+        log.info("[%s] Dropped %d oversized file(s)", name, dropped)
 
     if not docs:
         log.warning(
@@ -146,27 +236,36 @@ def build_index(scope: dict) -> dict:
             "name": name,
             "path": path,
             "file_count": 0,
-            "last_indexed": datetime.now().isoformat(),
+            "last_indexed": datetime.utcnow().isoformat() + "Z",
         }
         index_status[name] = status
         return status
 
-    log.info("[%s] Loaded %d documents, embedding...", name, len(docs))
+    total = len(docs)
+    log.info("[%s] Loaded %d documents, embedding...", name, total)
 
-    VectorStoreIndex.from_documents(
-        docs,
-        storage_context=storage_context,
-        show_progress=False,
-    )
+    for i, doc in enumerate(docs):
+        VectorStoreIndex.from_documents(
+            [doc],
+            storage_context=storage_context,
+            show_progress=False,
+        )
+        filename = Path(doc.metadata.get("file_path", "")).name
+        index_progress[name] = {"current": i +
+                                1, "total": total, "file": filename}
+        if progress_callback:
+            progress_callback(i + 1, total, filename)
+
+    index_progress.pop(name, None)
 
     status = {
         "name": name,
         "path": path,
-        "file_count": len(docs),
-        "last_indexed": datetime.now().isoformat(),
+        "file_count": total,
+        "last_indexed": datetime.utcnow().isoformat() + "Z",
     }
     index_status[name] = status
-    log.info("[%s] Index complete — %d docs stored", name, len(docs))
+    log.info("[%s] Index complete — %d docs stored", name, total)
     return status
 
 
@@ -184,13 +283,91 @@ def build_all_indexes() -> list[dict]:
             results.append({"name": scope["name"], "error": str(e)})
     return results
 
+# ── on-demand embedding ────────────────────────────────────────────────────────
+
+
+def embed_files_on_demand(scope_name: str, file_paths: list[str]) -> VectorStoreIndex | None:
+    """
+    Embed a specific list of files into a temporary in-memory index.
+    Always re-embeds for freshness — does not touch the persistent Chroma index.
+    Returns a queryable index or None if no files could be read.
+    """
+    root = Path(next(
+        (s["path"] for s in config.WATCHED_DIRS if s["name"] == scope_name), ""
+    )).expanduser()
+
+    resolved = []
+    for p in file_paths:
+        candidate = Path(p) if Path(p).is_absolute() else root / p
+        if not candidate.exists():
+            log.warning(
+                "[%s] on-demand: file not found, skipping: %s", scope_name, p)
+            continue
+        if candidate.stat().st_size > MAX_FILE_BYTES:
+            log.warning(
+                "[%s] on-demand: file too large, skipping: %s", scope_name, p)
+            continue
+        resolved.append(str(candidate))
+
+    if not resolved:
+        log.warning("[%s] on-demand: no valid files to embed", scope_name)
+        return None
+
+    log.info("[%s] on-demand: embedding %d file(s): %s",
+             scope_name, len(resolved), [Path(p).name for p in resolved])
+
+    try:
+        docs = SimpleDirectoryReader(
+            input_files=resolved,
+            file_metadata=lambda fp: {"file_path": fp},
+        ).load_data()
+
+        if not docs:
+            log.warning(
+                "[%s] on-demand: no content loaded from files", scope_name)
+            return None
+
+        index = VectorStoreIndex.from_documents(docs, show_progress=False)
+        log.info("[%s] on-demand: index built with %d doc(s)",
+                 scope_name, len(docs))
+        return index
+
+    except Exception as e:
+        log.error("[%s] on-demand: embedding failed: %s", scope_name, e)
+        return None
+
+
+def query_on_demand(question: str, scope_name: str, file_paths: list[str]) -> str:
+    """
+    Embed the given files on demand and query them.
+    Returns context string for prompt injection.
+    """
+    index = embed_files_on_demand(scope_name, file_paths)
+    if index is None:
+        return f"[on-demand: could not read files for scope '{scope_name}']"
+
+    retriever = index.as_retriever(similarity_top_k=5)
+    nodes = retriever.retrieve(question)
+
+    if not nodes:
+        log.info("[%s] on-demand: no relevant nodes found", scope_name)
+        return ""
+
+    log.info("[%s] on-demand: retrieved %d node(s)", scope_name, len(nodes))
+    chunks = [f"--- on-demand context from scope: {scope_name} ---"]
+    for node in nodes:
+        source = node.metadata.get("file_path", "unknown")
+        chunks.append(f"# {source}\n{node.text}")
+
+    return "\n\n".join(chunks)
+
 # ── querying ───────────────────────────────────────────────────────────────────
 
 
 def query_scopes(question: str, scope_names: list[str]) -> str:
     """
-    Query one or more scope indexes and return combined context
-    as a string to inject into the chat prompt.
+    Query pre-built vector indexes and return combined context.
+    Used as fallback when LLM decides no specific files are needed.
     """
     log.info("query_scopes: scopes=%s  question=%r",
              scope_names, question[:80])
@@ -224,13 +401,16 @@ def get_status() -> list[dict]:
     result = []
     for scope in config.WATCHED_DIRS:
         name = scope["name"]
+        entry = {
+            "name": name,
+            "path": scope["path"],
+            "file_count": None,
+            "last_indexed": None,
+            "indexing": None,
+        }
         if name in index_status:
-            result.append(index_status[name])
-        else:
-            result.append({
-                "name": name,
-                "path": scope["path"],
-                "file_count": None,
-                "last_indexed": None,
-            })
+            entry.update(index_status[name])
+        if name in index_progress:
+            entry["indexing"] = index_progress[name]
+        result.append(entry)
     return result
