@@ -117,17 +117,10 @@ main {
     color: var(--accent);
 }
 
-.content {
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-family: monospace;
-    font-size: 0.9rem;
-    line-height: 1.6;
-}
-
 .typing-indicator {
+    font-family: monospace !important;
     color: var(--accent);
-    animation: blink 1s step-end infinite;
+    padding: 0.25rem 0;
 }
 
 @keyframes blink {
@@ -145,88 +138,6 @@ main {
     background: var(--surface);
 }
 
-/* markdown rendering in chat */
-.content p {
-    margin: 0 0 0.75rem;
-}
-
-.content p:last-child {
-    margin-bottom: 0;
-}
-
-.content h1,
-.content h2,
-.content h3 {
-    font-size: 1rem;
-    font-weight: 500;
-    margin: 1rem 0 0.5rem;
-    color: var(--text);
-}
-
-.content code {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 0.85em;
-    padding: 0.15em 0.4em;
-}
-
-.content pre {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow-x: auto;
-    padding: 0.75rem 1rem;
-    margin: 0.5rem 0;
-}
-
-.content pre code {
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 0.85rem;
-    line-height: 1.6;
-}
-
-.content ul,
-.content ol {
-    padding-left: 1.5rem;
-    margin: 0 0 0.75rem;
-}
-
-.content li {
-    margin: 0.2rem 0;
-}
-
-.content blockquote {
-    border-left: 2px solid var(--accent);
-    margin: 0.5rem 0;
-    padding-left: 0.75rem;
-    color: var(--text-muted);
-}
-
-.content a {
-    color: var(--accent);
-}
-
-.content table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0.5rem 0;
-    font-size: 0.85rem;
-}
-
-.content th,
-.content td {
-    border: 1px solid var(--border);
-    padding: 0.4rem 0.6rem;
-    text-align: left;
-}
-
-.content th {
-    color: var(--accent);
-}
 
 textarea {
     flex: 1;
@@ -503,4 +414,282 @@ button:disabled {
 .index-btn:hover {
     color: var(--accent);
     border-color: var(--accent);
+}
+
+/* markdown rendering in chat */
+.content {
+    line-height: 1.7;
+    font-size: 1rem;
+}
+
+.content p {
+    margin: 0 0 0.75rem;
+}
+
+.content p:last-child {
+    margin-bottom: 0;
+}
+
+.content h1 {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.content h2 {
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin: 1rem 0 0.4rem;
+}
+
+.content h3 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin: 0.9rem 0 0.4rem;
+}
+
+.content h1:first-child,
+.content h2:first-child,
+.content h3:first-child {
+    margin-top: 0;
+}
+
+/* inline code */
+.content code {
+    /* background: #2d2d2d; */
+    /* border: 1px solid var(--border); */
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.82em;
+    padding: 0.15em 0.4em;
+    color: #e6db74;
+}
+
+/* code blocks — SyntaxHighlighter renders its own pre/code,
+   so we only need to handle the fallback pre case */
+.content pre {
+    background: #1e1e1e;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+}
+
+.content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: 0.85rem;
+}
+
+/* lists */
+.content ul,
+.content ol {
+    padding-left: 1.5rem;
+    margin: 0 0 0.75rem;
+}
+
+.content li {
+    margin: 0.25rem 0;
+}
+
+.content li>p {
+    margin: 0;
+}
+
+/* nested lists */
+.content ul ul,
+.content ol ol,
+.content ul ol,
+.content ol ul {
+    margin: 0.25rem 0 0.25rem 0;
+}
+
+/* blockquote */
+.content blockquote {
+    border-left: 2px solid var(--accent);
+    margin: 0.5rem 0;
+    padding: 0.25rem 0 0.25rem 0.75rem;
+    color: var(--text-muted);
+}
+
+.content blockquote p {
+    margin: 0;
+}
+
+/* tables (remark-gfm) */
+.content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+}
+
+.content th,
+.content td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+}
+
+.content th {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.content tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* horizontal rule */
+.content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
+}
+
+/* links */
+.content a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.content a:hover {
+    text-decoration: underline;
+}
+
+/* strong / em */
+.content strong {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.content em {
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.content.streaming {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.code-block-wrapper {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    overflow: hidden;
+}
+
+.code-block-label {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    font-family: monospace;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    user-select: none;
+}
+
+/* ── Add these to index.css ──────────────────────────────────────────────── */
+
+/* chat-layout wraps chat-panel + diff-panel side by side */
+.chat-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* diff viewer panel */
+.diff-panel {
+    display: flex;
+    flex-direction: column;
+    width: 55vw;
+    min-width: 400px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.diff-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.diff-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.diff-panel-icon {
+    color: var(--accent);
+}
+
+.diff-panel-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.diff-panel-editor {
+    flex: 1;
+    overflow: hidden;
+}
+
+/* view diff button on assistant messages */
+.diff-btn {
+    margin-top: 0.6rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.6rem;
+    display: inline-block;
+}
+
+.diff-btn:hover {
+    background: var(--accent-dim);
+}
+
+.model-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pull-progress {
+    height: 4px;
+    background: var(--border, #333);
+    border-radius: 2px;
+    margin-top: 0.4rem;
+    overflow: hidden;
+}
+
+.pull-progress-bar {
+    height: 100%;
+    background: var(--accent, #7aa2f7);
+    border-radius: 2px;
+    transition: width 0.2s ease;
 }

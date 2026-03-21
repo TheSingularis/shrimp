@@ -4,8 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
 from sse_starlette.sse import EventSourceResponse
-import httpx
-import json
+import httpx, json
 import logging
 import re
 import asyncio
@@ -72,6 +71,18 @@ def write_config(scopes: list[dict], model: str):
     config_path.write_text(current)
     log.info("config.py written: model=%s  scopes=%s",
              model, [s["name"] for s in scopes])
+
+
+# ── startup ────────────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup():
+    log.info("Server process startup - hydrating state...")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, rag._hydrate_status)
+    await loop.run_in_executor(None, rag.build_all_structural_maps)
+    log.info("Startup complete - structural maps and index status ready")
+
 
 # ── routes: health ────────────────────────────────────────────────────────────
 
@@ -141,6 +152,7 @@ async def chat(req: ChatRequest):
                 },
             )
             raw = resp.json().get("message", {}).get("content", "{}")
+            log.debug("chat: file selection raw response: %r", raw)
             parsed = json.loads(raw)
             needs_files = parsed.get("needs_files", False)
             if needs_files:
@@ -176,6 +188,12 @@ async def chat(req: ChatRequest):
     # ── step 3: build final prompt and stream answer ──────────────────────────
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files. "
+        "Respond using markdown formatting — use headers, bold, italics, lists, and "
+        "code blocks where appropriate. "
+        "IMPORTANT: Never wrap your entire response in a ```markdown code fence. "
+        "Write markdown directly — your output is rendered in a markdown-aware chat UI. "
+        "Only use fenced code blocks (``` with a language tag) for actual code snippets "
+        "like Python, TypeScript, bash, etc. "
         "When proposing file edits, always specify the full file path and provide "
         "the complete new file content inside a fenced code block."
     )
@@ -211,16 +229,6 @@ async def chat(req: ChatRequest):
                             break
 
     return StreamingResponse(stream(), media_type="text/plain")
-
-# ── startup ────────────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup():
-    log.info("Server process startup - hydrating state...")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, rag._hydrate_status)
-    await loop.run_in_executor(None, rag.build_all_structural_maps)
-    log.info("Startup complete - structural maps and index status ready")
 
 # ── routes: scopes ────────────────────────────────────────────────────────────
 
@@ -271,12 +279,31 @@ async def set_model(update: ModelUpdate):
     write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
     return {"active": config.OLLAMA_MODEL}
 
+@app.post("/models/pull")
+async def pull_model(body: dict):
+    model = body["model"]
+    async def stream():
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream(
+                "POST",
+                f"{config.OLLAMA_HOST}/api/pull",
+                json={"name": model}
+            ) as r:
+                async for line in r.aiter_lines():
+                    if line:
+                        yield line + "\n"
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+@app.delete("/models/{model:path}")
+async def delete_model(model: str):
+    async with httpx.AsyncClient() as client:
+        await client.delete(
+            f"{config.OLLAMA_HOST}/api/delete",
+            json={"name": model}
+        )
+    return {"ok": True}
+
 # ── routes: indexing ──────────────────────────────────────────────────────────
-
-
-@app.get("/index/status")
-async def index_status():
-    return rag.get_status()
 
 
 @app.post("/index")
@@ -288,6 +315,18 @@ async def index_all():
     threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started"}
 
+@app.get("/index/status")
+async def index_status():
+    return rag.get_status()
+
+@app.post("/index/structural")
+async def refresh_structural():
+    def run():
+        for scope in config.WATCHED_DIRS:
+            if scope.get("enabled"):
+                rag.build_structural_map(scope)
+    threading.Thread(target=run, daemon=True).start()
+    return {"status": "structural map refresh started"}
 
 @app.post("/index/{name}")
 async def index_one(name: str):
@@ -300,7 +339,6 @@ async def index_one(name: str):
         rag.build_index(scope)
     threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started", "scope": name}
-
 
 @app.get("/index/{name}/stream")
 async def index_stream(name: str):
@@ -338,12 +376,23 @@ async def index_stream(name: str):
 
     return EventSourceResponse(event_generator())
 
+# ── routes: file reading (diff support) ──────────────────────────────────────
 
-@app.post("/index/structural")
-async def refresh_structural():
-    def run():
-        for scope in config.WATCHED_DIRS:
-            if scope.get("enabled"):
-                rag.build_structural_map(scope)
-    threading.Thread(target=run, daemon=True).start()
-    return {"status": "structural map refresh started"}
+
+@app.get("/file")
+async def read_file(scope: str, path: str):
+    """
+    Return the raw content of a file within a scope.
+    Used by the frontend diff viewer to load the 'before' side.
+ 
+    GET /file?scope=code&path=src/main.py
+    """
+    try:
+        content = rag.read_file_from_scope(scope, path)
+        return {"scope": scope, "path": path, "content": content}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=413, detail=str(e))
