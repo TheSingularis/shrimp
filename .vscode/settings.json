@@ -3,12 +3,14 @@
         "reloadButton": "↻",
         "commands": [
             {
-                "name": "$(play) Run Nix-Shell",
-                "color": "lightblue",
-                "command": "echo \"Running Nix-Shell...\" && sleep 0.5 && nix-shell",
+                "name": "$(play) Run SHRIMP",
+                "color": "orange",
+                "command": "distrobox enter arch-dev -- bash start.sh & ",
                 "singleInstance": false
             }
         ]
     },
-    "python.REPL.enableREPLSmartSend": false
+    "python.REPL.enableREPLSmartSend": false,
+    "python.terminal.activateEnvironment": false,
+    "python.terminal.activateEnvInCurrentTerminal": false
 }

@@ -70,6 +70,8 @@ nix-shell
 6. Writes logs to `.ollama/serve.log`, `.ollama/backend.log`, `.ollama/frontend.log`
 7. Traps `EXIT` to clean up all three processes
 
+Note: For faster iterative dev testing on non-NixOS hosts, a `distrobox`-based workflow is supported. Create and enter a distrobox, then run `nix-shell` inside it to obtain the full development environment. See `README.md` for example commands and guidance on when to prefer `distrobox` vs running `nix-shell` directly on NixOS.
+
 ### Watching logs
 
 ```sh
@@ -297,6 +299,9 @@ shrimp/
 - `read_file(filepath)` → `str`
 - `generate_diff(original, proposed)` → `dict` with `original`, `proposed`, and `unified` keys
 - `write_accept(filepath, content)` → writes content to disk, returns confirmation
+- `write_accept(filepath, content)` → writes content to disk, returns confirmation
+
+Note: The backend file-reading logic has recently been updated. If you are modifying or debugging file ingestion, previewing, or diff generation, review `backend/file_ops.py` and `backend/rag.py` for the latest semantics around path expansion, ignored directories, and unified diff generation.
 
 **`watcher.py`**
 
@@ -313,6 +318,9 @@ shrimp/
 - Streaming chat responses use the Fetch API with a `ReadableStream` reader — do not use a library for this.
 - The diff viewer must never allow edits to the proposed content — Monaco `DiffEditor` should always be `readOnly: true`. The only actions are Accept and Reject.
 - When the LLM response contains multiple file proposals, render one `DiffViewer` per file. Each has independent accept/reject state.
+
+Note: A new `DiffPanel` / `DiffViewer` component was recently added to the frontend to render proposed file edits. It's functional but still a work in progress — expect further UX and styling refinements.
+
 - Electron shell is optional — the app must work as a plain browser tab at `localhost:5173` without Electron.
 
 ### Key components

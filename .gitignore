@@ -9,6 +9,8 @@ backend/chroma_db/
 
 # ollama logs
 .ollama/
+.ollama/bin/
+.ollama/*.log
 
 # node
 frontend/node_modules/

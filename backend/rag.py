@@ -414,3 +414,33 @@ def get_status() -> list[dict]:
             entry["indexing"] = index_progress[name]
         result.append(entry)
     return result
+
+# ── file reading ───────────────────────────────────────────────────────────────
+
+def read_file_from_scope(scope_name: str, relative_path: str) -> str:
+    """
+    Read a file from a scope by its relative path and return its raw text.
+    Used by the diff endpoint to supply the 'before' side of a diff view.
+    Raises FileNotFoundError if the scope of file does't exist.
+    """
+    scope = next(
+        (s for s in config.WATCHED_DIRS if s["name"] == scope_name), None
+    )
+    if scope is None:
+        raise FileNotFoundError(f"Scope '{scope_name}' not found")
+
+    root = Path(scope["path"]).expanduser().resolve()
+    target = (root / relative_path).resolve()
+
+    # Prevent path traversal outside the scope root
+    if not str(target).startswith(str(root)):
+        raise PermissionError(f"Path '{relative_path}' escapes scope root")
+    
+    if not target.exists():
+        raise FileNotFoundError(f"File not found: {relative_path}")
+    
+    if target.stat().st_size > MAX_FILE_BYTES:
+        raise ValueError(f"File too large to read: {relative_path}")
+    
+    log.info("[%s] read_file_from_scope: %s", scope_name, relative_path)
+    return target.read_text(errors="ignore")

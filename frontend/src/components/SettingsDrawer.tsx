@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { type Scope, getModels, setModel, setScopes, deleteScope } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
+import { pullModel, deleteModel } from "../api";
 
 interface Props {
     open: boolean;
@@ -17,6 +18,10 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [saving, setSaving] = useState(false);
     const [indexStatus, setIndexStatus] = useState<IndexStatus[]>([]);
     const [indexing, setIndexing] = useState<string | null>(null);
+    const [pullInput, setPullInput] = useState("");
+    const [pulling, setPulling] = useState(false);
+    const [pullStatus, setPullStatus] = useState<string | null>(null);
+    const [pullPercent, setPullPercent] = useState<number | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -95,6 +100,36 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         }, 3000);
     }
 
+    async function handlePullModel() {
+        if (!pullInput.trim()) return;
+        setPulling(true);
+        setPullStatus("starting...");
+        setPullPercent(null);
+        try {
+            await pullModel(pullInput.trim(), (status, percent) => {
+                setPullStatus(status);
+                setPullPercent(percent);
+            });
+            const data = await getModels();
+            setModels(data.models);
+            setActiveModel(data.active);
+            setPullInput("");
+            setPullStatus("done")
+        } catch {
+            setPullStatus("error pulling model");
+        } finally {
+            setPulling(false);
+            setPullPercent(null);
+        }
+    }
+
+    async function handleDeleteModel(model: string) {
+        await deleteModel(model);
+        const data = await getModels();
+        setModels(data.models);
+        setActiveModel(data.active);
+    }
+
     return (
     <>
       {open && <div className="drawer-backdrop" onClick={onClose} />}
@@ -107,16 +142,55 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         <section className="drawer-section">
           <h2>Model</h2>
           <div className="model-list">
+            {models.length === 0 && (
+                <span className="scope-status unindexed">no models installed</span>
+            )}
             {models.map((m) => (
-              <button
-                key={m}
-                className={`model-pill ${m === activeModel ? "active" : ""}`}
-                onClick={() => handleModelChange(m)}
-              >
-                {m}
-              </button>
+              <div key={m} className="model-row">
+                <button
+                    className={`model-pill ${m === activeModel ? "active" : ""}`}
+                    onClick={() => handleModelChange(m)}
+                >
+                    {m}
+                </button>
+                <button
+                    className="delete-btn"
+                    onClick={() => handleDeleteModel(m)}
+                    title="Remove model"
+                >
+                    ✕
+                </button>
+              </div>
             ))}
           </div>
+
+          <div className="add-scope" style={{ marginTop: "0.75rem" }}>
+            <input
+                placeholder="e.g. qwen2.5-coder:7b"
+                value={pullInput}
+                onChange={(e) => setPullInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handlePullModel()}
+                disabled={pulling}
+            />
+            <button onClick={handlePullModel} disabled={pulling || !pullInput.trim()}>
+                {pulling ? "pulling..." : "Pull"}
+            </button>
+          </div>
+          
+          {pullStatus && (
+            <div className="scope-status" style={{marginTop: "0.4rem"}}>
+              {pullStatus}
+              {pullPercent !== null && ` - ${pullPercent}%`}
+              {pulling && pullPercent !== null && (
+                <div className="pull-progress">
+                    <div
+                        className="pull-progress-bar"
+                        style={{ width: `${pullPercent}%` }}
+                    />
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="drawer-section">

@@ -86,3 +86,48 @@ export async function triggerIndexAll(): Promise<void> {
 export async function triggerIndexOne(name: string): Promise<void> {
     await fetch(`${BASE}/index/${name}`, { method: "POST" });
 }
+
+export async function fetchFile(scope: string, path: string): Promise<{ scope: string; path: string; content: string }> {
+    const res = await fetch(`${BASE}/file?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`);
+    if (!res.ok) throw new Error(`fetchFile: ${res.status}`);
+    return res.json();
+}
+
+export async function pullModel(
+    model: string,
+    onProgress: (status: string, percent: number | null) => void
+): Promise<void> {
+    const res = await fetch(`${BASE}/models/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+    });
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const data = JSON.parse(line);
+                const percent = data.total
+                    ? Math.round((data.completed / data.total) * 100)
+                    : null;
+                onProgress(data.status ?? "", percent);
+            } catch {}
+        }
+    }
+}
+
+export async function deleteModel(model: string): Promise<void> {
+    await fetch(`${BASE}/models/${encodeURIComponent(model)}`, {
+        method: "DELETE"
+    });
+}
