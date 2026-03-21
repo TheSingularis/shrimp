@@ -204,7 +204,18 @@ You can also add, edit, and delete scopes from the UI after starting the app —
 
 ### 3. Start the stack
 
+For local development we now use `distrobox` for faster, reproducible dev testing on non-NixOS hosts. The repository still includes `shell.nix` for the full environment; you can either run the full `nix-shell` inside a distrobox or use the distrobox workflow shown below.
+
+Example (create + enter a distrobox):
+
 ```sh
+# create a distrobox (one-time)
+distrobox-create --name shrimp --image docker.io/library/ubuntu:22.04
+
+# enter the distrobox
+distrobox-enter shrimp
+
+# inside the distrobox you can run the normal dev entrypoint
 nix-shell
 ```
 
@@ -214,6 +225,7 @@ On first run this will:
 - Install frontend npm packages
 - Start Ollama, the FastAPI backend (port 8000), and the Vite dev server (port 5173)
 
+If you prefer to run `nix-shell` directly on a NixOS machine, the previous workflow is still supported — `shell.nix` manages the same setup.
 ---
 
 ## Dev environment
@@ -393,3 +405,15 @@ Ollama may still be starting up. Check `.ollama/serve.log`. You can also run `ol
 
 **Port already in use**
 `nix-shell` runs `fuser -k 8000/tcp` and `fuser -k 5173/tcp` on startup to clear stale processes. If you still see the error, run those commands manually before entering the shell.
+
+---
+
+## Recent Updates
+
+#### v0.2.0 (2026-03-20)
+
+- **Markdown Rendering Enhancements**: Added support for `markdown` code fences and improved syntax highlighting.
+- **Spinner Improvements**: Fixed animation issues for smoother transitions during streaming.
+- **Code Quality**: Addressed type errors and improved component structure for better maintainability.
+
+---

@@ -4,6 +4,18 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
+## [Unreleased] — 2026-03-21
+
+### Added
+
+- Dev testing: switched development/test workflow to use `distrobox` for faster iterative testing on non-NixOS distributions. See `README.md` for basic usage notes.
+- Frontend: added `DiffPanel` component to render proposed file diffs in the UI (work in progress).
+
+### Changed
+
+- Backend: updated file-reading logic used by the assistant — see `backend/file_ops.py` and `backend/rag.py` for implementation details and new behaviours around path expansion and ignored directories.
+
+
 ## [v0.1.0] — 2025-07-15
 
 ### Added
@@ -25,4 +37,22 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
+## [v0.2.0] — 2026-03-20
+
+### Added
+
+- Enhanced markdown rendering in the chat panel, including support for `markdown` code fences that render inner content as markdown.
+- Introduced `unwrapOuterMarkdownFence` function to handle unwrapping of markdown fences for cleaner rendering.
+- Added custom `code` and `pre` handlers for improved syntax highlighting and fallback rendering.
+- Updated the `ChatPanel` component to use a shared `makeComponents` function for consistent markdown rendering.
+
+### Fixed
+
+- Resolved spinner animation issues to ensure smooth transitions during streaming.
+- Addressed type errors in the `code` and `pre` handlers by using `React.DetailedHTMLProps` for proper compatibility.
+- Fixed cascading renders caused by synchronous state updates in the spinner logic.
+
+---
+
 [v0.1.0]: https://github.com/TheSingularis/shrimp/releases/tag/v0.1.0
+[v0.2.0]: https://github.com/TheSingularis/shrimp/releases/tag/v0.2.0
