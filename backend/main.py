@@ -4,7 +4,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
 from sse_starlette.sse import EventSourceResponse
-import httpx, json
+import httpx
+import json
 import logging
 import re
 import asyncio
@@ -51,6 +52,13 @@ class ScopeUpdate(BaseModel):
 class ModelUpdate(BaseModel):
     model: str
 
+
+class ApplyEditRequest(BaseModel):
+    scope: str
+    path: str
+    content: str
+
+
 # ── config helpers ────────────────────────────────────────────────────────────
 
 
@@ -73,7 +81,53 @@ def write_config(scopes: list[dict], model: str):
              model, [s["name"] for s in scopes])
 
 
-# ── startup ────────────────────────────────────────────────────────────
+# ── section extraction ────────────────────────────────────────────────────────
+
+
+def extract_section(content: str, message: str) -> tuple[str, int, int] | None:
+    """
+    Find the section in content most relevant to the edit message.
+    Returns (section_text, start_pos, end_pos) or None.
+    Matches by keyword overlap between the message and header text.
+    """
+    headers = list(re.finditer(r"^(#{1,6}) .+", content, re.MULTILINE))
+    if not headers:
+        return None
+
+    message_lower = message.lower()
+    message_tokens = set(re.split(r"\W+", message_lower))
+    best = None
+    best_score = 0
+
+    for i, h in enumerate(headers):
+        header_text = h.group(0).lower()
+        header_tokens = set(re.split(r"\W+", header_text))
+        # count exact token matches — includes numbers like "3", "4"
+        score = len(header_tokens & message_tokens)
+        if score > best_score:
+            best_score = score
+            best = i
+
+    if best is None or best_score == 0:
+        return None
+
+    h = headers[best]
+    level = len(h.group(1))
+    start = h.start()
+
+    # section ends at next header of same or higher level
+    end = len(content)
+    for next_h in headers[best + 1:]:
+        next_level = len(re.match(r"(#+)", next_h.group(0)).group(1))
+        if next_level <= level:
+            end = next_h.start()
+            break
+
+    return content[start:end].strip(), start, end
+
+
+# ── startup ────────────────────────────────────────────────────────────────────
+
 
 @app.on_event("startup")
 async def startup():
@@ -91,7 +145,9 @@ async def startup():
 async def health():
     return {"status": "ok", "model": config.OLLAMA_MODEL}
 
+
 # ── routes: debug ─────────────────────────────────────────────────────────────
+
 
 @app.get("/debug/prompt")
 async def debug_prompt():
@@ -105,9 +161,11 @@ async def debug_prompt():
         "context_preview": context[:500],
     }
 
+
 @app.get("/debug/find")
-async def debug_find(filename: str,scope: str):
+async def debug_find(filename: str, scope: str):
     return rag.find_file_in_scopes(filename, [scope])
+
 
 # ── routes: chat ──────────────────────────────────────────────────────────────
 
@@ -126,7 +184,42 @@ async def chat(req: ChatRequest):
     log.info("chat: scopes=%s  message=%r", scope_names, req.message[:80])
     file_tree = rag.get_structural_summary(scope_names, max_files=150)
 
-    # ── step 1: ask LLM if it needs specific files ────────────────────────────
+    # ── step 1a: intent detection ─────────────────────────────────────────────
+    intent_prompt = (
+        "You are an intent detection assistant. Given a user message, decide if the "
+        "user is asking to CREATE, MODIFY, UPDATE, EDIT, EXPAND, REWRITE, or otherwise "
+        "CHANGE the content of a file.\n\n"
+        "Rules:\n"
+        "- If the user wants to change file content in any way, respond with: "
+        '{"is_file_edit": true}\n'
+        "- If the user is asking a question, requesting information, or just chatting, "
+        'respond with: {"is_file_edit": false}\n'
+        "- Respond with JSON only. No explanation.\n\n"
+        f"USER MESSAGE: {req.message}"
+    )
+
+    is_file_edit = False
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{config.OLLAMA_HOST}/api/chat",
+                json={
+                    "model": config.OLLAMA_MODEL,
+                    "messages": [{"role": "user", "content": intent_prompt}],
+                    "stream": False,
+                    "format": "json",
+                    "options": {"num_ctx": 2048},
+                },
+            )
+            raw = resp.json().get("message", {}).get("content", "{}")
+            parsed = json.loads(raw)
+            is_file_edit = parsed.get("is_file_edit", False)
+            log.info("chat: intent detection — is_file_edit=%s", is_file_edit)
+    except Exception as e:
+        log.warning(
+            "chat: intent detection failed (%s) — assuming not a file edit", e)
+
+    # ── step 1b: file selection ───────────────────────────────────────────────
     file_selection_prompt = (
         "You are a file selection assistant. Given a file tree and a user question, "
         "decide if answering the question requires reading specific files.\n\n"
@@ -154,10 +247,10 @@ async def chat(req: ChatRequest):
                     "messages": [{"role": "user", "content": file_selection_prompt}],
                     "stream": False,
                     "format": "json",
+                    "options": {"num_ctx": 4096},
                 },
             )
             raw = resp.json().get("message", {}).get("content", "{}")
-            log.debug("chat: file selection raw response: %r", raw)
             parsed = json.loads(raw)
             needs_files = parsed.get("needs_files", False)
             if needs_files:
@@ -169,18 +262,50 @@ async def chat(req: ChatRequest):
         log.warning(
             "chat: file selection pass failed (%s) — falling back to vector index", e)
 
+    # ── step 1c: deterministic file injection ─────────────────────────────────
+    # If the message explicitly names a file that exists in the structural map,
+    # inject it regardless of what the LLM decided above.
+    for scope_name in scope_names:
+        for word in re.findall(
+            r"\b[\w][\w\-. ]{0,40}\.(?:md|py|ts|tsx|js|json|yaml|yml|toml|txt|sh)\b",
+            req.message, re.IGNORECASE
+        ):
+            word = word.strip()
+            if len(word) > 60:
+                continue
+            matches = rag.find_file_in_scopes(word, [scope_name])
+            if matches:
+                selected_files.setdefault(scope_name, [])
+                for m in matches:
+                    if m["path"] not in selected_files[scope_name]:
+                        selected_files[scope_name].append(m["path"])
+                needs_files = True
+                log.info("chat: deterministic injection — %s: %s",
+                         scope_name, selected_files[scope_name])
+
     # ── step 2: gather context ────────────────────────────────────────────────
     context_chunks = []
+    full_file_contents: dict[str, str] = {}
 
     if needs_files and selected_files:
         for scope_name, paths in selected_files.items():
             if not paths:
                 continue
-            chunk = await asyncio.get_event_loop().run_in_executor(
-                None, rag.query_on_demand, req.message, scope_name, paths
-            )
-            if chunk:
-                context_chunks.append(chunk)
+            if is_file_edit:
+                for path in paths:
+                    try:
+                        content = rag.read_file_from_scope(scope_name, path)
+                        full_file_contents[path] = content
+                        log.info("chat: loaded full file for edit: %s", path)
+                    except Exception as e:
+                        log.warning(
+                            "chat: could not read file %s: %s", path, e)
+            else:
+                chunk = await asyncio.get_event_loop().run_in_executor(
+                    None, rag.query_on_demand, req.message, scope_name, paths
+                )
+                if chunk:
+                    context_chunks.append(chunk)
     else:
         context = await asyncio.get_event_loop().run_in_executor(
             None, rag.query_scopes, req.message, scope_names
@@ -190,7 +315,108 @@ async def chat(req: ChatRequest):
 
     context = "\n\n".join(context_chunks)
 
-    # ── step 3: build final prompt and stream answer ──────────────────────────
+    # ── step 3a: file edit path ───────────────────────────────────────────────
+    if is_file_edit and full_file_contents:
+        file_path = list(full_file_contents.keys())[0]
+        original_content = full_file_contents[file_path]
+        scope_for_file = next(
+            (sn for sn, paths in selected_files.items() if file_path in paths),
+            scope_names[0]
+        )
+
+        # extract the target section in Python — send only that to the model
+        section_result = extract_section(original_content, req.message)
+        if section_result:
+            section_text, section_start, section_end = section_result
+            log.info("chat: extracted section (%d chars) at %d-%d",
+                     len(section_text), section_start, section_end)
+        else:
+            # no section found — edit the whole file
+            section_text = original_content
+            section_start = 0
+            section_end = len(original_content)
+            log.info("chat: no section match found, editing full file")
+
+        edit_system_prompt = (
+            "You are a file editing assistant. You will be given a single section of "
+            "a file and an edit instruction. Return ONLY the updated section content. "
+            "No explanation, no preamble, no other sections, no commentary. "
+            "Preserve the header line exactly as-is. "
+            "Do not wrap the content in markdown fences. "
+            "Just return the raw updated section text."
+        )
+
+        edit_user_prompt = (
+            f"Section to edit:\n\n"
+            f"{section_text}\n\n"
+            f"Edit instruction: {req.message}\n\n"
+            "Return the updated section only. Keep the header line unchanged. "
+            "Do not include any other sections."
+        )
+
+        edit_messages = [
+            {"role": "system", "content": edit_system_prompt},
+            *req.history,
+            {"role": "user", "content": edit_user_prompt},
+        ]
+
+        log.info("chat: file edit chain — generating content for %s", file_path)
+
+        async def stream_file_edit():
+            new_content_parts = []
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream(
+                    "POST",
+                    f"{config.OLLAMA_HOST}/api/chat",
+                    json={
+                        "model": config.OLLAMA_MODEL,
+                        "messages": edit_messages,
+                        "stream": True,
+                        "options": {"num_ctx": 8192},
+                    },
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if line:
+                            data = json.loads(line)
+                            if token := data.get("message", {}).get("content"):
+                                new_content_parts.append(token)
+                            if data.get("done"):
+                                break
+
+            new_content = "".join(new_content_parts).strip()
+            log.info("chat: file edit generated %d chars", len(new_content))
+
+            # read fresh original from disk
+            try:
+                original = rag.read_file_from_scope(scope_for_file, file_path)
+            except Exception:
+                original = original_content
+
+            # splice the new section back at the exact position we extracted from
+            spliced = (
+                original[:section_start]
+                + new_content
+                + "\n\n"
+                + original[section_end:]
+            ).strip()
+            log.info("chat: spliced at %d-%d, result %d chars",
+                     section_start, section_end, len(spliced))
+
+            filename = file_path.split("/")[-1]
+            yield f"Expanding **{filename}**…"
+
+            sentinel = json.dumps({
+                "type": "file_edit",
+                "scope": scope_for_file,
+                "path": file_path,
+                "original": original,
+                "new": spliced,
+            })
+            yield f"\n\n__SHRIMP_EDIT__{sentinel}"
+
+        return StreamingResponse(stream_file_edit(), media_type="text/plain")
+
+    # ── step 3b: normal chat path ─────────────────────────────────────────────
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files. "
         "Respond using markdown formatting — use headers, bold, italics, lists, and "
@@ -198,15 +424,7 @@ async def chat(req: ChatRequest):
         "IMPORTANT: Never wrap your entire response in a ```markdown code fence. "
         "Write markdown directly — your output is rendered in a markdown-aware chat UI. "
         "Only use fenced code blocks (``` with a language tag) for actual code snippets "
-        "like Python, TypeScript, bash, etc. "
-        "When proposing a file edit, you MUST follow this exact format:\n"
-        "- Write a brief one or two sentence explanation of what you are changing.\n"
-        "- On its own line, emit exactly: __EDIT_FILE__: <relative_path_to_file>\n"
-        "- Immediately follow with the complete new file content in a fenced code block with the correct language tag.\n"
-        "- Do not include any other prose after the code block.\n"
-        "- Do not number these steps.\n"
-        "If the user asks you to edit a file but you are not certain which file they mean, "
-        "do NOT emit __EDIT_FILE__ — instead ask a clarifying question naming the candidates."
+        "like Python, TypeScript, bash, etc."
     )
 
     augmented_message = f"Here is a map of all files you have access to:\n\n{file_tree}\n\n"
@@ -220,75 +438,31 @@ async def chat(req: ChatRequest):
         {"role": "user", "content": augmented_message},
     ]
 
-    log.info("chat: streaming response — scopes=%s needs_files=%s",
+    log.info("chat: normal chat — scopes=%s needs_files=%s",
              scope_names, needs_files)
 
     async def stream():
-        full_response = []
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
                 "POST",
                 f"{config.OLLAMA_HOST}/api/chat",
-                json={"model": config.OLLAMA_MODEL,
-                    "messages": messages, "stream": True},
+                json={
+                    "model": config.OLLAMA_MODEL,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {"num_ctx": 8192},
+                },
             ) as resp:
                 async for line in resp.aiter_lines():
                     if line:
                         data = json.loads(line)
                         if token := data.get("message", {}).get("content"):
-                            full_response.append(token)
                             yield token
                         if data.get("done"):
                             break
 
-        # ── post-stream: detect file edit and emit sentinel ───────
-        complete = "".join(full_response)
-        edit_match = re.search(r"__EDIT_FILE__:\s*(.+?)[\n\r]", complete)
-        if not edit_match:
-            return
-
-        raw_path = edit_match.group(1).strip()
-        log.info("chat: detected file edit marker: %r", raw_path)
-
-        # extract the code block content that follows the marker
-        code_match = re.search(
-            r"__EDIT_FILE__:[^\n]*\n+(?:[\d]+\.\s*)?```\w*\n([\s\S]*?)\n```",
-            complete
-        )
-        new_content = code_match.group(1) if code_match else ""
-
-        # resolve path via fuzzy search across active scopes
-        matches = rag.find_file_in_scopes(raw_path, scope_names)
-
-        if len(matches) == 1:
-            # exactly one match — read original and emit sentinel
-            m = matches[0]
-            try:
-                original = rag.read_file_from_scope(m["scope"], m["path"])
-            except Exception:
-                original = ""
-            sentinel = json.dumps({
-                "type": "file_edit",
-                "scope": m["scope"],
-                "path": m["path"],
-                "original": original,
-                "new": new_content,
-            })
-            yield f"\n\n__SHRIMP_EDIT__{sentinel}"
-
-        elif len(matches) > 1:
-            # ambiguous — emit candidate list for the UI to show a picker
-            sentinel = json.dumps({
-                "type": "file_edit_ambiguous",
-                "candidates": matches,
-                "new": new_content,
-            })
-            yield f"\n\n__SHRIMP_EDIT__{sentinel}"
-
-        # 0 matches: SHRIMP should have asked for clarification in its prose,
-        # nothing to emit
-
     return StreamingResponse(stream(), media_type="text/plain")
+
 
 # ── routes: scopes ────────────────────────────────────────────────────────────
 
@@ -316,6 +490,7 @@ async def delete_scope(name: str):
     write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
     return config.WATCHED_DIRS
 
+
 # ── routes: models ────────────────────────────────────────────────────────────
 
 
@@ -339,9 +514,11 @@ async def set_model(update: ModelUpdate):
     write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
     return {"active": config.OLLAMA_MODEL}
 
+
 @app.post("/models/pull")
 async def pull_model(body: dict):
     model = body["model"]
+
     async def stream():
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
@@ -354,6 +531,7 @@ async def pull_model(body: dict):
                         yield line + "\n"
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 
+
 @app.delete("/models/{model:path}")
 async def delete_model(model: str):
     async with httpx.AsyncClient() as client:
@@ -362,6 +540,7 @@ async def delete_model(model: str):
             json={"name": model}
         )
     return {"ok": True}
+
 
 # ── routes: indexing ──────────────────────────────────────────────────────────
 
@@ -375,9 +554,11 @@ async def index_all():
     threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started"}
 
+
 @app.get("/index/status")
 async def index_status():
     return rag.get_status()
+
 
 @app.post("/index/structural")
 async def refresh_structural():
@@ -387,6 +568,7 @@ async def refresh_structural():
                 rag.build_structural_map(scope)
     threading.Thread(target=run, daemon=True).start()
     return {"status": "structural map refresh started"}
+
 
 @app.post("/index/{name}")
 async def index_one(name: str):
@@ -400,6 +582,7 @@ async def index_one(name: str):
     threading.Thread(target=run, daemon=True).start()
     return {"status": "indexing started", "scope": name}
 
+
 @app.get("/index/{name}/stream")
 async def index_stream(name: str):
     scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
@@ -411,7 +594,7 @@ async def index_stream(name: str):
 
     def callback(current: int, total: int, filename: str):
         q.put({"current": current, "total": total,
-              "file": filename, "done": False})
+               "file": filename, "done": False})
 
     def run_index():
         try:
@@ -436,17 +619,12 @@ async def index_stream(name: str):
 
     return EventSourceResponse(event_generator())
 
+
 # ── routes: file reading (diff support) ──────────────────────────────────────
 
 
 @app.get("/file")
 async def read_file(scope: str, path: str):
-    """
-    Return the raw content of a file within a scope.
-    Used by the frontend diff viewer to load the 'before' side.
- 
-    GET /file?scope=code&path=src/main.py
-    """
     try:
         content = rag.read_file_from_scope(scope, path)
         return {"scope": scope, "path": path, "content": content}
@@ -456,3 +634,38 @@ async def read_file(scope: str, path: str):
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=413, detail=str(e))
+
+
+@app.post("/file/apply")
+async def apply_edit(req: ApplyEditRequest):
+    try:
+        root = Path(next(
+            (s["path"]
+             for s in config.WATCHED_DIRS if s["name"] == req.scope), ""
+        )).expanduser().resolve()
+
+        if not root:
+            raise HTTPException(
+                status_code=404, detail=f"Scope '{req.scope}' not found")
+
+        target = (root / req.path).resolve()
+
+        if not str(target).startswith(str(root)):
+            raise HTTPException(
+                status_code=403, detail="Path escapes scope root")
+
+        target.write_text(req.content, encoding="utf-8")
+        log.info("apply_edit: wrote %s / %s", req.scope, req.path)
+
+        scope = next(
+            (s for s in config.WATCHED_DIRS if s["name"] == req.scope), None)
+        if scope:
+            await asyncio.get_event_loop().run_in_executor(
+                None, rag.build_structural_map, scope
+            )
+
+        return {"scope": req.scope, "path": req.path, "status": "applied"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -5,9 +5,20 @@ interface Props {
     originalContent: string;
     newContent: string;
     onClose: () => void;
+    onApply: () => void;
+    applying: boolean;
+    applied: boolean;
 }
 
-export function DiffPanel({ path, originalContent, newContent, onClose }: Props) {
+export function DiffPanel({
+    path,
+    originalContent,
+    newContent,
+    onClose,
+    onApply,
+    applying,
+    applied
+}: Props) {
     const ext = path.split(".").pop()?.toLowerCase() ?? "";
     const langMap: Record<string, string> = {
         py: "python", ts: "typescript", tsx: "typescript",
@@ -19,15 +30,29 @@ export function DiffPanel({ path, originalContent, newContent, onClose }: Props)
     const language = langMap[ext] ?? "plaintext";
     const filename = path.split("/").pop() ?? path;
 
-    return (
+        return (
         <div className="diff-panel">
             <div className="diff-panel-header">
                 <span className="diff-panel-title">
-                    <span className="diff-panel-icon">⊕</span>
+                    <span className="diff-panel-icon">✎</span>
                     {filename}
                 </span>
                 <span className="diff-panel-path">{path}</span>
-                <button className="close-btn" onClick={onClose}>✕</button>
+                <div className="diff-panel-actions">
+                    {!applied && (
+                        <button
+                            className="apply-btn"
+                            onClick={onApply}
+                            disabled={applying}
+                        >
+                            {applying ? "applying…" : "apply"}
+                        </button>
+                    )}
+                    {applied && (
+                        <span className="diff-panel-applied">✓ applied</span>
+                    )}
+                    <button className="close-btn" onClick={onClose}>✕</button>
+                </div>
             </div>
             <div className="diff-panel-editor">
                 <DiffEditor

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { type Message, sendChat, fetchFile } from "../api";
+import { type Message, sendChat, fetchFile, applyEdit } from "../api";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -50,54 +50,83 @@ const mdComponents: Components = {
     },
 };
 
-// ── file edit detection ────────────────────────────────────────────────────────
+// ── types ──────────────────────────────────────────────────────────────────────
 
-const FILE_EXTENSIONS = [
-    "py", "ts", "tsx", "js", "jsx", "json", "yaml", "yml",
-    "toml", "txt", "md", "sh", "rs", "go", "java", "c", "cpp", "h",
-];
-
-interface FileEdit {
+interface FileEditSentinel {
+    type: "file_edit";
+    scope: string;
     path: string;
-    newContent: string;
+    original: string;
+    new: string;
 }
 
-function extractFileEdit(content: string): FileEdit | null {
-    const extPattern = FILE_EXTENSIONS.join("|");
-    const pattern = new RegExp(
-        "(?:^|\\n)[^\\n]*?`?([\\w./\\- ]+\\.(?:" + extPattern + "))`?" +
-        "[^\\n]*(?:\\n[^\\n]*){0,3}?" +
-        "\\n```(?:\\w+)?\\n" +
-        "([\\s\\S]*?)" +
-        "\\n```",
-        "g"
-    );
+interface FileEditAmbiguousSentinel {
+    type: "file_edit_ambiguous";
+    candidates: { scope: string; path: string }[];
+    new: string;
+}
 
-    let match: RegExpExecArray | null;
-    let last: FileEdit | null = null;
-    while ((match = pattern.exec(content)) !== null) {
-        last = { path: match[1].trim(), newContent: match[2] };
+type Sentinel = FileEditSentinel | FileEditAmbiguousSentinel;
+
+interface AssistantMessage extends Message {
+    role: "assistant";
+    sentinel?: Sentinel;
+    prose?: string;
+}
+
+type ChatMessage = Message | AssistantMessage;
+
+// pending edit state — one entry per file path
+interface PendingEdit {
+    scope: string;
+    path: string;
+    original: string;   // disk content — never changes
+    current: string;    // accumulated edits — updated on each follow-up
+}
+
+// ── sentinel parsing ───────────────────────────────────────────────────────────
+
+const SENTINEL_PREFIX = "__SHRIMP_EDIT__";
+
+function parseSentinel(content: string): {
+    display: string;
+    sentinel: Sentinel | null;
+} {
+    const idx = content.indexOf(SENTINEL_PREFIX);
+    if (idx === -1) return { display: content, sentinel: null };
+
+    const display = content.slice(0, idx).trim();
+    const raw = content.slice(idx + SENTINEL_PREFIX.length);
+
+    try {
+        const sentinel = JSON.parse(raw) as Sentinel;
+        const editMarkerIdx = display.indexOf("__EDIT_FILE__");
+        const prose = editMarkerIdx !== -1
+            ? display.slice(0, editMarkerIdx).trim()
+            : display;
+        return { display: prose, sentinel };
+    } catch {
+        return { display, sentinel: null };
     }
-    return last;
-}
-
-// ── diff state ─────────────────────────────────────────────────────────────────
-
-interface DiffState {
-    path: string;
-    originalContent: string;
-    newContent: string;
 }
 
 // ── component ──────────────────────────────────────────────────────────────────
 
 export function ChatPanel({ scopes }: Props) {
-    const [history, setHistory] = useState<Message[]>([]);
+    const [history, setHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [streaming, setStreaming] = useState(false);
     const [responseStarted, setResponseStarted] = useState(false);
-    const [diffState, setDiffState] = useState<DiffState | null>(null);
-    const [fileEdits, setFileEdits] = useState<Record<number, FileEdit>>({});
+
+    // per-file pending edits keyed by path
+    const [pendingEdits, setPendingEdits] = useState<Record<string, PendingEdit>>({});
+
+    // which file is currently shown in the diff panel (null = closed)
+    const [activeDiffPath, setActiveDiffPath] = useState<string | null>(null);
+
+    // apply state per file
+    const [applying, setApplying] = useState<Record<string, boolean>>({});
+    const [applied, setApplied] = useState<Record<string, boolean>>({});
 
     const bottomRef = useRef<HTMLDivElement>(null);
     const spinner = cliSpinners.bouncingBar;
@@ -125,9 +154,21 @@ export function ChatPanel({ scopes }: Props) {
     async function submit() {
         if (!input.trim() || streaming) return;
 
-        const userMessage: Message = { role: "user", content: input };
+        // inject pending file context into the message if relevant
+        let augmentedInput = input;
+        const pendingList = Object.values(pendingEdits);
+        if (pendingList.length > 0) {
+            const contextBlocks = pendingList.map((pe) =>
+                `Current working version of ${pe.path}:\n\`\`\`\n${pe.current}\n\`\`\``
+            ).join("\n\n");
+            augmentedInput =
+                `${contextBlocks}\n\nUser request: ${input}`;
+        }
+
+        const userMessage: Message = { role: "user", content: input }; // display original
+        const augmentedMessage: Message = { role: "user", content: augmentedInput }; // sent to API
         const newHistory = [...history, userMessage];
-        const assistantIndex = newHistory.length;
+
         setHistory([...newHistory, { role: "assistant", content: "" }]);
         setInput("");
         setStreaming(true);
@@ -135,40 +176,95 @@ export function ChatPanel({ scopes }: Props) {
 
         let fullResponse = "";
 
-        await sendChat(input, scopes, history, (token) => {
+        // send augmented message but only display original
+        const historyForApi = [
+            ...history.map((m) => ({ role: m.role, content: m.content })),
+            { role: augmentedMessage.role, content: augmentedMessage.content },
+        ];
+
+        await sendChat(augmentedInput, scopes, history, (token) => {
             if (!responseStarted) setResponseStarted(true);
             fullResponse += token;
-            setHistory([...newHistory, { role: "assistant", content: fullResponse }]);
+            setHistory([
+                ...newHistory,
+                { role: "assistant", content: fullResponse },
+            ]);
         });
 
         setStreaming(false);
 
-        const edit = extractFileEdit(fullResponse);
-        if (edit) {
-            setFileEdits((prev) => ({ ...prev, [assistantIndex]: edit }));
+        const { display, sentinel } = parseSentinel(fullResponse);
+
+        const assistantMsg: AssistantMessage = {
+            role: "assistant",
+            content: display,
+            sentinel: sentinel ?? undefined,
+            prose: display,
+        };
+
+        setHistory([...newHistory, assistantMsg]);
+
+        if (sentinel?.type === "file_edit") {
+            setPendingEdits((prev) => {
+                const existing = prev[sentinel.path];
+                return {
+                    ...prev,
+                    [sentinel.path]: {
+                        scope: sentinel.scope,
+                        path: sentinel.path,
+                        // preserve original disk content from first edit
+                        original: existing?.original ?? sentinel.original,
+                        current: sentinel.new,
+                    },
+                };
+            });
+            setActiveDiffPath(sentinel.path);
         }
     }
 
-    async function openDiff(edit: FileEdit) {
-        for (const scope of scopes) {
-            try {
-                const result = await fetchFile(scope, edit.path);
-                setDiffState({
-                    path: edit.path,
-                    originalContent: result.content,
-                    newContent: edit.newContent,
-                });
-                return;
-            } catch {
-                // not in this scope, try next
-            }
+    async function resolveAmbiguous(
+        candidate: { scope: string; path: string },
+        newContent: string
+    ) {
+        let original = "";
+        try {
+            const result = await fetchFile(candidate.scope, candidate.path);
+            original = result.content;
+        } catch {
+            // new file
         }
-        // new file — no original
-        setDiffState({
-            path: edit.path,
-            originalContent: "",
-            newContent: edit.newContent,
-        });
+        setPendingEdits((prev) => ({
+            ...prev,
+            [candidate.path]: {
+                scope: candidate.scope,
+                path: candidate.path,
+                original,
+                current: newContent,
+            },
+        }));
+        setActiveDiffPath(candidate.path);
+    }
+
+    async function handleApply(path: string) {
+        const pe = pendingEdits[path];
+        if (!pe) return;
+
+        setApplying((prev) => ({ ...prev, [path]: true }));
+        try {
+            await applyEdit(pe.scope, pe.path, pe.current);
+            setApplied((prev) => ({ ...prev, [path]: true }));
+            // remove from pending after apply
+            setPendingEdits((prev) => {
+                const next = { ...prev };
+                delete next[path];
+                return next;
+            });
+            setActiveDiffPath(null);
+        } catch (e) {
+            console.error("apply failed", e);
+        } finally {
+            setApplying((prev) => ({ ...prev, [path]: false }));
+        }
     }
 
     function handleKeyDown(e: React.KeyboardEvent) {
@@ -178,6 +274,97 @@ export function ChatPanel({ scopes }: Props) {
         }
     }
 
+    function renderAssistantContent(msg: ChatMessage, isStreaming: boolean) {
+        const content = msg.content;
+        const sentinel = (msg as AssistantMessage).sentinel;
+
+        if (isStreaming) {
+            const editMarkerIdx = content.indexOf("__EDIT_FILE__");
+            const visible = editMarkerIdx !== -1
+                ? content.slice(0, editMarkerIdx).trim()
+                : content;
+            return <pre className="content streaming">{visible}</pre>;
+        }
+
+        if (sentinel?.type === "file_edit") {
+            const filename = sentinel.path.split("/").pop() ?? sentinel.path;
+            const isApplied = applied[sentinel.path];
+            const pe = pendingEdits[sentinel.path];
+            return (
+                <div className="content">
+                    {(msg as AssistantMessage).prose && (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {(msg as AssistantMessage).prose!}
+                        </ReactMarkdown>
+                    )}
+                    <div className="file-edit-pill-row">
+                        <div
+                            className={`file-edit-pill ${isApplied ? "applied" : ""}`}
+                            onClick={() => !isApplied && setActiveDiffPath(sentinel.path)}
+                        >
+                            <span className="file-edit-pill-icon">
+                                {isApplied ? "✓" : "✎"}
+                            </span>
+                            <span className="file-edit-pill-name">{filename}</span>
+                            {!isApplied && (
+                                <span className="file-edit-pill-action">view diff →</span>
+                            )}
+                            {isApplied && (
+                                <span className="file-edit-pill-action">applied</span>
+                            )}
+                        </div>
+                        {!isApplied && pe && (
+                            <button
+                                className="apply-btn"
+                                onClick={() => handleApply(sentinel.path)}
+                                disabled={applying[sentinel.path]}
+                            >
+                                {applying[sentinel.path] ? "applying…" : "apply"}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        if (sentinel?.type === "file_edit_ambiguous") {
+            return (
+                <div className="content">
+                    {(msg as AssistantMessage).prose && (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {(msg as AssistantMessage).prose!}
+                        </ReactMarkdown>
+                    )}
+                    <div className="file-picker">
+                        <span className="file-picker-label">
+                            Which file did you mean?
+                        </span>
+                        {sentinel.candidates.map((c) => (
+                            <button
+                                key={c.path}
+                                className="file-picker-option"
+                                onClick={() => resolveAmbiguous(c, sentinel.new)}
+                            >
+                                <span className="file-picker-scope">{c.scope}</span>
+                                <span className="file-picker-path">{c.path}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {content}
+                </ReactMarkdown>
+            </div>
+        );
+    }
+
+    const activePendingEdit = activeDiffPath ? pendingEdits[activeDiffPath] : null;
+
     return (
         <div className="chat-layout">
             <div className="chat-panel">
@@ -185,30 +372,13 @@ export function ChatPanel({ scopes }: Props) {
                     {history.map((msg, i) => (
                         <div key={i} className={`message ${msg.role}`}>
                             <span className="role-label">{msg.role}</span>
-                            {msg.role === "assistant" ? (
-                                streaming && i === history.length - 1 ? (
-                                    <pre className="content streaming">{msg.content}</pre>
-                                ) : (
-                                    <div className="content">
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={mdComponents}
-                                        >
-                                            {msg.content}
-                                        </ReactMarkdown>
-                                        {fileEdits[i] && (
-                                            <button
-                                                className="diff-btn"
-                                                onClick={() => openDiff(fileEdits[i])}
-                                            >
-                                                ⊕ view diff
-                                            </button>
-                                        )}
-                                    </div>
-                                )
-                            ) : (
-                                <pre className="content">{msg.content}</pre>
-                            )}
+                            {msg.role === "assistant"
+                                ? renderAssistantContent(
+                                      msg,
+                                      streaming && i === history.length - 1
+                                  )
+                                : <pre className="content">{msg.content}</pre>
+                            }
                         </div>
                     ))}
                     {streaming && !responseStarted && (
@@ -235,12 +405,15 @@ export function ChatPanel({ scopes }: Props) {
                 </div>
             </div>
 
-            {diffState && (
+            {activePendingEdit && (
                 <DiffPanel
-                    path={diffState.path}
-                    originalContent={diffState.originalContent}
-                    newContent={diffState.newContent}
-                    onClose={() => setDiffState(null)}
+                    path={activePendingEdit.path}
+                    originalContent={activePendingEdit.original}
+                    newContent={activePendingEdit.current}
+                    onClose={() => setActiveDiffPath(null)}
+                    onApply={() => handleApply(activePendingEdit.path)}
+                    applying={applying[activePendingEdit.path] ?? false}
+                    applied={applied[activePendingEdit.path] ?? false}
                 />
             )}
         </div>

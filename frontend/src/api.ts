@@ -131,3 +131,16 @@ export async function deleteModel(model: string): Promise<void> {
         method: "DELETE"
     });
 }
+
+export async function applyEdit(
+    scope: string,
+    path: string,
+    content: string
+): Promise <void> {
+    const res = await fetch(`${BASE}/file/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, path, content }),
+    });
+    if (!res.ok) throw new Error(`applyEdit: ${res.status}`);
+}
