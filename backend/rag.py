@@ -7,6 +7,7 @@ from llama_index.core import (
     StorageContext,
     Settings,
 )
+from llama_index.core.node_parser import SentenceSplitter
 import config
 import chromadb
 import logging
@@ -27,6 +28,7 @@ log.info("Initialising LlamaIndex — LLM: %s  embed: %s",
          config.OLLAMA_MODEL, config.EMBED_MODEL)
 Settings.llm = Ollama(model=config.OLLAMA_MODEL, request_timeout=120.0)
 Settings.embed_model = OllamaEmbedding(model_name=config.EMBED_MODEL)
+Settings.transformations = [SentenceSplitter(chunk_size=512, chunk_overlap=50)]
 
 chroma_client = chromadb.PersistentClient(path=config.CHROMA_PATH)
 log.info("ChromaDB client ready at %s", config.CHROMA_PATH)
@@ -435,12 +437,40 @@ def read_file_from_scope(scope_name: str, relative_path: str) -> str:
     # Prevent path traversal outside the scope root
     if not str(target).startswith(str(root)):
         raise PermissionError(f"Path '{relative_path}' escapes scope root")
-    
+
     if not target.exists():
         raise FileNotFoundError(f"File not found: {relative_path}")
-    
+
     if target.stat().st_size > MAX_FILE_BYTES:
         raise ValueError(f"File too large to read: {relative_path}")
-    
+
     log.info("[%s] read_file_from_scope: %s", scope_name, relative_path)
     return target.read_text(errors="ignore")
+
+# ── fuzzy file resolution ──────────────────────────────────────────────────────────
+
+def find_file_in_scopes(filename: str, scope_names: list[str]) -> list[dict]:
+    """
+    Search structural maps for files whose path ends with the given filename.
+    Match is case-insensitive and works with partial paths too.
+
+    e.g. "Tyr.md" matches "DND - Storm Kings Thunder/Characters/NPCs/Tyr.md"
+    e.g. "NPCs/Tyr.md" also matches the same file
+
+    Returns a list of dicts: [{"scope": name, "path": relative_path}, ...]
+    Sorted by path length ascending so the most specific match comes first.
+    """
+    needle = filename.lower().replace("\\", "/")
+    matches = []
+
+    for name in scope_names:
+        files = structural_maps.get(name, [])
+        for f in files:
+            haystack = f["path"].lower().replace("\\", "/")
+            if haystack.endswith(needle):
+                matches.append({"scope": name, "path": f["path"]})
+
+    # shortest path = most specific match (least extra directories)
+    matches.sort(key=lambda m: len(m["path"]))
+    log.info("find_file_in_scopes(%r, %s): %d match(es)", filename, scope_names, len(matches))
+    return matches
