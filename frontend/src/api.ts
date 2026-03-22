@@ -64,6 +64,7 @@ export async function sendChat(
     history: Message[],
     onToken: (token: string) => void,
     pendingFile?: PendingFile,
+    signal?: AbortSignal,
 ): Promise<void> {
     const res = await fetch("http://localhost:8000/chat", {
         method: "POST",
@@ -74,6 +75,7 @@ export async function sendChat(
             history: history.map((m) => ({ role: m.role, content: m.content })),
             pending_file: pendingFile ?? null,
         }),
+        signal,
     });
  
     if (!res.ok || !res.body) throw new Error(`sendChat: ${res.status}`);
@@ -81,10 +83,14 @@ export async function sendChat(
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
  
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        onToken(decoder.decode(value, { stream: true }));
+    try{
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            onToken(decoder.decode(value, { stream: true }));
+        }
+    } finally {
+        reader.cancel();
     }
 }
 

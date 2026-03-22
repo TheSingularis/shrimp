@@ -6,6 +6,7 @@ interface Props {
     newContent: string;
     onClose: () => void;
     onApply: () => void;
+    onDiscard: () => void;
     applying: boolean;
     applied: boolean;
 }
@@ -16,6 +17,7 @@ export function DiffPanel({
     newContent,
     onClose,
     onApply,
+    onDiscard,
     applying,
     applied
 }: Props) {
@@ -40,13 +42,22 @@ export function DiffPanel({
                 <span className="diff-panel-path">{path}</span>
                 <div className="diff-panel-actions">
                     {!applied && (
+                        <>
+                        <button
+                            className="discard-btn"
+                            onClick={onDiscard}
+                            disabled={applying}
+                        >
+                            discard
+                        </button>
                         <button
                             className="apply-btn"
                             onClick={onApply}
                             disabled={applying}
-                        >
+                            >
                             {applying ? "applying…" : "apply"}
                         </button>
+                            </>
                     )}
                     {applied && (
                         <span className="diff-panel-applied">✓ applied</span>
