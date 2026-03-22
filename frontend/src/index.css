@@ -85,10 +85,11 @@ main {
 
 /* chat */
 .chat-panel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    flex: 1;
-    overflow: hidden;
 }
 
 .messages {
@@ -115,6 +116,10 @@ main {
 
 .message.user .role-label {
     color: var(--accent);
+}
+
+.message.user .content {
+    white-space: pre-wrap;
 }
 
 .typing-indicator {
@@ -692,4 +697,81 @@ button:disabled {
     background: var(--accent, #7aa2f7);
     border-radius: 2px;
     transition: width 0.2s ease;
+}
+
+/* ── chat layout ─────────────────────────────────────────────────────────── */
+
+.chat-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── diff panel ──────────────────────────────────────────────────────────── */
+
+.diff-panel {
+    display: flex;
+    flex-direction: column;
+    width: 55vw;
+    min-width: 400px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.diff-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.diff-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.diff-panel-icon {
+    color: var(--accent);
+}
+
+.diff-panel-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.diff-panel-editor {
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── view diff button ────────────────────────────────────────────────────── */
+
+.diff-btn {
+    margin-top: 0.6rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.6rem;
+    display: inline-block;
+}
+
+.diff-btn:hover {
+    background: var(--accent-dim);
 }

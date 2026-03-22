@@ -91,6 +91,7 @@ async def startup():
 async def health():
     return {"status": "ok", "model": config.OLLAMA_MODEL}
 
+# ── routes: debug ─────────────────────────────────────────────────────────────
 
 @app.get("/debug/prompt")
 async def debug_prompt():
@@ -103,6 +104,10 @@ async def debug_prompt():
         "file_tree_preview": file_tree[:500],
         "context_preview": context[:500],
     }
+
+@app.get("/debug/find")
+async def debug_find(filename: str,scope: str):
+    return rag.find_file_in_scopes(filename, [scope])
 
 # ── routes: chat ──────────────────────────────────────────────────────────────
 
@@ -194,8 +199,14 @@ async def chat(req: ChatRequest):
         "Write markdown directly — your output is rendered in a markdown-aware chat UI. "
         "Only use fenced code blocks (``` with a language tag) for actual code snippets "
         "like Python, TypeScript, bash, etc. "
-        "When proposing file edits, always specify the full file path and provide "
-        "the complete new file content inside a fenced code block."
+        "When proposing a file edit, you MUST follow this exact format:\n"
+        "- Write a brief one or two sentence explanation of what you are changing.\n"
+        "- On its own line, emit exactly: __EDIT_FILE__: <relative_path_to_file>\n"
+        "- Immediately follow with the complete new file content in a fenced code block with the correct language tag.\n"
+        "- Do not include any other prose after the code block.\n"
+        "- Do not number these steps.\n"
+        "If the user asks you to edit a file but you are not certain which file they mean, "
+        "do NOT emit __EDIT_FILE__ — instead ask a clarifying question naming the candidates."
     )
 
     augmented_message = f"Here is a map of all files you have access to:\n\n{file_tree}\n\n"
@@ -213,20 +224,69 @@ async def chat(req: ChatRequest):
              scope_names, needs_files)
 
     async def stream():
-        async with httpx.AsyncClient(timeout=120) as client:
+        full_response = []
+        async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
                 "POST",
                 f"{config.OLLAMA_HOST}/api/chat",
                 json={"model": config.OLLAMA_MODEL,
-                      "messages": messages, "stream": True},
+                    "messages": messages, "stream": True},
             ) as resp:
                 async for line in resp.aiter_lines():
                     if line:
                         data = json.loads(line)
                         if token := data.get("message", {}).get("content"):
+                            full_response.append(token)
                             yield token
                         if data.get("done"):
                             break
+
+        # ── post-stream: detect file edit and emit sentinel ───────
+        complete = "".join(full_response)
+        edit_match = re.search(r"__EDIT_FILE__:\s*(.+?)[\n\r]", complete)
+        if not edit_match:
+            return
+
+        raw_path = edit_match.group(1).strip()
+        log.info("chat: detected file edit marker: %r", raw_path)
+
+        # extract the code block content that follows the marker
+        code_match = re.search(
+            r"__EDIT_FILE__:[^\n]*\n+(?:[\d]+\.\s*)?```\w*\n([\s\S]*?)\n```",
+            complete
+        )
+        new_content = code_match.group(1) if code_match else ""
+
+        # resolve path via fuzzy search across active scopes
+        matches = rag.find_file_in_scopes(raw_path, scope_names)
+
+        if len(matches) == 1:
+            # exactly one match — read original and emit sentinel
+            m = matches[0]
+            try:
+                original = rag.read_file_from_scope(m["scope"], m["path"])
+            except Exception:
+                original = ""
+            sentinel = json.dumps({
+                "type": "file_edit",
+                "scope": m["scope"],
+                "path": m["path"],
+                "original": original,
+                "new": new_content,
+            })
+            yield f"\n\n__SHRIMP_EDIT__{sentinel}"
+
+        elif len(matches) > 1:
+            # ambiguous — emit candidate list for the UI to show a picker
+            sentinel = json.dumps({
+                "type": "file_edit_ambiguous",
+                "candidates": matches,
+                "new": new_content,
+            })
+            yield f"\n\n__SHRIMP_EDIT__{sentinel}"
+
+        # 0 matches: SHRIMP should have asked for clarification in its prose,
+        # nothing to emit
 
     return StreamingResponse(stream(), media_type="text/plain")
 
