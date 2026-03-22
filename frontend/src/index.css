@@ -775,3 +775,338 @@ button:disabled {
 .diff-btn:hover {
     background: var(--accent-dim);
 }
+
+/* ── chat layout ─────────────────────────────────────────────────────────── */
+
+.chat-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── diff panel ──────────────────────────────────────────────────────────── */
+
+.diff-panel {
+    display: flex;
+    flex-direction: column;
+    width: 55vw;
+    min-width: 400px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.diff-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.diff-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.diff-panel-icon {
+    color: var(--accent);
+}
+
+.diff-panel-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.diff-panel-editor {
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── file edit pill ──────────────────────────────────────────────────────── */
+
+.file-edit-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.file-edit-pill:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.file-edit-pill-icon {
+    color: var(--accent);
+    font-size: 1rem;
+}
+
+.file-edit-pill-name {
+    color: var(--text);
+}
+
+.file-edit-pill-action {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+/* ── file picker (ambiguous matches) ─────────────────────────────────────── */
+
+.file-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.file-picker-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+}
+
+.file-picker-option {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-family: monospace;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.file-picker-option:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.file-picker-scope {
+    font-size: 0.7rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.file-picker-path {
+    font-size: 0.82rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── chat layout ─────────────────────────────────────────────────────────── */
+
+.chat-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── diff panel ──────────────────────────────────────────────────────────── */
+
+.diff-panel {
+    display: flex;
+    flex-direction: column;
+    width: 55vw;
+    min-width: 400px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.diff-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.diff-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.diff-panel-icon {
+    color: var(--accent);
+}
+
+.diff-panel-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.diff-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.diff-panel-applied {
+    font-size: 0.78rem;
+    color: var(--accent);
+    font-family: monospace;
+}
+
+.diff-panel-editor {
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── apply button ────────────────────────────────────────────────────────── */
+
+.apply-btn {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.6rem;
+    transition: all 0.15s;
+}
+
+.apply-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: #000;
+}
+
+.apply-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── file edit pill ──────────────────────────────────────────────────────── */
+
+.file-edit-pill-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.file-edit-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.file-edit-pill:hover:not(.applied) {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.file-edit-pill.applied {
+    cursor: default;
+    border-color: var(--accent);
+    opacity: 0.6;
+}
+
+.file-edit-pill-icon {
+    color: var(--accent);
+    font-size: 1rem;
+}
+
+.file-edit-pill-name {
+    color: var(--text);
+}
+
+.file-edit-pill-action {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+/* ── file picker (ambiguous matches) ─────────────────────────────────────── */
+
+.file-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.file-picker-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+}
+
+.file-picker-option {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-family: monospace;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.file-picker-option:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.file-picker-scope {
+    font-size: 0.7rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.file-picker-path {
+    font-size: 0.82rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
