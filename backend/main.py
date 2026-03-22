@@ -37,6 +37,8 @@ class ChatRequest(BaseModel):
     message: str
     scopes: list[str] = []
     history: list[dict] = []
+    # {"path": str, "content": str, "scope": str}
+    pending_file: dict | None = None
 
 
 class Scope(BaseModel):
@@ -318,23 +320,33 @@ async def chat(req: ChatRequest):
     # ── step 3a: file edit path ───────────────────────────────────────────────
     if is_file_edit and full_file_contents:
         file_path = list(full_file_contents.keys())[0]
-        original_content = full_file_contents[file_path]
+        disk_content = full_file_contents[file_path]
         scope_for_file = next(
             (sn for sn, paths in selected_files.items() if file_path in paths),
             scope_names[0]
         )
 
-        # extract the target section in Python — send only that to the model
-        section_result = extract_section(original_content, req.message)
+        # if the frontend has an unapplied pending edit for this file, use that
+        # as the working base — otherwise fall back to disk content
+        if (req.pending_file
+                and req.pending_file.get("path") == file_path
+                and req.pending_file.get("content")):
+            working_content = req.pending_file["content"]
+            log.info("chat: using pending content from frontend (%d chars)", len(
+                working_content))
+        else:
+            working_content = disk_content
+
+        # extract the target section from the working content in Python
+        section_result = extract_section(working_content, req.message)
         if section_result:
             section_text, section_start, section_end = section_result
             log.info("chat: extracted section (%d chars) at %d-%d",
                      len(section_text), section_start, section_end)
         else:
-            # no section found — edit the whole file
-            section_text = original_content
+            section_text = working_content
             section_start = 0
-            section_end = len(original_content)
+            section_end = len(working_content)
             log.info("chat: no section match found, editing full file")
 
         edit_system_prompt = (
@@ -386,21 +398,21 @@ async def chat(req: ChatRequest):
             new_content = "".join(new_content_parts).strip()
             log.info("chat: file edit generated %d chars", len(new_content))
 
-            # read fresh original from disk
-            try:
-                original = rag.read_file_from_scope(scope_for_file, file_path)
-            except Exception:
-                original = original_content
-
-            # splice the new section back at the exact position we extracted from
+            # splice into working_content (may be a pending unapplied edit)
             spliced = (
-                original[:section_start]
+                working_content[:section_start]
                 + new_content
                 + "\n\n"
-                + original[section_end:]
+                + working_content[section_end:]
             ).strip()
             log.info("chat: spliced at %d-%d, result %d chars",
                      section_start, section_end, len(spliced))
+
+            # read fresh disk original for the diff — this is always the true before state
+            try:
+                original = rag.read_file_from_scope(scope_for_file, file_path)
+            except Exception:
+                original = disk_content
 
             filename = file_path.split("/")[-1]
             yield f"Expanding **{filename}**…"
