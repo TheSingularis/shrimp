@@ -18,6 +18,12 @@ export interface IndexStatus {
     last_indexed: string | null;
 }
 
+export interface PendingFile {
+    path: string;
+    content: string;
+    scope: string;
+}
+
 export async function getScopes(): Promise<Scope[]> {
     const res = await fetch(`${BASE}/scopes`);
     return res.json();
@@ -56,21 +62,29 @@ export async function sendChat(
     message: string,
     scopes: string[],
     history: Message[],
-    onToken: (token: string) => void
+    onToken: (token: string) => void,
+    pendingFile?: PendingFile,
 ): Promise<void> {
-    const res = await fetch(`${BASE}/chat`, {
+    const res = await fetch("http://localhost:8000/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, scopes, history }),
+        body: JSON.stringify({
+            message,
+            scopes,
+            history: history.map((m) => ({ role: m.role, content: m.content })),
+            pending_file: pendingFile ?? null,
+        }),
     });
-
-    const reader = res.body!.getReader();
+ 
+    if (!res.ok || !res.body) throw new Error(`sendChat: ${res.status}`);
+ 
+    const reader = res.body.getReader();
     const decoder = new TextDecoder();
-
+ 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        onToken(decoder.decode(value));
+        onToken(decoder.decode(value, { stream: true }));
     }
 }
 
@@ -87,8 +101,13 @@ export async function triggerIndexOne(name: string): Promise<void> {
     await fetch(`${BASE}/index/${name}`, { method: "POST" });
 }
 
-export async function fetchFile(scope: string, path: string): Promise<{ scope: string; path: string; content: string }> {
-    const res = await fetch(`${BASE}/file?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`);
+export async function fetchFile(
+    scope: string,
+    path: string,
+): Promise<{ scope: string; path: string; content: string }> {
+    const res = await fetch(
+        `http://localhost:8000/file?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`
+    );
     if (!res.ok) throw new Error(`fetchFile: ${res.status}`);
     return res.json();
 }
@@ -135,9 +154,9 @@ export async function deleteModel(model: string): Promise<void> {
 export async function applyEdit(
     scope: string,
     path: string,
-    content: string
-): Promise <void> {
-    const res = await fetch(`${BASE}/file/apply`, {
+    content: string,
+): Promise<void> {
+    const res = await fetch("http://localhost:8000/file/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope, path, content }),

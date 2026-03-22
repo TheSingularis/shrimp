@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { type Message, sendChat, fetchFile, applyEdit } from "../api";
+import { type Message, sendChat, fetchFile, applyEdit, type PendingFile } from "../api";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -154,16 +154,9 @@ export function ChatPanel({ scopes }: Props) {
     async function submit() {
         if (!input.trim() || streaming) return;
 
-        // inject pending file context into the message if relevant
-        let augmentedInput = input;
-        const pendingList = Object.values(pendingEdits);
-        if (pendingList.length > 0) {
-            const contextBlocks = pendingList.map((pe) =>
-                `Current working version of ${pe.path}:\n\`\`\`\n${pe.current}\n\`\`\``
-            ).join("\n\n");
-            augmentedInput =
-                `${contextBlocks}\n\nUser request: ${input}`;
-        }
+        // augmented input is just the raw message — pending file context
+        // is sent separately via pending_file field, not injected into the message text
+        const augmentedInput = input;
 
         const userMessage: Message = { role: "user", content: input }; // display original
         const augmentedMessage: Message = { role: "user", content: augmentedInput }; // sent to API
@@ -176,11 +169,13 @@ export function ChatPanel({ scopes }: Props) {
 
         let fullResponse = "";
 
-        // send augmented message but only display original
-        const historyForApi = [
-            ...history.map((m) => ({ role: m.role, content: m.content })),
-            { role: augmentedMessage.role, content: augmentedMessage.content },
-        ];
+        // if there's exactly one pending edit, pass it to the backend so it
+        // uses the accumulated content as the working base for section extraction
+        const pendingList = Object.values(pendingEdits);
+        const pendingFile: PendingFile | undefined =
+            pendingList.length === 1
+                ? { path: pendingList[0].path, content: pendingList[0].current, scope: pendingList[0].scope }
+                : undefined;
 
         await sendChat(augmentedInput, scopes, history, (token) => {
             if (!responseStarted) setResponseStarted(true);
@@ -189,7 +184,7 @@ export function ChatPanel({ scopes }: Props) {
                 ...newHistory,
                 { role: "assistant", content: fullResponse },
             ]);
-        });
+        }, pendingFile);
 
         setStreaming(false);
 
