@@ -8,32 +8,18 @@ interface Props {
 }
 
 export function DiffPanel({ path, originalContent, newContent, onClose }: Props) {
-    // Derive language from file extension for Monaco syntax highlighting
     const ext = path.split(".").pop()?.toLowerCase() ?? "";
-        const langMap: Record<string, string> = {
-        py: "python",
-        ts: "typescript",
-        tsx: "typescript",
-        js: "javascript",
-        jsx: "javascript",
-        json: "json",
-        md: "markdown",
-        yaml: "yaml",
-        yml: "yaml",
-        toml: "toml",
-        sh: "shell",
-        rs: "rust",
-        go: "go",
-        java: "java",
-        c: "c",
-        cpp: "cpp",
-        h: "cpp",
-        txt: "plaintext",
+    const langMap: Record<string, string> = {
+        py: "python", ts: "typescript", tsx: "typescript",
+        js: "javascript", jsx: "javascript", json: "json",
+        md: "markdown", yaml: "yaml", yml: "yaml",
+        toml: "toml", sh: "shell", rs: "rust", go: "go",
+        java: "java", c: "c", cpp: "cpp", h: "cpp", txt: "plaintext",
     };
     const language = langMap[ext] ?? "plaintext";
     const filename = path.split("/").pop() ?? path;
 
-        return (
+    return (
         <div className="diff-panel">
             <div className="diff-panel-header">
                 <span className="diff-panel-title">
@@ -57,12 +43,7 @@ export function DiffPanel({ path, originalContent, newContent, onClose }: Props)
                         fontSize: 13,
                         lineNumbers: "on",
                         wordWrap: "on",
-                        diffWordWrap: "on",
                         renderOverviewRuler: false,
-                        scrollbar: {
-                            vertical: "auto",
-                            horizontal: "auto",
-                        },
                     }}
                     height="100%"
                 />

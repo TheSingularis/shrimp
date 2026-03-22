@@ -5,7 +5,7 @@
             {
                 "name": "$(play) Run SHRIMP",
                 "color": "orange",
-                "command": "distrobox enter arch-dev -- bash start.sh & ",
+                "command": "distrobox enter arch-dev -- bash start.sh",
                 "singleInstance": false
             }
         ]
