@@ -127,8 +127,10 @@ export function ChatPanel({ scopes }: Props) {
     // apply state per file
     const [applying, setApplying] = useState<Record<string, boolean>>({});
     const [applied, setApplied] = useState<Record<string, boolean>>({});
+    const [discarded, setDiscarded] = useState<Record<string, boolean>>({});
 
     const bottomRef = useRef<HTMLDivElement>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const spinner = cliSpinners.bouncingBar;
     const [spinnerFrame, setSpinnerFrame] = useState(0);
 
@@ -154,12 +156,8 @@ export function ChatPanel({ scopes }: Props) {
     async function submit() {
         if (!input.trim() || streaming) return;
 
-        // augmented input is just the raw message — pending file context
-        // is sent separately via pending_file field, not injected into the message text
         const augmentedInput = input;
-
-        const userMessage: Message = { role: "user", content: input }; // display original
-        const augmentedMessage: Message = { role: "user", content: augmentedInput }; // sent to API
+        const userMessage: Message = { role: "user", content: input };
         const newHistory = [...history, userMessage];
 
         setHistory([...newHistory, { role: "assistant", content: "" }]);
@@ -169,24 +167,41 @@ export function ChatPanel({ scopes }: Props) {
 
         let fullResponse = "";
 
-        // if there's exactly one pending edit, pass it to the backend so it
-        // uses the accumulated content as the working base for section extraction
         const pendingList = Object.values(pendingEdits);
         const pendingFile: PendingFile | undefined =
             pendingList.length === 1
                 ? { path: pendingList[0].path, content: pendingList[0].current, scope: pendingList[0].scope }
                 : undefined;
 
-        await sendChat(augmentedInput, scopes, history, (token) => {
-            if (!responseStarted) setResponseStarted(true);
-            fullResponse += token;
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        try {
+            await sendChat(augmentedInput, scopes, history, (token) => {
+                if (!responseStarted) setResponseStarted(true);
+                fullResponse += token;
+                setHistory([
+                    ...newHistory,
+                    { role: "assistant", content: fullResponse },
+                ]);
+            }, pendingFile, controller.signal);
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name !== "AbortError") {
+                console.error("sendChat error:", err);
+            }
+        } finally {
+            abortRef.current = null;
+            setStreaming(false);
+        }
+
+        // if cancelled mid-stream, keep whatever was received as plain text
+        if (controller.signal.aborted) {
             setHistory([
                 ...newHistory,
-                { role: "assistant", content: fullResponse },
+                { role: "assistant", content: fullResponse || "_(cancelled)_" },
             ]);
-        }, pendingFile);
-
-        setStreaming(false);
+            return;
+        }
 
         const { display, sentinel } = parseSentinel(fullResponse);
 
@@ -207,7 +222,6 @@ export function ChatPanel({ scopes }: Props) {
                     [sentinel.path]: {
                         scope: sentinel.scope,
                         path: sentinel.path,
-                        // preserve original disk content from first edit
                         original: existing?.original ?? sentinel.original,
                         current: sentinel.new,
                     },
@@ -215,6 +229,10 @@ export function ChatPanel({ scopes }: Props) {
             });
             setActiveDiffPath(sentinel.path);
         }
+    }
+
+    function cancel() {
+        abortRef.current?.abort();
     }
 
     async function resolveAmbiguous(
@@ -262,6 +280,16 @@ export function ChatPanel({ scopes }: Props) {
         }
     }
 
+    function handleDiscard(path: string) {
+        setPendingEdits((prev) => {
+            const next = { ...prev };
+            delete next[path];
+            return next;
+        });
+        setDiscarded((prev) => ({ ...prev, [path]: true }));
+        setActiveDiffPath(null);
+    }
+
     function handleKeyDown(e: React.KeyboardEvent) {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -284,6 +312,7 @@ export function ChatPanel({ scopes }: Props) {
         if (sentinel?.type === "file_edit") {
             const filename = sentinel.path.split("/").pop() ?? sentinel.path;
             const isApplied = applied[sentinel.path];
+            const isDiscarded = discarded[sentinel.path];
             const pe = pendingEdits[sentinel.path];
             return (
                 <div className="content">
@@ -294,21 +323,18 @@ export function ChatPanel({ scopes }: Props) {
                     )}
                     <div className="file-edit-pill-row">
                         <div
-                            className={`file-edit-pill ${isApplied ? "applied" : ""}`}
-                            onClick={() => !isApplied && setActiveDiffPath(sentinel.path)}
+                            className={`file-edit-pill ${isApplied ? "applied" : ""} ${isDiscarded ? "discarded" : ""}`}
+                            onClick={() => !isApplied && !isDiscarded && setActiveDiffPath(sentinel.path)}
                         >
                             <span className="file-edit-pill-icon">
-                                {isApplied ? "✓" : "✎"}
+                                {isApplied ? "✓" : isDiscarded ? "✕" : "✎"}
                             </span>
                             <span className="file-edit-pill-name">{filename}</span>
-                            {!isApplied && (
-                                <span className="file-edit-pill-action">view diff →</span>
-                            )}
-                            {isApplied && (
-                                <span className="file-edit-pill-action">applied</span>
-                            )}
+                            <span className="file-edit-pill-action">
+                                {isApplied ? "applied" : isDiscarded ? "discarded" : "view diff →"}
+                            </span>
                         </div>
-                        {!isApplied && pe && (
+                        {!isApplied && !isDiscarded && pe && (
                             <button
                                 className="apply-btn"
                                 onClick={() => handleApply(sentinel.path)}
@@ -394,9 +420,15 @@ export function ChatPanel({ scopes }: Props) {
                         rows={3}
                         disabled={streaming}
                     />
-                    <button onClick={submit} disabled={streaming || !input.trim()}>
-                        {streaming ? "..." : "Send"}
-                    </button>
+                    {streaming ? (
+                        <button className="stop-btn" onClick={cancel}>
+                            ■ stop
+                        </button>
+                    ) : (
+                        <button onClick={submit} disabled={!input.trim()}>
+                            Send
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -407,6 +439,7 @@ export function ChatPanel({ scopes }: Props) {
                     newContent={activePendingEdit.current}
                     onClose={() => setActiveDiffPath(null)}
                     onApply={() => handleApply(activePendingEdit.path)}
+                    onDiscard={() => handleDiscard(activePendingEdit.path)}
                     applying={applying[activePendingEdit.path] ?? false}
                     applied={applied[activePendingEdit.path] ?? false}
                 />

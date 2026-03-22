@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -173,7 +173,7 @@ async def debug_find(filename: str, scope: str):
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, request: Request):
     enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
     active = [s for s in enabled if s["name"]
               in req.scopes] if req.scopes else enabled
@@ -187,17 +187,23 @@ async def chat(req: ChatRequest):
     file_tree = rag.get_structural_summary(scope_names, max_files=150)
 
     # ── step 1a: intent detection ─────────────────────────────────────────────
+    # Include recent history so follow-up messages like "yeah go ahead" are
+    # understood in context of what was just discussed.
+    recent_history = req.history[-6:] if len(req.history) > 6 else req.history
+
     intent_prompt = (
-        "You are an intent detection assistant. Given a user message, decide if the "
-        "user is asking to CREATE, MODIFY, UPDATE, EDIT, EXPAND, REWRITE, or otherwise "
-        "CHANGE the content of a file.\n\n"
+        "You are an intent detection assistant. Given a conversation and the latest "
+        "user message, decide if the user is asking to CREATE, MODIFY, UPDATE, EDIT, "
+        "EXPAND, REWRITE, or otherwise CHANGE the content of a file.\n\n"
         "Rules:\n"
         "- If the user wants to change file content in any way, respond with: "
         '{"is_file_edit": true}\n'
         "- If the user is asking a question, requesting information, or just chatting, "
         'respond with: {"is_file_edit": false}\n'
+        "- Consider the full conversation context — a short follow-up like 'yeah go "
+        "ahead' or 'do it' may be confirming a file edit discussed earlier.\n"
         "- Respond with JSON only. No explanation.\n\n"
-        f"USER MESSAGE: {req.message}"
+        f"LATEST USER MESSAGE: {req.message}"
     )
 
     is_file_edit = False
@@ -207,10 +213,13 @@ async def chat(req: ChatRequest):
                 f"{config.OLLAMA_HOST}/api/chat",
                 json={
                     "model": config.OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": intent_prompt}],
+                    "messages": [
+                        *recent_history,
+                        {"role": "user", "content": intent_prompt},
+                    ],
                     "stream": False,
                     "format": "json",
-                    "options": {"num_ctx": 2048},
+                    "options": {"num_ctx": 4096},
                 },
             )
             raw = resp.json().get("message", {}).get("content", "{}")
@@ -223,18 +232,24 @@ async def chat(req: ChatRequest):
 
     # ── step 1b: file selection ───────────────────────────────────────────────
     file_selection_prompt = (
-        "You are a file selection assistant. Given a file tree and a user question, "
-        "decide if answering the question requires reading specific files.\n\n"
+        "You are a file selection assistant. Given a file tree and a conversation, "
+        "decide if the latest user message requires reading specific files.\n\n"
         "Rules:\n"
-        "- If the question is conversational, general, or doesn't need file content, "
-        'respond with: {"needs_files": false}\n'
-        "- If specific files would help, respond with the most relevant file paths. "
-        'Example: {"needs_files": true, "files": {"code": ["src/main.py"], "obsidian": ["Notes/auth.md"]}}\n'
+        "- The scope keys MUST be one of the exact scope names listed below. "
+        "Never use a file path as a scope key.\n"
+        f"- Valid scope names: {scope_names}\n"
+        "- If no files are needed, respond with: "
+        '{"needs_files": false}\n'
+        "- If specific files would help, use this format exactly: "
+        '{"needs_files": true, "files": {"obsidian": ["path/to/file.md"]}}\n'
         "- Only include files that actually exist in the tree below.\n"
+        "- Consider the full conversation — the user may be referring to a file "
+        "mentioned earlier without naming it again.\n"
         "- Maximum 5 files total across all scopes.\n"
         "- Respond with JSON only. No explanation, no markdown.\n\n"
+        f"VALID SCOPE NAMES: {scope_names}\n\n"
         f"FILE TREE:\n{file_tree}\n\n"
-        f"USER QUESTION: {req.message}"
+        f"LATEST USER MESSAGE: {req.message}"
     )
 
     selected_files: dict[str, list[str]] = {}
@@ -246,7 +261,10 @@ async def chat(req: ChatRequest):
                 f"{config.OLLAMA_HOST}/api/chat",
                 json={
                     "model": config.OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": file_selection_prompt}],
+                    "messages": [
+                        *recent_history,
+                        {"role": "user", "content": file_selection_prompt},
+                    ],
                     "stream": False,
                     "format": "json",
                     "options": {"num_ctx": 4096},
@@ -256,13 +274,49 @@ async def chat(req: ChatRequest):
             parsed = json.loads(raw)
             needs_files = parsed.get("needs_files", False)
             if needs_files:
-                selected_files = parsed.get("files", {})
-                log.info("chat: file selection — %s", selected_files)
+                raw_files = parsed.get("files", {})
+                # validate scope keys — discard any that aren't real scope names
+                selected_files = {
+                    k: v for k, v in raw_files.items()
+                    if k in scope_names and isinstance(v, list)
+                }
+                if raw_files and not selected_files:
+                    log.warning(
+                        "chat: file selection returned invalid scope keys: %s", list(raw_files.keys()))
+                else:
+                    log.info("chat: file selection — %s", selected_files)
             else:
                 log.info("chat: LLM decided no files needed")
     except Exception as e:
         log.warning(
             "chat: file selection pass failed (%s) — falling back to vector index", e)
+
+    # ── step 1b.5: history-based file fallback ───────────────────────────────
+    # If file selection found nothing but intent says this is a file edit,
+    # scan recent assistant messages for previously identified file paths
+    # and reuse them (the user is likely doing a follow-up on the same file).
+    if is_file_edit and not selected_files and recent_history:
+        for msg in reversed(recent_history):
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content", "")
+            # look for scope/path pattern from previous sentinels in history
+            for scope_name in scope_names:
+                files_in_map = [f["path"]
+                                for f in rag.structural_maps.get(scope_name, [])]
+                for fp in files_in_map:
+                    if fp in content or fp.split("/")[-1] in content:
+                        selected_files.setdefault(scope_name, [])
+                        if fp not in selected_files[scope_name]:
+                            selected_files[scope_name].append(fp)
+                            needs_files = True
+                            log.info(
+                                "chat: history fallback — reusing %s: %s", scope_name, fp)
+                            break
+                if selected_files:
+                    break
+            if selected_files:
+                break
 
     # ── step 1c: deterministic file injection ─────────────────────────────────
     # If the message explicitly names a file that exists in the structural map,
@@ -388,6 +442,10 @@ async def chat(req: ChatRequest):
                     },
                 ) as resp:
                     async for line in resp.aiter_lines():
+                        if await request.is_disconnected():
+                            log.info(
+                                "chat: client disconnected during file edit stream")
+                            return
                         if line:
                             data = json.loads(line)
                             if token := data.get("message", {}).get("content"):
@@ -466,6 +524,9 @@ async def chat(req: ChatRequest):
                 },
             ) as resp:
                 async for line in resp.aiter_lines():
+                    if await request.is_disconnected():
+                        log.info("chat: client disconnected during stream")
+                        return
                     if line:
                         data = json.loads(line)
                         if token := data.get("message", {}).get("content"):
