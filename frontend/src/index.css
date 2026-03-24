@@ -1659,3 +1659,25 @@ button:disabled {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 0.4rem 0;
+}
+
+.typing-indicator .spinner {
+    white-space: pre;
+    font-family: monospace;
+    color: var(--accent);
+}
+
+.stage-label {
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.85rem;
+}
