@@ -169,3 +169,18 @@ export async function applyEdit(
     });
     if (!res.ok) throw new Error(`applyEdit: ${res.status}`);
 }
+
+export async function getCtx(): Promise<number> {
+    const res = await fetch(`${BASE}/settings/ctx`);
+    if (!res.ok) throw new Error(`getCtx: ${res.status}`);
+    return (await res.json()).num_ctx;
+}
+
+export async function setCtx(num_ctx: number): Promise<void> {
+    const res = await fetch(`${BASE}/settings/ctx`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ num_ctx }),
+    });
+    if (!res.ok) throw new Error(`setCtx: ${res.status}`);
+}
