@@ -60,6 +60,8 @@ class ApplyEditRequest(BaseModel):
     path: str
     content: str
 
+class CtxUpdate(BaseModel):
+    num_ctx: int
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -219,7 +221,7 @@ async def chat(req: ChatRequest, request: Request):
                     ],
                     "stream": False,
                     "format": "json",
-                    "options": {"num_ctx": 4096},
+                    "options": {"num_ctx": config.NUM_CTX},
                 },
             )
             raw = resp.json().get("message", {}).get("content", "{}")
@@ -267,7 +269,7 @@ async def chat(req: ChatRequest, request: Request):
                     ],
                     "stream": False,
                     "format": "json",
-                    "options": {"num_ctx": 4096},
+                    "options": {"num_ctx": config.NUM_CTX},
                 },
             )
             raw = resp.json().get("message", {}).get("content", "{}")
@@ -428,7 +430,8 @@ async def chat(req: ChatRequest, request: Request):
 
         log.info("chat: file edit chain — generating content for %s", file_path)
 
-        async def stream_file_edit():
+        async def stream_file_edit_inner():
+            yield "__STAGE__thinking"
             new_content_parts = []
             async with httpx.AsyncClient(timeout=None) as client:
                 async with client.stream(
@@ -438,7 +441,7 @@ async def chat(req: ChatRequest, request: Request):
                         "model": config.OLLAMA_MODEL,
                         "messages": edit_messages,
                         "stream": True,
-                        "options": {"num_ctx": 8192},
+                        "options": {"num_ctx": config.NUM_CTX},
                     },
                 ) as resp:
                     async for line in resp.aiter_lines():
@@ -472,6 +475,8 @@ async def chat(req: ChatRequest, request: Request):
             except Exception:
                 original = disk_content
 
+            yield "__STAGE__done"
+
             filename = file_path.split("/")[-1]
             yield f"Expanding **{filename}**…"
 
@@ -483,6 +488,13 @@ async def chat(req: ChatRequest, request: Request):
                 "new": spliced,
             })
             yield f"\n\n__SHRIMP_EDIT__{sentinel}"
+
+        async def stream_file_edit():
+            # Stage tokens for pre-stream steps (already completed by this point)
+            yield "__STAGE__finding"
+            yield "__STAGE__reading"
+            async for chunk in stream_file_edit_inner():
+                yield chunk
 
         return StreamingResponse(stream_file_edit(), media_type="text/plain")
 
@@ -511,7 +523,7 @@ async def chat(req: ChatRequest, request: Request):
     log.info("chat: normal chat — scopes=%s needs_files=%s",
              scope_names, needs_files)
 
-    async def stream():
+    async def stream_inner():
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
                 "POST",
@@ -520,7 +532,7 @@ async def chat(req: ChatRequest, request: Request):
                     "model": config.OLLAMA_MODEL,
                     "messages": messages,
                     "stream": True,
-                    "options": {"num_ctx": 8192},
+                    "options": {"num_ctx": config.NUM_CTX},
                 },
             ) as resp:
                 async for line in resp.aiter_lines():
@@ -533,6 +545,14 @@ async def chat(req: ChatRequest, request: Request):
                             yield token
                         if data.get("done"):
                             break
+
+    async def stream():
+        # Stage token for file selection (already completed by this point)
+        yield "__STAGE__searching"
+        # Stage token before Ollama call
+        yield "__STAGE__thinking"
+        async for chunk in stream_inner():
+            yield chunk
 
     return StreamingResponse(stream(), media_type="text/plain")
 
@@ -742,3 +762,22 @@ async def apply_edit(req: ApplyEditRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ── routes: ctx ────────────────────────────────────────────────
+
+@app.get("/settings/ctx")
+async def get_ctx():
+    return {"num_ctx": config.NUM_CTX}
+
+@app.post("/settings/ctx")
+async def set_ctx_setting(update: CtxUpdate):
+    config.NUM_CTX = update.num_ctx
+    # persist to config.py
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    if _re.search(r"NUM_CTX: int = \d+", current):
+        current = _re.sub(r"NUM_CTX: int = \d+", f"NUM_CTX: int = {update.num_ctx}", current)
+        config_path.write_text(current)
+        log.info("settings: NUM_CTX set to %d", update.num_ctx)
+        return {"num_ctx": config.NUM_CTX}

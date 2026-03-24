@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { type Scope, getModels, setModel, setScopes, deleteScope } from "../api";
+import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
 
@@ -8,6 +8,43 @@ interface Props {
     onClose: () => void;
     onScopesChanged: (scopes: Scope[]) => void;
 }
+
+// ── context slider ─────────────────────────────────────────────────────────────
+
+const CTX_OPTIONS = [2048, 4096, 8192, 16384, 32768];
+
+function ContextSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+    const idx = CTX_OPTIONS.indexOf(value);
+    const selectedIdx = idx === -1 ? 2 : idx; // default to 8192
+
+    return (
+        <div className="ctx-slider-wrapper">
+            <input
+                type="range"
+                className="ctx-slider"
+                min={0}
+                max={CTX_OPTIONS.length - 1}
+                step={1}
+                value={selectedIdx}
+                onChange={(e) => onChange(CTX_OPTIONS[parseInt(e.target.value)])}
+            />
+            <div className="ctx-slider-labels">
+                {CTX_OPTIONS.map((opt, i) => (
+                    <span
+                        key={opt}
+                        className={`ctx-label ${i === selectedIdx ? "active" : ""}`}
+                        onClick={() => onChange(opt)}
+                    >
+                        {opt >= 1024 ? `${opt / 1024}k` : opt}
+                    </span>
+                ))}
+            </div>
+            <div className="ctx-slider-value">{value.toLocaleString()} tokens</div>
+        </div>
+    );
+}
+
+// ── component ──────────────────────────────────────────────────────────────────
 
 export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [models, setModels] = useState<string[]>([]);
@@ -22,6 +59,8 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [pulling, setPulling] = useState(false);
     const [pullStatus, setPullStatus] = useState<string | null>(null);
     const [pullPercent, setPullPercent] = useState<number | null>(null);
+    const [ctxValue, setCtxValue] = useState(8192);
+    const [ctxSaving, setCtxSaving] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -33,7 +72,18 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         fetch("http://localhost:8000/settings/scopes")
             .then((r) => r.json())
             .then(setLocalScopes);
+        getCtx().then(setCtxValue).catch(() => {});
     }, [open]);
+
+    async function handleCtxChange(value: number) {
+        setCtxValue(value);
+        setCtxSaving(true);
+        try {
+            await setCtx(value);
+        } finally {
+            setCtxSaving(false);
+        }
+    }
 
     async function handleModelChange(model: string) {
         setActiveModel(model);
@@ -42,7 +92,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
 
     async function handleToggleScope(name: string) {
         const updated = scopes.map((s) =>
-        s.name === name ? { ...s, enabled: !s.enabled }: s
+            s.name === name ? { ...s, enabled: !s.enabled } : s
         );
         setSaving(true);
         const result = await setScopes(updated);
@@ -57,7 +107,6 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         setLocalScopes(result);
         onScopesChanged(result);
         setSaving(false);
-
     }
 
     async function handleAddScope() {
@@ -79,7 +128,6 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     async function handleIndexOne(name: string) {
         setIndexing(name);
         await triggerIndexOne(name);
-        // poll until status updates
         const poll = setInterval(async () => {
             const status = await getIndexStatus();
             setIndexStatus(status);
@@ -114,7 +162,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             setModels(data.models);
             setActiveModel(data.active);
             setPullInput("");
-            setPullStatus("done")
+            setPullStatus("done");
         } catch {
             setPullStatus("error pulling model");
         } finally {
@@ -131,127 +179,135 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     }
 
     return (
-    <>
-      {open && <div className="drawer-backdrop" onClick={onClose} />}
-      <div className={`settings-drawer ${open ? "open" : ""}`}>
-        <div className="drawer-header">
-          <span>Settings</span>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
-
-        <section className="drawer-section">
-          <h2>Model</h2>
-          <div className="model-list">
-            {models.length === 0 && (
-                <span className="scope-status unindexed">no models installed</span>
-            )}
-            {models.map((m) => (
-              <div key={m} className="model-row">
-                <button
-                    className={`model-pill ${m === activeModel ? "active" : ""}`}
-                    onClick={() => handleModelChange(m)}
-                >
-                    {m}
-                </button>
-                <button
-                    className="delete-btn"
-                    onClick={() => handleDeleteModel(m)}
-                    title="Remove model"
-                >
-                    ✕
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="add-scope" style={{ marginTop: "0.75rem" }}>
-            <input
-                placeholder="e.g. qwen2.5-coder:7b"
-                value={pullInput}
-                onChange={(e) => setPullInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handlePullModel()}
-                disabled={pulling}
-            />
-            <button onClick={handlePullModel} disabled={pulling || !pullInput.trim()}>
-                {pulling ? "pulling..." : "Pull"}
-            </button>
-          </div>
-          
-          {pullStatus && (
-            <div className="scope-status" style={{marginTop: "0.4rem"}}>
-              {pullStatus}
-              {pullPercent !== null && ` - ${pullPercent}%`}
-              {pulling && pullPercent !== null && (
-                <div className="pull-progress">
-                    <div
-                        className="pull-progress-bar"
-                        style={{ width: `${pullPercent}%` }}
-                    />
+        <>
+            {open && <div className="drawer-backdrop" onClick={onClose} />}
+            <div className={`settings-drawer ${open ? "open" : ""}`}>
+                <div className="drawer-header">
+                    <span>Settings</span>
+                    <button className="close-btn" onClick={onClose}>✕</button>
                 </div>
-              )}
-            </div>
-          )}
-        </section>
 
-        <section className="drawer-section">
-          <h2>Scopes {saving && <span className="saving">saving…</span>}</h2>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={handleIndexAll} disabled={indexing !== null}>
-                {indexing === "all" ? "indexing…" : "↻ index all"}
-            </button>
-          </div>
-          <div className="scope-list">
-            {scopes.map((s) => (
-              <div key={s.name} className="scope-row">
-                <div className="scope-info">
-                    <span className="scope-name">{s.name}</span>
-                    <span className="scope-path">{s.path}</span>
-                    {statusFor(s.name)?.last_indexed ? (
-                    <span className="scope-status">
-                        {statusFor(s.name)!.file_count} files · indexed {" "}
-                        {new Date(statusFor(s.name)!.last_indexed!).toLocaleTimeString()}
-                    </span>
-                    ) : (
-                    <span className="scope-status unindexed">not indexed</span>
+                <section className="drawer-section">
+                    <h2>Model</h2>
+                    <div className="model-list">
+                        {models.length === 0 && (
+                            <span className="scope-status unindexed">no models installed</span>
+                        )}
+                        {models.map((m) => (
+                            <div key={m} className="model-row">
+                                <button
+                                    className={`model-pill ${m === activeModel ? "active" : ""}`}
+                                    onClick={() => handleModelChange(m)}
+                                >
+                                    {m}
+                                </button>
+                                <button
+                                    className="delete-btn"
+                                    onClick={() => handleDeleteModel(m)}
+                                    title="Remove model"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="add-scope" style={{ marginTop: "0.75rem" }}>
+                        <input
+                            placeholder="e.g. qwen2.5-coder:7b"
+                            value={pullInput}
+                            onChange={(e) => setPullInput(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handlePullModel()}
+                            disabled={pulling}
+                        />
+                        <button onClick={handlePullModel} disabled={pulling || !pullInput.trim()}>
+                            {pulling ? "pulling..." : "Pull"}
+                        </button>
+                    </div>
+
+                    {pullStatus && (
+                        <div className="scope-status" style={{ marginTop: "0.4rem" }}>
+                            {pullStatus}
+                            {pullPercent !== null && ` - ${pullPercent}%`}
+                            {pulling && pullPercent !== null && (
+                                <div className="pull-progress">
+                                    <div
+                                        className="pull-progress-bar"
+                                        style={{ width: `${pullPercent}%` }}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     )}
-                </div>
-                <div className="scope-actions">
-                    <button
-                    className="index-btn"
-                    onClick={() => handleIndexOne(s.name)}
-                    disabled={indexing !== null}
-                    >
-                    {indexing === s.name ? "…" : "↻"}
-                    </button>
-                    <button
-                    className={`toggle-btn ${s.enabled ? "on" : "off"}`}
-                    onClick={() => handleToggleScope(s.name)}
-                    >
-                    {s.enabled ? "on" : "off"}
-                    </button>
-                    <button className="delete-btn" onClick={() => handleDeleteScope(s.name)}>✕</button>
-                </div>
-                </div>
-            ))}
-          </div>
+                </section>
 
-          <div className="add-scope">
-            <input
-              placeholder="name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <input
-              placeholder="/path/to/directory"
-              value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
-            />
-            <button onClick={handleAddScope} disabled={!newName || !newPath}>
-              Add
-            </button>
-          </div>
-        </section>
-      </div>
-    </>
-  );
+                <section className="drawer-section">
+                    <h2>
+                        Context Window
+                        {ctxSaving && <span className="saving">saving…</span>}
+                    </h2>
+                    <ContextSlider value={ctxValue} onChange={handleCtxChange} />
+                </section>
+
+                <section className="drawer-section">
+                    <h2>Scopes {saving && <span className="saving">saving…</span>}</h2>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button onClick={handleIndexAll} disabled={indexing !== null}>
+                            {indexing === "all" ? "indexing…" : "↻ index all"}
+                        </button>
+                    </div>
+                    <div className="scope-list">
+                        {scopes.map((s) => (
+                            <div key={s.name} className="scope-row">
+                                <div className="scope-info">
+                                    <span className="scope-name">{s.name}</span>
+                                    <span className="scope-path">{s.path}</span>
+                                    {statusFor(s.name)?.last_indexed ? (
+                                        <span className="scope-status">
+                                            {statusFor(s.name)!.file_count} files · indexed{" "}
+                                            {new Date(statusFor(s.name)!.last_indexed!).toLocaleTimeString()}
+                                        </span>
+                                    ) : (
+                                        <span className="scope-status unindexed">not indexed</span>
+                                    )}
+                                </div>
+                                <div className="scope-actions">
+                                    <button
+                                        className="index-btn"
+                                        onClick={() => handleIndexOne(s.name)}
+                                        disabled={indexing !== null}
+                                    >
+                                        {indexing === s.name ? "…" : "↻"}
+                                    </button>
+                                    <button
+                                        className={`toggle-btn ${s.enabled ? "on" : "off"}`}
+                                        onClick={() => handleToggleScope(s.name)}
+                                    >
+                                        {s.enabled ? "on" : "off"}
+                                    </button>
+                                    <button className="delete-btn" onClick={() => handleDeleteScope(s.name)}>✕</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="add-scope">
+                        <input
+                            placeholder="name"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                        />
+                        <input
+                            placeholder="/path/to/directory"
+                            value={newPath}
+                            onChange={(e) => setNewPath(e.target.value)}
+                        />
+                        <button onClick={handleAddScope} disabled={!newName || !newPath}>
+                            Add
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </>
+    );
 }

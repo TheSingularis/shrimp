@@ -6,10 +6,10 @@ Items are grouped by effort. Within each group, recommended order top to bottom.
 
 ## Quick wins
 
-- [X] **Discard button** — abandon a pending file edit without applying it. Clears
+- [x] **Discard button** — abandon a pending file edit without applying it. Clears
       the entry from `pendingEdits` and closes the diff panel.
 
-- [ ] **Stop / cancel button** — abort an in-flight streaming response. Frontend
+- [x] **Stop / cancel button** — abort an in-flight streaming response. Frontend
       closes the reader; backend needs the stream generator to respect an
       `asyncio.Event` or the client disconnect signal.
 
@@ -18,7 +18,7 @@ Items are grouped by effort. Within each group, recommended order top to bottom.
       stream during generation; snap to the formatted pill + diff panel when
       streaming finishes.
 
-- [ ] **Context window slider in settings** — expose `num_ctx` as a user setting
+- [x] **Context window slider in settings** — expose `num_ctx` as a user setting
       with fixed snap points (2048 / 4096 / 8192 / 16384 / 32768). Persist to
       `config.py`. Apply to all Ollama API calls.
 
@@ -53,6 +53,27 @@ Items are grouped by effort. Within each group, recommended order top to bottom.
 ---
 
 ## Larger efforts
+
+### Tool calling refactor
+
+- [ ] **Rewrite chat pipeline around Ollama tool calling** — replace the current
+      prompt-chaining approach (3 separate LLM calls + regex parsing + sentinel
+      system) with a proper tool-calling loop using Ollama's structured `tools`
+      API (same interface as OpenAI function calling, supported by
+      `qwen2.5-coder` and other models).
+      - Define tools: `read_file(scope, path)`, `edit_section(path, section, new_content)`,
+        `search_files(query)`, `list_files(scope)`.
+      - Backend runs a loop: model responds with `tool_calls` → Python executes
+        the tool → result fed back → model continues until it produces a final
+        text response.
+      - Frontend sentinel system (`__SHRIMP_EDIT__`) replaced by structured tool
+        result events streamed to the frontend.
+      - **Benefits:** eliminates model compliance issues (wrong files, dropped
+        sections, ignored format instructions), enables multiple file edits
+        naturally, removes all regex parsing, makes adding new capabilities
+        (web search, shell commands, etc.) trivial.
+      - **Prerequisite:** confirm `qwen2.5-coder:7b` tool calling works reliably
+        via Ollama before committing to the refactor.
 
 ### Ollama host settings
 
@@ -93,7 +114,15 @@ Items are grouped by effort. Within each group, recommended order top to bottom.
 
 ## Nice to have / unsorted
 
-- [ ] **"Save to Home Screen" mobile PWA** — add a `manifest.json` and service
+- [ ] **GPU utilization indicator** — show live GPU memory usage in the header
+      or settings, polling `ollama ps` every few seconds. Pairs with a VRAM
+      prediction feature: fetch model architecture details (num_layers,
+      num_heads, head_dim) from the Ollama registry or model metadata, then
+      calculate estimated KV cache size based on selected context window using
+      the formula `2 * num_layers * num_heads * head_dim * ctx * 2 bytes`.
+      Display both current usage and predicted usage for the active model +
+      context window combination so the user knows if they have headroom before
+      sending a request.
       worker so the app can be installed as a PWA on iOS/Android. Requires the
       network binding fix above so the phone can reach the host.
 - [ ] **Per-scope prompt context** — let each scope have an optional description
