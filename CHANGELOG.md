@@ -10,6 +10,7 @@ All notable changes to SHRIMP* will be documented in this file.
 
 - Dev testing: switched development/test workflow to use `distrobox` for faster iterative testing on non-NixOS distributions. See `README.md` for basic usage notes.
 - Frontend: added `DiffPanel` component to render proposed file diffs in the UI (work in progress).
+- Chat UI: real-time stage indicators during LLM operations show progress (e.g., "Finding file…", "Reading file…", "Thinking…", "Searching…") with animated spinner.
 
 ### Changed
 

@@ -77,6 +77,15 @@ tail -f .ollama/frontend.log         # Vite
 
 ## Updating Documentation
 
-After major changes (new features, changed behavior, updated setup), update `README.md`.
+**IMPORTANT**: After implementing any feature, fix, or change, proactively update relevant documentation files:
 
-On version tags, update `CHANGELOG.md` with user-facing descriptions (not implementation details) under `Added`, `Fixed`, `Changed`, `Removed`.
+- **README.md** — Update after major changes: new features, changed behavior, updated setup instructions, new dependencies, or modified workflows.
+- **CHANGELOG.md** — Add entries under `## Unreleased` section using these categories:
+  - `### Added` — New features or capabilities
+  - `### Changed` — Changes to existing functionality
+  - `### Fixed` — Bug fixes
+  - `### Removed` — Removed features or deprecations
+  - Use user-facing descriptions (what changed), not implementation details (how it was done).
+- **CLAUDE.md** (this file) — Update if you discover new patterns, conventions, or gotchas while working on the codebase.
+
+Always update documentation in the same commit as the code changes, not as a separate step.
