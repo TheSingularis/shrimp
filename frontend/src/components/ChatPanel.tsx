@@ -112,11 +112,23 @@ function parseSentinel(content: string): {
 
 // ── component ──────────────────────────────────────────────────────────────────
 
+// ── stage labels ────────────────────────────────────────────────────────────
+
+const STAGE_LABELS: Record<string, string> = {
+    detecting: "Detecting intent…",
+    finding: "Finding file…",
+    reading: "Reading file…",
+    thinking: "Thinking…",
+    searching: "Searching…",
+    done: "Applying…",
+};
+
 export function ChatPanel({ scopes }: Props) {
     const [history, setHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [streaming, setStreaming] = useState(false);
     const [responseStarted, setResponseStarted] = useState(false);
+    const [stage, setStage] = useState<string>("");
 
     // per-file pending edits keyed by path
     const [pendingEdits, setPendingEdits] = useState<Record<string, PendingEdit>>({});
@@ -131,6 +143,7 @@ export function ChatPanel({ scopes }: Props) {
 
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
+    const stageBufferRef = useRef<string>("");
     const spinner = cliSpinners.bouncingBar;
     const [spinnerFrame, setSpinnerFrame] = useState(0);
 
@@ -139,13 +152,15 @@ export function ChatPanel({ scopes }: Props) {
     }, [history]);
 
     useEffect(() => {
-        if (streaming && !responseStarted) {
+        // Run spinner when waiting for response to start, or during file edit streaming with stage
+        const shouldSpin = streaming && (!responseStarted || (stage && stage !== "done"));
+        if (shouldSpin) {
             const interval = setInterval(() => {
                 setSpinnerFrame((prev) => (prev + 1) % spinner.frames.length);
             }, spinner.interval);
             return () => clearInterval(interval);
         }
-    }, [streaming, responseStarted, spinner.frames.length, spinner.interval]);
+    }, [streaming, responseStarted, stage, spinner.frames.length, spinner.interval]);
 
     useEffect(() => {
         if (!streaming) {
@@ -176,15 +191,71 @@ export function ChatPanel({ scopes }: Props) {
         const controller = new AbortController();
         abortRef.current = controller;
 
-        try {
-            await sendChat(augmentedInput, scopes, history, (token) => {
+        // Helper to flush displayable content
+        const flushContent = (content: string) => {
+            if (content) {
                 if (!responseStarted) setResponseStarted(true);
-                fullResponse += token;
+                fullResponse += content;
                 setHistory([
                     ...newHistory,
                     { role: "assistant", content: fullResponse },
                 ]);
+            }
+        };
+
+        // Possible partial prefixes of "__STAGE__" (in order of length, longest first)
+        const STAGE_PREFIXES = [
+            "__STAGE_",
+            "__STAGE",
+            "__STAG",
+            "__STA",
+            "__ST",
+            "__S",
+            "__",
+            "_",
+        ];
+
+        try {
+            await sendChat(augmentedInput, scopes, history, (token) => {
+                // Buffer tokens to handle partial __STAGE__ tokens
+                stageBufferRef.current += token;
+
+                // Process buffer - may contain multiple stage tokens
+                let buffer = stageBufferRef.current;
+
+                // Keep extracting stage tokens until none remain
+                let stageMatch;
+                while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
+                    // Found a complete stage token - extract it
+                    const key = stageMatch[1];
+                    setStage(key);
+                    // Flush content before the stage token
+                    const beforeStage = buffer.slice(0, stageMatch.index);
+                    flushContent(beforeStage);
+                    // Continue with content after the stage token
+                    buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                }
+
+                // Check if buffer ends with a potential partial stage token
+                for (const prefix of STAGE_PREFIXES) {
+                    if (buffer.endsWith(prefix)) {
+                        // Hold the potential partial in buffer, flush the rest
+                        flushContent(buffer.slice(0, -prefix.length));
+                        stageBufferRef.current = prefix;
+                        return;
+                    }
+                }
+
+                // No partial stage token, flush entire buffer
+                flushContent(buffer);
+                stageBufferRef.current = "";
             }, pendingFile, controller.signal);
+
+            // Flush any remaining buffer content after stream ends
+            if (stageBufferRef.current) {
+                fullResponse += stageBufferRef.current;
+                stageBufferRef.current = "";
+            }
         } catch (err: unknown) {
             if (err instanceof Error && err.name !== "AbortError") {
                 console.error("sendChat error:", err);
@@ -192,6 +263,8 @@ export function ChatPanel({ scopes }: Props) {
         } finally {
             abortRef.current = null;
             setStreaming(false);
+            setStage("");
+            stageBufferRef.current = "";
         }
 
         // if cancelled mid-stream, keep whatever was received as plain text
@@ -306,6 +379,17 @@ export function ChatPanel({ scopes }: Props) {
             const visible = editMarkerIdx !== -1
                 ? content.slice(0, editMarkerIdx).trim()
                 : content;
+
+            // During file edit streaming (content starts with "Expanding"), show stage indicator
+            if (content.includes("Expanding") && stage) {
+                return (
+                    <div className="typing-indicator">
+                        <span className="spinner">{spinner.frames[spinnerFrame]}</span>
+                        <span className="stage-label">{STAGE_LABELS[stage] ?? "Thinking…"}</span>
+                    </div>
+                );
+            }
+
             return <pre className="content streaming">{visible}</pre>;
         }
 
@@ -404,9 +488,8 @@ export function ChatPanel({ scopes }: Props) {
                     ))}
                     {streaming && !responseStarted && (
                         <div className="typing-indicator">
-                            <span style={{ whiteSpace: "pre", fontFamily: "monospace" }}>
-                                {spinner.frames[spinnerFrame]}
-                            </span>
+                            <span className="spinner">{spinner.frames[spinnerFrame]}</span>
+                            <span className="stage-label">{STAGE_LABELS[stage] ?? "Thinking…"}</span>
                         </div>
                     )}
                     <div ref={bottomRef} />
