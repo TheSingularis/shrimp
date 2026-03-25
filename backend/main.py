@@ -516,9 +516,115 @@ async def chat(req: ChatRequest, request: Request):
 
     # ── step 3a.5: multi-file edit path ───────────────────────────────────────
     elif intent == "multi_file_edit" and full_file_contents:
-        # Multi-file editing not yet implemented - route to normal chat with guidance
-        log.info("chat: multi-file edit detected but not yet implemented — falling back to explanation mode")
-        # Fall through to normal chat path (will explain how to implement)
+        log.info("chat: multi-file edit mode — processing %d files", len(full_file_contents))
+
+        # Build list of files with their scopes
+        file_list = []
+        for file_path, disk_content in full_file_contents.items():
+            scope_for_file = next(
+                (sn for sn, paths in selected_files.items() if file_path in paths),
+                scope_names[0]
+            )
+            # Check for pending unapplied edit for this file
+            working_content = disk_content
+            if (req.pending_file
+                    and req.pending_file.get("path") == file_path
+                    and req.pending_file.get("content")):
+                working_content = req.pending_file["content"]
+                log.info("chat: using pending content for %s (%d chars)",
+                         file_path, len(working_content))
+
+            file_list.append({
+                "scope": scope_for_file,
+                "path": file_path,
+                "original": disk_content,
+                "working": working_content
+            })
+
+        # Limit to 5 files maximum
+        if len(file_list) > 5:
+            log.warning("chat: multi-file edit requested %d files, limiting to 5", len(file_list))
+            file_list = file_list[:5]
+
+        edit_system_prompt = (
+            "You are a file editing assistant. You will be given file content and an edit "
+            "instruction. Return ONLY the updated file content. "
+            "No explanation, no preamble, no commentary. "
+            "Do not wrap the content in markdown fences. "
+            "Just return the raw updated file text."
+        )
+
+        async def stream_multi_file_edit():
+            yield "__STAGE__planning"
+
+            file_diffs = []
+            total_files = len(file_list)
+
+            for idx, file_info in enumerate(file_list, start=1):
+                file_path = file_info["path"]
+                original = file_info["original"]
+                working = file_info["working"]
+
+                yield f"__STAGE__editing_{idx}_of_{total_files}"
+                log.info("chat: generating edit for %s (%d/%d)", file_path, idx, total_files)
+
+                edit_user_prompt = (
+                    f"File: {file_path}\n\n"
+                    f"Current content:\n{working}\n\n"
+                    f"Edit instruction: {req.message}\n\n"
+                    "Return the complete updated file content."
+                )
+
+                edit_messages = [
+                    {"role": "system", "content": edit_system_prompt},
+                    *req.history,
+                    {"role": "user", "content": edit_user_prompt},
+                ]
+
+                # Generate new content via LLM
+                new_content_parts = []
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream(
+                        "POST",
+                        f"{config.OLLAMA_HOST}/api/chat",
+                        json={
+                            "model": config.OLLAMA_MODEL,
+                            "messages": edit_messages,
+                            "stream": True,
+                            "options": {"num_ctx": config.NUM_CTX},
+                        },
+                    ) as resp:
+                        async for line in resp.aiter_lines():
+                            if await request.is_disconnected():
+                                log.info("chat: client disconnected during multi-file edit")
+                                return
+                            if line:
+                                data = json.loads(line)
+                                if token := data.get("message", {}).get("content"):
+                                    new_content_parts.append(token)
+                                if data.get("done"):
+                                    break
+
+                new_content = "".join(new_content_parts).strip()
+                log.info("chat: generated %d chars for %s", len(new_content), file_path)
+
+                file_diffs.append({
+                    "scope": file_info["scope"],
+                    "path": file_path,
+                    "original": original,
+                    "new": new_content,
+                })
+
+            yield "__STAGE__done"
+
+            # Emit multi-file sentinel
+            sentinel = json.dumps({
+                "type": "multi_file_edit",
+                "files": file_diffs
+            })
+            yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
+
+        return StreamingResponse(stream_multi_file_edit(), media_type="text/plain")
 
     # ── step 3b: normal chat path ─────────────────────────────────────────────
     system_prompt = (
