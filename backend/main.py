@@ -194,26 +194,32 @@ async def chat(req: ChatRequest, request: Request):
     recent_history = req.history[-6:] if len(req.history) > 6 else req.history
 
     intent_prompt = (
-        "You are an intent detection assistant. Decide if the user wants you to "
-        "ACTUALLY EDIT a file right now, or if they're asking a question.\n\n"
-        "Respond {\"is_file_edit\": true} if:\n"
-        "- Direct edit commands: 'update X to say Y', 'add Z to file A', 'change B to C'\n"
-        "- Confirmation of a previous proposal: 'yes do it', 'go ahead', 'apply that change'\n"
-        "- Imperative requests: 'fix the bug in X', 'refactor Y'\n\n"
-        "Respond {\"is_file_edit\": false} if:\n"
-        "- Questions about implementation: 'how would I add X?', 'what's the best way to Y?'\n"
-        "- Requests for explanation: 'how does X work?', 'explain the architecture'\n"
-        "- Asking for suggestions: 'how should I implement Z?', 'what changes are needed?'\n"
+        "You are an intent detection assistant. Classify the user's request into one of three categories.\n\n"
+        'Respond with {"intent": "question"} if:\n'
+        "- Asking how to do something: 'how would I add X?', 'what's the best way to Y?'\n"
+        "- Requesting explanation: 'how does X work?', 'explain the architecture'\n"
+        "- Seeking suggestions: 'how should I implement Z?', 'what changes are needed?'\n"
         "- General discussion: 'tell me about X', 'what files handle Y?'\n\n"
-        "Key distinction:\n"
-        "- 'how would I update README?' → false (asking for guidance)\n"
-        "- 'update README to include X' → true (requesting actual edit)\n\n"
-        "Consider conversation context for follow-ups like 'yeah' or 'do it'.\n"
+        'Respond with {"intent": "single_file_edit"} if:\n'
+        "- Edit ONE specific file: 'update README to add X', 'fix the bug in main.py'\n"
+        "- User explicitly names a single file to change\n"
+        "- Follow-up confirmation: 'yes do it', 'go ahead' (if previous context was single-file)\n\n"
+        'Respond with {"intent": "multi_file_edit"} if:\n'
+        "- Edit MULTIPLE files: 'update README and CHANGELOG', 'refactor auth across main.py and auth.py'\n"
+        "- Implementing a feature that clearly needs multiple files: 'add authentication' (needs config, routes, etc.)\n"
+        "- User mentions 'files', 'both', 'all' when referring to changes\n"
+        "- Creating new files alongside existing: 'move X logic to a new module'\n\n"
+        "Key examples:\n"
+        "- 'how would I update README?' → question\n"
+        "- 'update README to include X' → single_file_edit\n"
+        "- 'update README and CHANGELOG' → multi_file_edit\n"
+        "- 'add feature X' → multi_file_edit (if X clearly needs multiple files)\n\n"
+        "Consider conversation context for follow-ups.\n"
         "Respond with JSON only. No explanation.\n\n"
         f"LATEST USER MESSAGE: {req.message}"
     )
 
-    is_file_edit = False
+    intent = "question"  # default to question mode
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -231,11 +237,15 @@ async def chat(req: ChatRequest, request: Request):
             )
             raw = resp.json().get("message", {}).get("content", "{}")
             parsed = json.loads(raw)
-            is_file_edit = parsed.get("is_file_edit", False)
-            log.info("chat: intent detection — is_file_edit=%s", is_file_edit)
+            intent = parsed.get("intent", "question")
+            # Validate intent value
+            if intent not in ["question", "single_file_edit", "multi_file_edit"]:
+                log.warning("chat: invalid intent '%s', defaulting to question", intent)
+                intent = "question"
+            log.info("chat: intent detection — intent=%s", intent)
     except Exception as e:
         log.warning(
-            "chat: intent detection failed (%s) — assuming not a file edit", e)
+            "chat: intent detection failed (%s) — defaulting to question mode", e)
 
     # ── step 1b: file selection ───────────────────────────────────────────────
     file_selection_prompt = (
@@ -302,7 +312,8 @@ async def chat(req: ChatRequest, request: Request):
     # If file selection found nothing but intent says this is a file edit,
     # scan recent assistant messages for previously identified file paths
     # and reuse them (the user is likely doing a follow-up on the same file).
-    if is_file_edit and not selected_files and recent_history:
+    is_file_edit_intent = intent in ["single_file_edit", "multi_file_edit"]
+    if is_file_edit_intent and not selected_files and recent_history:
         for msg in reversed(recent_history):
             if msg.get("role") != "assistant":
                 continue
@@ -354,7 +365,7 @@ async def chat(req: ChatRequest, request: Request):
         for scope_name, paths in selected_files.items():
             if not paths:
                 continue
-            if is_file_edit:
+            if is_file_edit_intent:
                 for path in paths:
                     try:
                         content = rag.read_file_from_scope(scope_name, path)
@@ -378,8 +389,8 @@ async def chat(req: ChatRequest, request: Request):
 
     context = "\n\n".join(context_chunks)
 
-    # ── step 3a: file edit path ───────────────────────────────────────────────
-    if is_file_edit and full_file_contents:
+    # ── step 3a: single-file edit path ────────────────────────────────────────
+    if intent == "single_file_edit" and full_file_contents and len(full_file_contents) == 1:
         file_path = list(full_file_contents.keys())[0]
         disk_content = full_file_contents[file_path]
         scope_for_file = next(
@@ -503,6 +514,12 @@ async def chat(req: ChatRequest, request: Request):
 
         return StreamingResponse(stream_file_edit(), media_type="text/plain")
 
+    # ── step 3a.5: multi-file edit path ───────────────────────────────────────
+    elif intent == "multi_file_edit" and full_file_contents:
+        # Multi-file editing not yet implemented - route to normal chat with guidance
+        log.info("chat: multi-file edit detected but not yet implemented — falling back to explanation mode")
+        # Fall through to normal chat path (will explain how to implement)
+
     # ── step 3b: normal chat path ─────────────────────────────────────────────
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files.\n\n"
@@ -525,7 +542,8 @@ async def chat(req: ChatRequest, request: Request):
         "## Key Principles\n"
         "- **Be helpful, not presumptuous** — explain first, act second\n"
         "- **Clarify ambiguity** — if unsure whether they want explanation or action, ask\n"
-        "- **Don't hallucinate capabilities** — you can propose file edits, but only ONE file at a time currently\n"
+        "- **Current limitation** — you can propose file edits, but only ONE file at a time currently. "
+        "Multi-file editing is in development.\n"
         "- **Be specific** — when suggesting changes, reference exact file paths and line numbers\n"
         "- **Adapt to content type** — code files need implementation details; notes/docs need clarity and structure\n\n"
         "## Formatting\n"
