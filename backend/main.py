@@ -649,6 +649,18 @@ async def chat(req: ChatRequest, request: Request):
                 yield f"__STAGE__reviewing_{idx}_of_{total_files}"
                 log.info("chat: critiquing edit for %s", file_path)
 
+                # Pre-critique size check: flag if edit removes >40% of content
+                size_issue_detected = False
+                original_size = len(working)
+                new_size = len(initial_edit)
+                size_ratio = new_size / original_size if original_size > 0 else 1.0
+
+                if size_ratio < 0.6 and original_size > 500:  # Significant shrinkage on non-trivial file
+                    size_issue_detected = True
+                    removed_lines = working.count('\n') - initial_edit.count('\n')
+                    log.warning("chat: size check flagged %s — removed %d%% of content (%d→%d chars, ~%d lines)",
+                                file_path, int((1 - size_ratio) * 100), original_size, new_size, removed_lines)
+
                 critique_prompt = (
                     f"User request: {req.message}\n\n"
                     f"File: {file_path}\n\n"
@@ -679,12 +691,20 @@ async def chat(req: ChatRequest, request: Request):
                         has_issues = critique.get("has_issues", False)
                         issues = critique.get("issues", [])
                         suggestions = critique.get("suggestions", [])
+
+                        # Add size warning to issues if detected
+                        if size_issue_detected:
+                            has_issues = True
+                            issues.insert(0, f"The edit removes {int((1-size_ratio)*100)}% of the original content — verify this is intentional")
+                            suggestions.insert(0, "Preserve all important content unless explicitly asked to remove it")
+
                         log.info("chat: critique for %s — has_issues=%s, issues=%s",
                                  file_path, has_issues, issues)
                     except Exception as e:
                         log.warning("chat: critique parsing failed for %s: %s", file_path, e)
-                        has_issues = False
-                        suggestions = []
+                        has_issues = size_issue_detected  # At least flag the size issue
+                        issues = [f"The edit removes {int((1-size_ratio)*100)}% of content"] if size_issue_detected else []
+                        suggestions = ["Preserve all important content unless explicitly asked to remove it"] if size_issue_detected else []
 
                 # ── Step 3: Refine based on critique ──────────────────────────
                 if has_issues and suggestions:
@@ -833,6 +853,8 @@ async def chat(req: ChatRequest, request: Request):
         yield "__STAGE__thinking"
         async for chunk in stream_inner():
             yield chunk
+        # Signal completion
+        yield "__STAGE__done"
 
     return StreamingResponse(stream(), media_type="text/plain")
 
