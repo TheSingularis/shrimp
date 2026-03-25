@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
 import { DiffPanel } from "./DiffPanel";
+import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
 
 interface Props {
     scopes: string[];
@@ -66,7 +67,17 @@ interface FileEditAmbiguousSentinel {
     new: string;
 }
 
-type Sentinel = FileEditSentinel | FileEditAmbiguousSentinel;
+interface MultiFileEditSentinel {
+    type: "multi_file_edit";
+    files: Array<{
+        scope: string;
+        path: string;
+        original: string;
+        new: string;
+    }>;
+}
+
+type Sentinel = FileEditSentinel | FileEditAmbiguousSentinel | MultiFileEditSentinel;
 
 interface AssistantMessage extends Message {
     role: "assistant";
@@ -87,16 +98,26 @@ interface PendingEdit {
 // ── sentinel parsing ───────────────────────────────────────────────────────────
 
 const SENTINEL_PREFIX = "__SHRIMP_EDIT__";
+const MULTI_SENTINEL_PREFIX = "__SHRIMP_MULTI_EDIT__";
 
 function parseSentinel(content: string): {
     display: string;
     sentinel: Sentinel | null;
 } {
-    const idx = content.indexOf(SENTINEL_PREFIX);
+    // Check for multi-file sentinel first
+    let idx = content.indexOf(MULTI_SENTINEL_PREFIX);
+    let prefix = MULTI_SENTINEL_PREFIX;
+
+    // Fall back to single-file sentinel
+    if (idx === -1) {
+        idx = content.indexOf(SENTINEL_PREFIX);
+        prefix = SENTINEL_PREFIX;
+    }
+
     if (idx === -1) return { display: content, sentinel: null };
 
     const display = content.slice(0, idx).trim();
-    const raw = content.slice(idx + SENTINEL_PREFIX.length);
+    const raw = content.slice(idx + prefix.length);
 
     try {
         const sentinel = JSON.parse(raw) as Sentinel;
@@ -140,6 +161,10 @@ export function ChatPanel({ scopes }: Props) {
     const [applying, setApplying] = useState<Record<string, boolean>>({});
     const [applied, setApplied] = useState<Record<string, boolean>>({});
     const [discarded, setDiscarded] = useState<Record<string, boolean>>({});
+
+    // multi-file edit state
+    const [multiFileEdit, setMultiFileEdit] = useState<MultiFileEditSentinel | null>(null);
+    const [multiFileApplying, setMultiFileApplying] = useState(false);
 
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -301,6 +326,8 @@ export function ChatPanel({ scopes }: Props) {
                 };
             });
             setActiveDiffPath(sentinel.path);
+        } else if (sentinel?.type === "multi_file_edit") {
+            setMultiFileEdit(sentinel);
         }
     }
 
@@ -361,6 +388,40 @@ export function ChatPanel({ scopes }: Props) {
         });
         setDiscarded((prev) => ({ ...prev, [path]: true }));
         setActiveDiffPath(null);
+    }
+
+    async function handleMultiFileApply(approvedPaths: string[]) {
+        if (!multiFileEdit) return;
+
+        setMultiFileApplying(true);
+
+        // Apply each approved file sequentially
+        for (const path of approvedPaths) {
+            const fileData = multiFileEdit.files.find(f => f.path === path);
+            if (!fileData) continue;
+
+            setApplying((prev) => ({ ...prev, [path]: true }));
+            try {
+                await applyEdit(fileData.scope, fileData.path, fileData.new);
+                setApplied((prev) => ({ ...prev, [path]: true }));
+            } catch (e) {
+                console.error(`Failed to apply ${path}:`, e);
+            } finally {
+                setApplying((prev) => ({ ...prev, [path]: false }));
+            }
+        }
+
+        setMultiFileApplying(false);
+
+        // Check if all files are either applied or rejected
+        const allProcessed = multiFileEdit.files.every(
+            f => applied[f.path] || approvedPaths.indexOf(f.path) === -1
+        );
+
+        if (allProcessed) {
+            // Close the multi-file panel after a brief delay
+            setTimeout(() => setMultiFileEdit(null), 1000);
+        }
     }
 
     function handleKeyDown(e: React.KeyboardEvent) {
@@ -525,6 +586,16 @@ export function ChatPanel({ scopes }: Props) {
                     onDiscard={() => handleDiscard(activePendingEdit.path)}
                     applying={applying[activePendingEdit.path] ?? false}
                     applied={applied[activePendingEdit.path] ?? false}
+                />
+            )}
+
+            {multiFileEdit && (
+                <MultiFileDiffPanel
+                    files={multiFileEdit.files}
+                    onClose={() => setMultiFileEdit(null)}
+                    onApplyAll={handleMultiFileApply}
+                    applying={multiFileApplying}
+                    applied={applied}
                 />
             )}
         </div>
