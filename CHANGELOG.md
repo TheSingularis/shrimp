@@ -4,16 +4,17 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
-## [Unreleased] — 2026-03-21
+## [Unreleased] — 2026-03-25
 
 ### Added
 
 - **Multi-file editing**: Request changes across multiple files in one conversation (e.g., "update README and CHANGELOG to document feature X"). Features:
-  - 3-way intent detection: questions, single-file edits, multi-file edits
+  - 4-way intent detection: questions, single-file edits, multi-file edits, unclear requests
   - Tabbed diff viewer showing all proposed changes
   - Per-file approve/reject controls
   - Batch apply with progress tracking
   - Supports up to 5 files per request
+  - Quality control loop with automatic refinement when issues detected
 - Dev testing: switched development/test workflow to use `distrobox` for faster iterative testing on non-NixOS distributions. See `README.md` for basic usage notes.
 - Frontend: added `DiffPanel` component to render proposed file diffs in the UI (work in progress).
 - Chat UI: real-time stage indicators during LLM operations show progress (e.g., "Finding file…", "Reading file…", "Thinking…", "Searching…", "Editing 2/3…") with animated spinner.
@@ -21,6 +22,12 @@ All notable changes to SHRIMP* will be documented in this file.
 ### Changed
 
 - Backend: updated file-reading logic used by the assistant — see `backend/file_ops.py` and `backend/rag.py` for implementation details and new behaviours around path expansion and ignored directories.
+
+### Fixed
+
+- Stage indicators now properly transition in question mode (no longer stuck on "Processing…")
+- Added size check to quality control loop that flags edits removing >40% of content
+- Excessive content removal now automatically triggers refinement with preservation guidance
 
 
 ## [v0.1.0] — 2025-07-15
