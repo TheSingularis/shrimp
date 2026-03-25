@@ -146,11 +146,23 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 function getStageLabel(stage: string): string {
-    // Handle dynamic stages like "editing_1_of_3"
+    // Handle dynamic stages like "editing_1_of_3", "reviewing_2_of_5", "refining_3_of_4"
     if (stage.startsWith("editing_")) {
         const match = stage.match(/editing_(\d+)_of_(\d+)/);
         if (match) {
             return `Editing file ${match[1]}/${match[2]}…`;
+        }
+    }
+    if (stage.startsWith("reviewing_")) {
+        const match = stage.match(/reviewing_(\d+)_of_(\d+)/);
+        if (match) {
+            return `Reviewing file ${match[1]}/${match[2]}…`;
+        }
+    }
+    if (stage.startsWith("refining_")) {
+        const match = stage.match(/refining_(\d+)_of_(\d+)/);
+        if (match) {
+            return `Refining file ${match[1]}/${match[2]}…`;
         }
     }
     return STAGE_LABELS[stage] ?? "Processing…";
