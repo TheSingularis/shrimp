@@ -194,7 +194,7 @@ async def chat(req: ChatRequest, request: Request):
     recent_history = req.history[-6:] if len(req.history) > 6 else req.history
 
     intent_prompt = (
-        "You are an intent detection assistant. Classify the user's request into one of three categories.\n\n"
+        "You are an intent detection assistant. Classify the user's request into one of four categories.\n\n"
         'Respond with {"intent": "question"} if:\n'
         "- Asking how to do something: 'how would I add X?', 'what's the best way to Y?'\n"
         "- Requesting explanation: 'how does X work?', 'explain the architecture'\n"
@@ -209,11 +209,17 @@ async def chat(req: ChatRequest, request: Request):
         "- Implementing a feature that clearly needs multiple files: 'add authentication' (needs config, routes, etc.)\n"
         "- User mentions 'files', 'both', 'all' when referring to changes\n"
         "- Creating new files alongside existing: 'move X logic to a new module'\n\n"
+        'Respond with {"intent": "unclear"} if:\n'
+        "- Request is ambiguous or lacks context: 'fix it', 'update that file', 'change the thing'\n"
+        "- Nonsensical input: random characters, gibberish\n"
+        "- Cannot determine intent with confidence\n"
+        "- Need more information from the user to proceed\n\n"
         "Key examples:\n"
         "- 'how would I update README?' → question\n"
         "- 'update README to include X' → single_file_edit\n"
         "- 'update README and CHANGELOG' → multi_file_edit\n"
-        "- 'add feature X' → multi_file_edit (if X clearly needs multiple files)\n\n"
+        "- 'fix it' → unclear (which file? what needs fixing?)\n"
+        "- 'add feature X' → multi_file_edit (if X clearly needs multiple files) OR unclear (if not obvious)\n\n"
         "Consider conversation context for follow-ups.\n"
         "Respond with JSON only. No explanation.\n\n"
         f"LATEST USER MESSAGE: {req.message}"
@@ -239,13 +245,31 @@ async def chat(req: ChatRequest, request: Request):
             parsed = json.loads(raw)
             intent = parsed.get("intent", "question")
             # Validate intent value
-            if intent not in ["question", "single_file_edit", "multi_file_edit"]:
-                log.warning("chat: invalid intent '%s', defaulting to question", intent)
-                intent = "question"
+            if intent not in ["question", "single_file_edit", "multi_file_edit", "unclear"]:
+                log.warning("chat: invalid intent '%s', defaulting to unclear", intent)
+                intent = "unclear"
             log.info("chat: intent detection — intent=%s", intent)
     except Exception as e:
         log.warning(
             "chat: intent detection failed (%s) — defaulting to question mode", e)
+
+    # ── step 1a.5: handle unclear intent ──────────────────────────────────────
+    if intent == "unclear":
+        log.info("chat: unclear intent — asking for clarification")
+
+        clarification_message = (
+            "I'm not sure I understand what you'd like me to do. Could you clarify?\n\n"
+            "I can help you:\n"
+            "- **Answer questions** about your files (e.g., 'how does authentication work?')\n"
+            "- **Edit a single file** (e.g., 'update README.md to add installation instructions')\n"
+            "- **Edit multiple files** (e.g., 'update README and CHANGELOG to document feature X')\n\n"
+            "What would you like me to do?"
+        )
+
+        async def stream_clarification():
+            yield clarification_message
+
+        return StreamingResponse(stream_clarification(), media_type="text/plain")
 
     # ── step 1b: file selection ───────────────────────────────────────────────
     file_selection_prompt = (
