@@ -22,6 +22,9 @@ Items are grouped by effort. Within each group, recommended order top to bottom.
       with fixed snap points (2048 / 4096 / 8192 / 16384 / 32768). Persist to
       `config.py`. Apply to all Ollama API calls.
 
+- [ ] **Update Branding** - update the styling and branding of the app to utilize the  
+      shrimp icons in frontend/public/icons and the apps color scheme to match, maybe some color scheme options in the settings page.
+
 ---
 
 ## Medium effort
