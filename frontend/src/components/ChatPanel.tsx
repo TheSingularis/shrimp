@@ -141,8 +141,20 @@ const STAGE_LABELS: Record<string, string> = {
     reading: "Reading file…",
     thinking: "Thinking…",
     searching: "Searching…",
-    done: "Applying…",
+    planning: "Planning changes…",
+    done: "Done",
 };
+
+function getStageLabel(stage: string): string {
+    // Handle dynamic stages like "editing_1_of_3"
+    if (stage.startsWith("editing_")) {
+        const match = stage.match(/editing_(\d+)_of_(\d+)/);
+        if (match) {
+            return `Editing file ${match[1]}/${match[2]}…`;
+        }
+    }
+    return STAGE_LABELS[stage] ?? "Processing…";
+}
 
 export function ChatPanel({ scopes }: Props) {
     const [history, setHistory] = useState<ChatMessage[]>([]);
@@ -446,7 +458,7 @@ export function ChatPanel({ scopes }: Props) {
                 return (
                     <div className="typing-indicator">
                         <span className="spinner">{spinner.frames[spinnerFrame]}</span>
-                        <span className="stage-label">{STAGE_LABELS[stage] ?? "Thinking…"}</span>
+                        <span className="stage-label">{getStageLabel(stage)}</span>
                     </div>
                 );
             }
@@ -550,7 +562,7 @@ export function ChatPanel({ scopes }: Props) {
                     {streaming && !responseStarted && (
                         <div className="typing-indicator">
                             <span className="spinner">{spinner.frames[spinnerFrame]}</span>
-                            <span className="stage-label">{STAGE_LABELS[stage] ?? "Thinking…"}</span>
+                            <span className="stage-label">{getStageLabel(stage)}</span>
                         </div>
                     )}
                     <div ref={bottomRef} />
