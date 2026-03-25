@@ -8,9 +8,15 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Added
 
+- **Multi-file editing**: Request changes across multiple files in one conversation (e.g., "update README and CHANGELOG to document feature X"). Features:
+  - 3-way intent detection: questions, single-file edits, multi-file edits
+  - Tabbed diff viewer showing all proposed changes
+  - Per-file approve/reject controls
+  - Batch apply with progress tracking
+  - Supports up to 5 files per request
 - Dev testing: switched development/test workflow to use `distrobox` for faster iterative testing on non-NixOS distributions. See `README.md` for basic usage notes.
 - Frontend: added `DiffPanel` component to render proposed file diffs in the UI (work in progress).
-- Chat UI: real-time stage indicators during LLM operations show progress (e.g., "Finding file…", "Reading file…", "Thinking…", "Searching…") with animated spinner.
+- Chat UI: real-time stage indicators during LLM operations show progress (e.g., "Finding file…", "Reading file…", "Thinking…", "Searching…", "Editing 2/3…") with animated spinner.
 
 ### Changed
 
