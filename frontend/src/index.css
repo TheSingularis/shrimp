@@ -1776,6 +1776,20 @@ button:disabled {
 
 .tab-filename {
     font-family: monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.new-file-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
 }
 
 .multi-diff-editor {
