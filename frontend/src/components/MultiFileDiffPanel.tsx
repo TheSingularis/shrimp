@@ -72,6 +72,7 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                     const state = fileStates[file.path];
                     const isApplied = applied[file.path];
                     const filename = file.path.split("/").pop() ?? file.path;
+                    const isNewFile = !file.original || file.original.trim() === "";
 
                     let statusIcon = "";
                     let statusClass = "";
@@ -91,9 +92,13 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                             key={file.path}
                             className={`multi-diff-tab ${activeTab === idx ? "active" : ""} ${statusClass}`}
                             onClick={() => setActiveTab(idx)}
+                            title={file.path}
                         >
                             {statusIcon && <span className="tab-status-icon">{statusIcon}</span>}
-                            <span className="tab-filename">{filename}</span>
+                            <span className="tab-filename">
+                                {filename}
+                                {isNewFile && <span className="new-file-badge">new</span>}
+                            </span>
                         </button>
                     );
                 })}
