@@ -554,6 +554,18 @@ async def chat(req: ChatRequest, request: Request):
             "Just return the raw updated file text."
         )
 
+        critique_system_prompt = (
+            "You are a code review assistant. Review a proposed file edit and identify issues.\n\n"
+            "Respond with JSON only:\n"
+            '{"has_issues": true/false, "issues": ["issue1", "issue2"], "suggestions": ["suggestion1"]}\n\n'
+            "Common issues to check:\n"
+            "- Does the edit actually solve the user's request?\n"
+            "- Are we removing important content unnecessarily?\n"
+            "- Are there syntax errors or broken references?\n"
+            "- Is the change too aggressive or too minimal?\n"
+            "- Does it maintain consistency with the rest of the file?"
+        )
+
         async def stream_multi_file_edit():
             yield "__STAGE__planning"
 
@@ -565,8 +577,9 @@ async def chat(req: ChatRequest, request: Request):
                 original = file_info["original"]
                 working = file_info["working"]
 
+                # ── Step 1: Generate initial edit ─────────────────────────────
                 yield f"__STAGE__editing_{idx}_of_{total_files}"
-                log.info("chat: generating edit for %s (%d/%d)", file_path, idx, total_files)
+                log.info("chat: generating initial edit for %s (%d/%d)", file_path, idx, total_files)
 
                 edit_user_prompt = (
                     f"File: {file_path}\n\n"
@@ -581,8 +594,8 @@ async def chat(req: ChatRequest, request: Request):
                     {"role": "user", "content": edit_user_prompt},
                 ]
 
-                # Generate new content via LLM
-                new_content_parts = []
+                # Generate initial edit
+                initial_edit_parts = []
                 async with httpx.AsyncClient(timeout=None) as client:
                     async with client.stream(
                         "POST",
@@ -601,12 +614,103 @@ async def chat(req: ChatRequest, request: Request):
                             if line:
                                 data = json.loads(line)
                                 if token := data.get("message", {}).get("content"):
-                                    new_content_parts.append(token)
+                                    initial_edit_parts.append(token)
                                 if data.get("done"):
                                     break
 
-                new_content = "".join(new_content_parts).strip()
-                log.info("chat: generated %d chars for %s", len(new_content), file_path)
+                initial_edit = "".join(initial_edit_parts).strip()
+                log.info("chat: generated initial edit (%d chars) for %s", len(initial_edit), file_path)
+
+                # ── Step 2: Critique the edit ─────────────────────────────────
+                yield f"__STAGE__reviewing_{idx}_of_{total_files}"
+                log.info("chat: critiquing edit for %s", file_path)
+
+                critique_prompt = (
+                    f"User request: {req.message}\n\n"
+                    f"File: {file_path}\n\n"
+                    f"Original content:\n{working}\n\n"
+                    f"Proposed edit:\n{initial_edit}\n\n"
+                    "Review this edit. Does it solve the user's request? Are there any issues?"
+                )
+
+                critique_messages = [
+                    {"role": "system", "content": critique_system_prompt},
+                    {"role": "user", "content": critique_prompt},
+                ]
+
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.post(
+                        f"{config.OLLAMA_HOST}/api/chat",
+                        json={
+                            "model": config.OLLAMA_MODEL,
+                            "messages": critique_messages,
+                            "stream": False,
+                            "format": "json",
+                            "options": {"num_ctx": config.NUM_CTX},
+                        },
+                    )
+                    critique_raw = resp.json().get("message", {}).get("content", "{}")
+                    try:
+                        critique = json.loads(critique_raw)
+                        has_issues = critique.get("has_issues", False)
+                        issues = critique.get("issues", [])
+                        suggestions = critique.get("suggestions", [])
+                        log.info("chat: critique for %s — has_issues=%s, issues=%s",
+                                 file_path, has_issues, issues)
+                    except Exception as e:
+                        log.warning("chat: critique parsing failed for %s: %s", file_path, e)
+                        has_issues = False
+                        suggestions = []
+
+                # ── Step 3: Refine based on critique ──────────────────────────
+                if has_issues and suggestions:
+                    yield f"__STAGE__refining_{idx}_of_{total_files}"
+                    log.info("chat: refining edit for %s based on critique", file_path)
+
+                    refine_prompt = (
+                        f"File: {file_path}\n\n"
+                        f"Original content:\n{working}\n\n"
+                        f"Edit instruction: {req.message}\n\n"
+                        f"Your previous edit had these issues:\n"
+                        + "\n".join(f"- {issue}" for issue in issues) + "\n\n"
+                        f"Suggestions for improvement:\n"
+                        + "\n".join(f"- {sug}" for sug in suggestions) + "\n\n"
+                        "Return an improved version of the complete file content."
+                    )
+
+                    refine_messages = [
+                        {"role": "system", "content": edit_system_prompt},
+                        {"role": "user", "content": refine_prompt},
+                    ]
+
+                    refined_parts = []
+                    async with httpx.AsyncClient(timeout=None) as client:
+                        async with client.stream(
+                            "POST",
+                            f"{config.OLLAMA_HOST}/api/chat",
+                            json={
+                                "model": config.OLLAMA_MODEL,
+                                "messages": refine_messages,
+                                "stream": True,
+                                "options": {"num_ctx": config.NUM_CTX},
+                            },
+                        ) as resp:
+                            async for line in resp.aiter_lines():
+                                if await request.is_disconnected():
+                                    return
+                                if line:
+                                    data = json.loads(line)
+                                    if token := data.get("message", {}).get("content"):
+                                        refined_parts.append(token)
+                                    if data.get("done"):
+                                        break
+
+                    new_content = "".join(refined_parts).strip()
+                    log.info("chat: refined edit (%d chars) for %s", len(new_content), file_path)
+                else:
+                    # No issues found, use initial edit
+                    new_content = initial_edit
+                    log.info("chat: no issues found, using initial edit for %s", file_path)
 
                 file_diffs.append({
                     "scope": file_info["scope"],
