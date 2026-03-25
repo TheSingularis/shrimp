@@ -37,17 +37,35 @@ tail -f .ollama/frontend.log         # Vite
 
 ### Frontend (`frontend/src/`)
 - `api.ts` — All backend communication. **Components never call `fetch` directly.**
-- `components/ChatPanel.tsx` — Streaming chat UI. Parses `__SHRIMP_EDIT__` sentinels for file edit proposals.
+- `components/ChatPanel.tsx` — Streaming chat UI. Parses `__SHRIMP_EDIT__` and `__SHRIMP_MULTI_EDIT__` sentinels. Handles stage indicators.
+- `components/DiffPanel.tsx` — Monaco diff editor for single-file edit review.
+- `components/MultiFileDiffPanel.tsx` — Tabbed Monaco diff viewer for multi-file edits with per-file approve/reject.
 - `components/SettingsDrawer.tsx` — Model/scope management, index controls.
-- `components/DiffPanel.tsx` — Monaco diff editor for reviewing proposed file edits.
 
 ### Data Flow
+
+**Intent Detection (3-way)**:
 1. User message → `POST /chat` with selected scopes
-2. Backend runs intent detection + file selection (2 LLM calls)
-3. ChromaDB semantic search retrieves relevant chunks
-4. System prompt assembled with file tree + chunks + history
-5. Ollama streams response tokens to frontend
-6. If response contains `__SHRIMP_EDIT__` sentinel → DiffPanel shows proposed changes
+2. Backend runs intent detection (1 LLM call) → `"question" | "single_file_edit" | "multi_file_edit"`
+3. File selection (1 LLM call) → identifies which files to read
+4. ChromaDB semantic search retrieves relevant chunks
+
+**Question Mode**:
+5. System prompt assembled with file tree + chunks + history
+6. Ollama streams response tokens to frontend
+
+**Single-File Edit Mode**:
+5. Load full file content
+6. Generate edit with section extraction
+7. Stream response with `__SHRIMP_EDIT__` sentinel
+8. DiffPanel shows proposed change
+
+**Multi-File Edit Mode** (NEW):
+5. Load all file contents (up to 5 files)
+6. For each file: generate edit sequentially (N LLM calls)
+7. Stream response with stage tokens + `__SHRIMP_MULTI_EDIT__` sentinel
+8. MultiFileDiffPanel shows tabbed diffs with approve/reject controls
+9. User approves subset → batch apply
 
 ## Key Conventions
 
