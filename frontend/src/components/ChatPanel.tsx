@@ -5,7 +5,6 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
-import { DiffPanel } from "./DiffPanel";
 import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
 
 interface Props {
@@ -107,11 +106,13 @@ function parseSentinel(content: string): {
     // Check for multi-file sentinel first
     let idx = content.indexOf(MULTI_SENTINEL_PREFIX);
     let prefix = MULTI_SENTINEL_PREFIX;
+    let isSingleFile = false;
 
     // Fall back to single-file sentinel
     if (idx === -1) {
         idx = content.indexOf(SENTINEL_PREFIX);
         prefix = SENTINEL_PREFIX;
+        isSingleFile = true;
     }
 
     if (idx === -1) return { display: content, sentinel: null };
@@ -120,7 +121,21 @@ function parseSentinel(content: string): {
     const raw = content.slice(idx + prefix.length);
 
     try {
-        const sentinel = JSON.parse(raw) as Sentinel;
+        let sentinel = JSON.parse(raw) as Sentinel;
+
+        // Normalize single-file to multi-file format for consistent handling
+        if (isSingleFile && sentinel.type === "file_edit") {
+            sentinel = {
+                type: "multi_file_edit",
+                files: [{
+                    scope: sentinel.scope,
+                    path: sentinel.path,
+                    original: sentinel.original,
+                    new: sentinel.new,
+                }]
+            } as MultiFileEditSentinel;
+        }
+
         const editMarkerIdx = display.indexOf("__EDIT_FILE__");
         const prose = editMarkerIdx !== -1
             ? display.slice(0, editMarkerIdx).trim()
@@ -177,9 +192,6 @@ export function ChatPanel({ scopes }: Props) {
 
     // per-file pending edits keyed by path
     const [pendingEdits, setPendingEdits] = useState<Record<string, PendingEdit>>({});
-
-    // which file is currently shown in the diff panel (null = closed)
-    const [activeDiffPath, setActiveDiffPath] = useState<string | null>(null);
 
     // apply state per file
     const [applying, setApplying] = useState<Record<string, boolean>>({});
@@ -336,22 +348,24 @@ export function ChatPanel({ scopes }: Props) {
 
         setHistory([...newHistory, assistantMsg]);
 
-        if (sentinel?.type === "file_edit") {
-            setPendingEdits((prev) => {
-                const existing = prev[sentinel.path];
-                return {
-                    ...prev,
-                    [sentinel.path]: {
-                        scope: sentinel.scope,
-                        path: sentinel.path,
-                        original: existing?.original ?? sentinel.original,
-                        current: sentinel.new,
-                    },
-                };
-            });
-            setActiveDiffPath(sentinel.path);
-        } else if (sentinel?.type === "multi_file_edit") {
+        // All file edits are now normalized to multi-file format (even single files)
+        if (sentinel?.type === "multi_file_edit") {
             setMultiFileEdit(sentinel);
+
+            // Also populate pendingEdits for follow-up request tracking
+            setPendingEdits((prev) => {
+                const next = { ...prev };
+                for (const file of sentinel.files) {
+                    const existing = prev[file.path];
+                    next[file.path] = {
+                        scope: file.scope,
+                        path: file.path,
+                        original: existing?.original ?? file.original,
+                        current: file.new,
+                    };
+                }
+                return next;
+            });
         }
     }
 
@@ -379,7 +393,17 @@ export function ChatPanel({ scopes }: Props) {
                 current: newContent,
             },
         }));
-        setActiveDiffPath(candidate.path);
+
+        // Convert to multi-file format and show in unified diff editor
+        setMultiFileEdit({
+            type: "multi_file_edit",
+            files: [{
+                scope: candidate.scope,
+                path: candidate.path,
+                original,
+                new: newContent,
+            }]
+        });
     }
 
     async function handleApply(path: string) {
@@ -396,7 +420,6 @@ export function ChatPanel({ scopes }: Props) {
                 delete next[path];
                 return next;
             });
-            setActiveDiffPath(null);
         } catch (e) {
             console.error("apply failed", e);
         } finally {
@@ -411,7 +434,6 @@ export function ChatPanel({ scopes }: Props) {
             return next;
         });
         setDiscarded((prev) => ({ ...prev, [path]: true }));
-        setActiveDiffPath(null);
     }
 
     async function handleMultiFileApply(approvedPaths: string[]) {
@@ -478,11 +500,7 @@ export function ChatPanel({ scopes }: Props) {
             return <pre className="content streaming">{visible}</pre>;
         }
 
-        if (sentinel?.type === "file_edit") {
-            const filename = sentinel.path.split("/").pop() ?? sentinel.path;
-            const isApplied = applied[sentinel.path];
-            const isDiscarded = discarded[sentinel.path];
-            const pe = pendingEdits[sentinel.path];
+        if (sentinel?.type === "multi_file_edit") {
             return (
                 <div className="content">
                     {(msg as AssistantMessage).prose && (
@@ -491,27 +509,42 @@ export function ChatPanel({ scopes }: Props) {
                         </ReactMarkdown>
                     )}
                     <div className="file-edit-pill-row">
-                        <div
-                            className={`file-edit-pill ${isApplied ? "applied" : ""} ${isDiscarded ? "discarded" : ""}`}
-                            onClick={() => !isApplied && !isDiscarded && setActiveDiffPath(sentinel.path)}
-                        >
-                            <span className="file-edit-pill-icon">
-                                {isApplied ? "✓" : isDiscarded ? "✕" : "✎"}
-                            </span>
-                            <span className="file-edit-pill-name">{filename}</span>
-                            <span className="file-edit-pill-action">
-                                {isApplied ? "applied" : isDiscarded ? "discarded" : "view diff →"}
-                            </span>
-                        </div>
-                        {!isApplied && !isDiscarded && pe && (
-                            <button
-                                className="apply-btn"
-                                onClick={() => handleApply(sentinel.path)}
-                                disabled={applying[sentinel.path]}
-                            >
-                                {applying[sentinel.path] ? "applying…" : "apply"}
-                            </button>
-                        )}
+                        {sentinel.files.map((file) => {
+                            const filename = file.path.split("/").pop() ?? file.path;
+                            const isApplied = applied[file.path];
+                            const isDiscarded = discarded[file.path];
+                            const pe = pendingEdits[file.path];
+                            return (
+                                <div key={file.path} style={{ marginBottom: "0.5rem" }}>
+                                    <div
+                                        className={`file-edit-pill ${isApplied ? "applied" : ""} ${isDiscarded ? "discarded" : ""}`}
+                                        onClick={() => {
+                                            if (!isApplied && !isDiscarded) {
+                                                // Re-open the multi-file editor with just this file visible
+                                                setMultiFileEdit(sentinel);
+                                            }
+                                        }}
+                                    >
+                                        <span className="file-edit-pill-icon">
+                                            {isApplied ? "✓" : isDiscarded ? "✕" : "✎"}
+                                        </span>
+                                        <span className="file-edit-pill-name">{filename}</span>
+                                        <span className="file-edit-pill-action">
+                                            {isApplied ? "applied" : isDiscarded ? "discarded" : "view diff →"}
+                                        </span>
+                                    </div>
+                                    {!isApplied && !isDiscarded && pe && (
+                                        <button
+                                            className="apply-btn"
+                                            onClick={() => handleApply(file.path)}
+                                            disabled={applying[file.path]}
+                                        >
+                                            {applying[file.path] ? "applying…" : "apply"}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             );
@@ -552,8 +585,6 @@ export function ChatPanel({ scopes }: Props) {
             </div>
         );
     }
-
-    const activePendingEdit = activeDiffPath ? pendingEdits[activeDiffPath] : null;
 
     return (
         <div className="chat-layout">
@@ -599,19 +630,6 @@ export function ChatPanel({ scopes }: Props) {
                     )}
                 </div>
             </div>
-
-            {activePendingEdit && (
-                <DiffPanel
-                    path={activePendingEdit.path}
-                    originalContent={activePendingEdit.original}
-                    newContent={activePendingEdit.current}
-                    onClose={() => setActiveDiffPath(null)}
-                    onApply={() => handleApply(activePendingEdit.path)}
-                    onDiscard={() => handleDiscard(activePendingEdit.path)}
-                    applying={applying[activePendingEdit.path] ?? false}
-                    applied={applied[activePendingEdit.path] ?? false}
-                />
-            )}
 
             {multiFileEdit && (
                 <MultiFileDiffPanel
