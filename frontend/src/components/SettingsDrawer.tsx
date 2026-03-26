@@ -339,16 +339,18 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                                         <span className="scope-name">{s.name}</span>
                                         <span className="scope-path">{s.path}</span>
                                         {progress ? (
-                                            <span className="scope-status">
-                                                Indexing {progress.current}/{progress.total} files ({percent}%)
-                                                {progress.file && ` — ${progress.file}`}
-                                                <div className="pull-progress">
+                                            <>
+                                                <span className="scope-status">
+                                                    Indexing {progress.current}/{progress.total} files ({percent}%)
+                                                    {progress.file && ` — ${progress.file}`}
+                                                </span>
+                                                <div className="pull-progress" style={{ display: 'block', width: '100%' }}>
                                                     <div
                                                         className="pull-progress-bar"
                                                         style={{ width: `${percent}%` }}
                                                     />
                                                 </div>
-                                            </span>
+                                            </>
                                         ) : statusFor(s.name)?.last_indexed ? (
                                             <span className="scope-status">
                                                 {statusFor(s.name)!.file_count} files · indexed{" "}
