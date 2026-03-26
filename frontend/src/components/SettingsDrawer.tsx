@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
+
+const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 interface Props {
     open: boolean;
@@ -53,8 +55,10 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [newName, setNewName] = useState("");
     const [newPath, setNewPath] = useState("");
     const [saving, setSaving] = useState(false);
+    const saveTimerRef = useRef<number | null>(null);
     const [indexStatus, setIndexStatus] = useState<IndexStatus[]>([]);
     const [indexing, setIndexing] = useState<string | null>(null);
+    const [indexProgress, setIndexProgress] = useState<Record<string, { current: number; total: number; file: string }>>({});
     const [pullInput, setPullInput] = useState("");
     const [pulling, setPulling] = useState(false);
     const [pullStatus, setPullStatus] = useState<string | null>(null);
@@ -91,14 +95,24 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     }
 
     async function handleToggleScope(name: string) {
+        // Update local state immediately for responsive UI
         const updated = scopes.map((s) =>
             s.name === name ? { ...s, enabled: !s.enabled } : s
         );
+        setLocalScopes(updated);
+
+        // Debounce the save to backend - wait 1s after last toggle
+        if (saveTimerRef.current !== null) {
+            clearTimeout(saveTimerRef.current);
+        }
         setSaving(true);
-        const result = await setScopes(updated);
-        setLocalScopes(result);
-        onScopesChanged(result);
-        setSaving(false);
+        saveTimerRef.current = window.setTimeout(async () => {
+            const result = await setScopes(updated);
+            setLocalScopes(result);
+            onScopesChanged(result);
+            setSaving(false);
+            saveTimerRef.current = null;
+        }, 1000);
     }
 
     async function handleDeleteScope(name: string) {
@@ -127,25 +141,67 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
 
     async function handleIndexOne(name: string) {
         setIndexing(name);
-        await triggerIndexOne(name);
-        const poll = setInterval(async () => {
-            const status = await getIndexStatus();
-            setIndexStatus(status);
-            const s = status.find((x) => x.name === name);
-            if (s?.last_indexed) {
-                setIndexing(null);
-                clearInterval(poll);
+        setIndexProgress({ ...indexProgress, [name]: { current: 0, total: 0, file: "" } });
+
+        // Use SSE stream for real-time progress
+        const eventSource = new EventSource(`${BASE}/index/${name}/stream`);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.done) {
+                    eventSource.close();
+                    setIndexing(null);
+                    setIndexProgress((prev) => {
+                        const next = { ...prev };
+                        delete next[name];
+                        return next;
+                    });
+                    // Refresh status to show final file count
+                    getIndexStatus().then(setIndexStatus);
+                } else if (data.current && data.total) {
+                    setIndexProgress((prev) => ({
+                        ...prev,
+                        [name]: { current: data.current, total: data.total, file: data.file || "" }
+                    }));
+                }
+            } catch (e) {
+                console.error("Failed to parse index progress:", e);
             }
-        }, 1500);
+        };
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            setIndexing(null);
+            setIndexProgress((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        };
     }
 
     async function handleIndexAll() {
         setIndexing("all");
         await triggerIndexAll();
-        setTimeout(async () => {
-            setIndexStatus(await getIndexStatus());
-            setIndexing(null);
-        }, 3000);
+
+        // Poll status until all enabled scopes are indexed
+        const poll = setInterval(async () => {
+            const status = await getIndexStatus();
+            setIndexStatus(status);
+
+            // Check if all enabled scopes are done indexing
+            const enabledScopes = scopes.filter((s) => s.enabled);
+            const allDone = enabledScopes.every((scope) => {
+                const st = status.find((s) => s.name === scope.name);
+                return st?.last_indexed && !st?.indexing;
+            });
+
+            if (allDone) {
+                setIndexing(null);
+                clearInterval(poll);
+            }
+        }, 1000);
     }
 
     async function handlePullModel() {
@@ -257,38 +313,56 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         </button>
                     </div>
                     <div className="scope-list">
-                        {scopes.map((s) => (
-                            <div key={s.name} className="scope-row">
-                                <div className="scope-info">
-                                    <span className="scope-name">{s.name}</span>
-                                    <span className="scope-path">{s.path}</span>
-                                    {statusFor(s.name)?.last_indexed ? (
-                                        <span className="scope-status">
-                                            {statusFor(s.name)!.file_count} files · indexed{" "}
-                                            {new Date(statusFor(s.name)!.last_indexed!).toLocaleTimeString()}
-                                        </span>
-                                    ) : (
-                                        <span className="scope-status unindexed">not indexed</span>
-                                    )}
+                        {scopes.map((s) => {
+                            const progress = indexProgress[s.name];
+                            const percent = progress && progress.total > 0
+                                ? Math.round((progress.current / progress.total) * 100)
+                                : 0;
+
+                            return (
+                                <div key={s.name} className="scope-row">
+                                    <div className="scope-info">
+                                        <span className="scope-name">{s.name}</span>
+                                        <span className="scope-path">{s.path}</span>
+                                        {progress ? (
+                                            <span className="scope-status">
+                                                Indexing {progress.current}/{progress.total} files ({percent}%)
+                                                {progress.file && ` — ${progress.file}`}
+                                                <div className="pull-progress">
+                                                    <div
+                                                        className="pull-progress-bar"
+                                                        style={{ width: `${percent}%` }}
+                                                    />
+                                                </div>
+                                            </span>
+                                        ) : statusFor(s.name)?.last_indexed ? (
+                                            <span className="scope-status">
+                                                {statusFor(s.name)!.file_count} files · indexed{" "}
+                                                {new Date(statusFor(s.name)!.last_indexed!).toLocaleTimeString()}
+                                            </span>
+                                        ) : (
+                                            <span className="scope-status unindexed">not indexed</span>
+                                        )}
+                                    </div>
+                                    <div className="scope-actions">
+                                        <button
+                                            className="index-btn"
+                                            onClick={() => handleIndexOne(s.name)}
+                                            disabled={indexing !== null}
+                                        >
+                                            {indexing === s.name ? "…" : "↻"}
+                                        </button>
+                                        <button
+                                            className={`toggle-btn ${s.enabled ? "on" : "off"}`}
+                                            onClick={() => handleToggleScope(s.name)}
+                                        >
+                                            {s.enabled ? "on" : "off"}
+                                        </button>
+                                        <button className="delete-btn" onClick={() => handleDeleteScope(s.name)}>✕</button>
+                                    </div>
                                 </div>
-                                <div className="scope-actions">
-                                    <button
-                                        className="index-btn"
-                                        onClick={() => handleIndexOne(s.name)}
-                                        disabled={indexing !== null}
-                                    >
-                                        {indexing === s.name ? "…" : "↻"}
-                                    </button>
-                                    <button
-                                        className={`toggle-btn ${s.enabled ? "on" : "off"}`}
-                                        onClick={() => handleToggleScope(s.name)}
-                                    >
-                                        {s.enabled ? "on" : "off"}
-                                    </button>
-                                    <button className="delete-btn" onClick={() => handleDeleteScope(s.name)}>✕</button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     <div className="add-scope">
