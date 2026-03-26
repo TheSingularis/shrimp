@@ -4,4 +4,4 @@ EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
 NUM_CTX: int = 8192
 
-WATCHED_DIRS: list[dict] = [{'name': 'code', 'path': '~/Documents/Code Projects/test', 'enabled': False}, {'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': False}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True}]
+WATCHED_DIRS: list[dict] = [{'name': 'code', 'path': '~/Documents/Code Projects/test', 'enabled': True}, {'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': True}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True}]
