@@ -69,6 +69,10 @@ tail -f .ollama/frontend.log         # Vite
 
 ## Key Conventions
 
+### General Principles
+- **Avoid code duplication**: Before implementing new functionality, check if similar code already exists that can be reused or abstracted. Extract common logic into shared functions rather than duplicating patterns.
+- **Prefer composition over duplication**: If two functions need similar behavior, have one call the other or extract shared logic into a helper function.
+
 ### Backend
 - Type hints everywhere. All request/response bodies are Pydantic models.
 - All `Path` operations must call `.expanduser()` — paths may contain `~`.
