@@ -344,7 +344,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                                                     Indexing {progress.current}/{progress.total} files ({percent}%)
                                                     {progress.file && ` — ${progress.file}`}
                                                 </span>
-                                                <div className="pull-progress">
+                                                <div className="pull-progress" style={{ width: '100%' }}>
                                                     <div
                                                         className="pull-progress-bar"
                                                         style={{ width: `${percent}%` }}
