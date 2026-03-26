@@ -912,6 +912,70 @@ async def delete_scope(name: str):
     return config.WATCHED_DIRS
 
 
+@app.post("/scopes/{name}/generate-description")
+async def generate_scope_description(name: str):
+    """Generate a description for a scope using LLM based on structural map."""
+    scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
+    if not scope:
+        raise HTTPException(status_code=404, detail=f"Scope '{name}' not found")
+
+    # Get structural map
+    files = rag.structural_maps.get(name, [])
+    if not files:
+        # Try to build it if not available
+        files = rag.build_structural_map(scope)
+
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No files found in scope '{name}'. Index the scope first."
+        )
+
+    # Create a summary of the structure
+    file_summary = "\n".join([f"- {f['path']}" for f in files[:50]])  # First 50 files
+    if len(files) > 50:
+        file_summary += f"\n... and {len(files) - 50} more files"
+
+    # Add previews of a few representative files
+    previews = []
+    for f in files[:3]:
+        if f.get("preview"):
+            previews.append(f"File: {f['path']}\n{f['preview'][:200]}...\n")
+
+    preview_text = "\n".join(previews) if previews else ""
+
+    # Prompt LLM to generate description
+    prompt = (
+        f"You are analyzing a codebase/directory named '{name}' located at '{scope['path']}'.\n\n"
+        f"Here are the files in this scope ({len(files)} total):\n{file_summary}\n\n"
+    )
+    if preview_text:
+        prompt += f"Sample file content:\n{preview_text}\n\n"
+
+    prompt += (
+        "Generate a concise 1-2 sentence description of this scope. "
+        "Focus on what type of content it contains (e.g., 'React/TypeScript frontend', "
+        "'Python backend API', 'Personal notes and documentation', etc.). "
+        "Be specific but brief. Return ONLY the description, no preamble."
+    )
+
+    # Call LLM
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{config.OLLAMA_HOST}/api/generate",
+            json={
+                "model": config.OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+            },
+        )
+        result = resp.json()
+        description = result.get("response", "").strip()
+
+    log.info("[%s] Generated description: %s", name, description)
+    return {"description": description}
+
+
 # ── routes: models ────────────────────────────────────────────────────────────
 
 
