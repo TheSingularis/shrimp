@@ -995,8 +995,10 @@ async def index_stream(name: str):
     q: queue.Queue = queue.Queue()
 
     def callback(current: int, total: int, filename: str):
-        q.put({"current": current, "total": total,
-               "file": filename, "done": False})
+        progress = {"current": current, "total": total,
+                    "file": filename, "done": False}
+        log.info("[%s] Progress: %d/%d - %s", name, current, total, filename)
+        q.put(progress)
 
     def run_index():
         try:

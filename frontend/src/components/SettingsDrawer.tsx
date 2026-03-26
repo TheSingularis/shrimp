@@ -144,12 +144,21 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         setIndexProgress({ ...indexProgress, [name]: { current: 0, total: 0, file: "" } });
 
         // Use SSE stream for real-time progress
-        const eventSource = new EventSource(`${BASE}/index/${name}/stream`);
+        const url = `${BASE}/index/${name}/stream`;
+        console.log(`[Index] Opening SSE stream: ${url}`);
+        const eventSource = new EventSource(url);
+
+        eventSource.onopen = () => {
+            console.log(`[Index] SSE connection opened for ${name}`);
+        };
 
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log(`[Index] Progress update for ${name}:`, data);
+
                 if (data.done) {
+                    console.log(`[Index] Indexing complete for ${name}`);
                     eventSource.close();
                     setIndexing(null);
                     setIndexProgress((prev) => {
@@ -164,13 +173,16 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         ...prev,
                         [name]: { current: data.current, total: data.total, file: data.file || "" }
                     }));
+                } else if (data.ping) {
+                    // Ignore ping messages
                 }
             } catch (e) {
-                console.error("Failed to parse index progress:", e);
+                console.error("[Index] Failed to parse progress:", e, event.data);
             }
         };
 
-        eventSource.onerror = () => {
+        eventSource.onerror = (err) => {
+            console.error(`[Index] SSE error for ${name}:`, err);
             eventSource.close();
             setIndexing(null);
             setIndexProgress((prev) => {
