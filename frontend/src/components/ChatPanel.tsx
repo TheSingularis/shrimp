@@ -9,6 +9,8 @@ import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
 
 interface Props {
     scopes: string[];
+    messages: ChatMessage[];
+    onMessagesChange: (messages: ChatMessage[]) => void;
 }
 
 // ── markdown components ────────────────────────────────────────────────────────
@@ -183,8 +185,7 @@ function getStageLabel(stage: string): string {
     return STAGE_LABELS[stage] ?? "Processing…";
 }
 
-export function ChatPanel({ scopes }: Props) {
-    const [history, setHistory] = useState<ChatMessage[]>([]);
+export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
     const [input, setInput] = useState("");
     const [streaming, setStreaming] = useState(false);
     const [responseStarted, setResponseStarted] = useState(false);
@@ -210,7 +211,7 @@ export function ChatPanel({ scopes }: Props) {
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [history]);
+    }, [messages]);
 
     useEffect(() => {
         // Run spinner when waiting for response to start, or during file edit streaming with stage
@@ -234,9 +235,9 @@ export function ChatPanel({ scopes }: Props) {
 
         const augmentedInput = input;
         const userMessage: Message = { role: "user", content: input };
-        const newHistory = [...history, userMessage];
+        const newHistory = [...messages, userMessage];
 
-        setHistory([...newHistory, { role: "assistant", content: "" }]);
+        onMessagesChange([...newHistory, { role: "assistant", content: "" }]);
         setInput("");
         setStreaming(true);
         setResponseStarted(false);
@@ -257,7 +258,7 @@ export function ChatPanel({ scopes }: Props) {
             if (content) {
                 if (!responseStarted) setResponseStarted(true);
                 fullResponse += content;
-                setHistory([
+                onMessagesChange([
                     ...newHistory,
                     { role: "assistant", content: fullResponse },
                 ]);
@@ -277,7 +278,7 @@ export function ChatPanel({ scopes }: Props) {
         ];
 
         try {
-            await sendChat(augmentedInput, scopes, history, (token) => {
+            await sendChat(augmentedInput, scopes, messages, (token) => {
                 // Buffer tokens to handle partial __STAGE__ tokens
                 stageBufferRef.current += token;
 
@@ -330,7 +331,7 @@ export function ChatPanel({ scopes }: Props) {
 
         // if cancelled mid-stream, keep whatever was received as plain text
         if (controller.signal.aborted) {
-            setHistory([
+            onMessagesChange([
                 ...newHistory,
                 { role: "assistant", content: fullResponse || "_(cancelled)_" },
             ]);
@@ -346,7 +347,7 @@ export function ChatPanel({ scopes }: Props) {
             prose: display,
         };
 
-        setHistory([...newHistory, assistantMsg]);
+        onMessagesChange([...newHistory, assistantMsg]);
 
         // All file edits are now normalized to multi-file format (even single files)
         if (sentinel?.type === "multi_file_edit") {
@@ -590,13 +591,13 @@ export function ChatPanel({ scopes }: Props) {
         <div className="chat-layout">
             <div className="chat-panel">
                 <div className="messages">
-                    {history.map((msg, i) => (
+                    {messages.map((msg, i) => (
                         <div key={i} className={`message ${msg.role}`}>
                             <span className="role-label">{msg.role}</span>
                             {msg.role === "assistant"
                                 ? renderAssistantContent(
                                       msg,
-                                      streaming && i === history.length - 1
+                                      streaming && i === messages.length - 1
                                   )
                                 : <pre className="content">{msg.content}</pre>
                             }
