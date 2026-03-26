@@ -23,6 +23,14 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
   - **Prerequisite:** Save conversations
   - **Value:** Natural extension once persistence exists
 
+- [ ] **Conversation Projects** — Group related conversations into projects for better organization.
+  - Project sidebar with folders/categories
+  - Move conversations between projects
+  - Project-level context/settings
+  - Similar to Claude.ai's Projects feature
+  - **Prerequisite:** Save conversations
+  - **Value:** Better organization for users working on multiple codebases/topics
+
 - [ ] **Tool calling refactor** — **BIG ONE.** Replace current prompt-chaining (intent detection, file selection, sentinel parsing) with Ollama's structured `tools` API.
   - Define tools: `read_file(scope, path)`, `edit_file(scope, path, content)`, `search_files(query)`, `list_scope(name)`
   - Model calls tools → Python executes → results fed back → model continues
