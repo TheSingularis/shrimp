@@ -390,6 +390,7 @@ async def chat(req: ChatRequest, request: Request):
             if not paths:
                 continue
             if is_file_edit_intent:
+                # For edits: load full file content
                 for path in paths:
                     try:
                         content = rag.read_file_from_scope(scope_name, path)
@@ -399,11 +400,17 @@ async def chat(req: ChatRequest, request: Request):
                         log.warning(
                             "chat: could not read file %s: %s", path, e)
             else:
-                chunk = await asyncio.get_event_loop().run_in_executor(
-                    None, rag.query_on_demand, req.message, scope_name, paths
-                )
-                if chunk:
-                    context_chunks.append(chunk)
+                # For questions: read files directly instead of re-embedding
+                chunks = [f"--- context from scope: {scope_name} ---"]
+                for path in paths:
+                    try:
+                        content = rag.read_file_from_scope(scope_name, path)
+                        chunks.append(f"# {path}\n{content}")
+                        log.info("chat: loaded file for context: %s", path)
+                    except Exception as e:
+                        log.warning("chat: could not read file %s: %s", path, e)
+                if len(chunks) > 1:  # Has content beyond the header
+                    context_chunks.append("\n\n".join(chunks))
     else:
         context = await asyncio.get_event_loop().run_in_executor(
             None, rag.query_scopes, req.message, scope_names

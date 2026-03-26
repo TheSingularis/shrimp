@@ -187,13 +187,13 @@ def build_index(scope: dict, progress_callback=None) -> dict:
     Returns status info.
     """
     name = scope["name"]
-    path = str(Path(scope["path"]).expanduser())
+    root = Path(scope["path"]).expanduser()
 
-    log.info("[%s] Starting index of %s", name, path)
+    log.info("[%s] Starting index of %s", name, root)
 
-    if not Path(path).exists():
-        log.error("[%s] Directory not found: %s", name, path)
-        raise FileNotFoundError(f"Directory not found: {path}")
+    if not root.exists():
+        log.error("[%s] Directory not found: %s", name, root)
+        raise FileNotFoundError(f"Directory not found: {root}")
 
     try:
         chroma_client.delete_collection(name)
@@ -205,38 +205,45 @@ def build_index(scope: dict, progress_callback=None) -> dict:
     vector_store = ChromaVectorStore(chroma_collection=collection)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-    exclude_paths = [
-        str(Path(path) / d)
-        for d in EXCLUDED_DIRS
-        if (Path(path) / d).exists()
-    ]
-    if exclude_paths:
-        log.info("[%s] Excluding %d dirs: %s", name,
-                 len(exclude_paths), [Path(p).name for p in exclude_paths])
+    # Walk directory ourselves to properly exclude nested dirs
+    # (SimpleDirectoryReader's exclude parameter doesn't work recursively)
+    valid_files = []
+    for f in root.rglob("*"):
+        if not f.is_file():
+            continue
+        if f.suffix not in SUPPORTED_EXTENSIONS:
+            continue
+        if f.stat().st_size > MAX_FILE_BYTES:
+            continue
+        # Use same exclusion logic as structural map
+        if any(ex in f.parts for ex in EXCLUDED_DIRS):
+            continue
+        valid_files.append(str(f))
 
+    log.info("[%s] Found %d valid files after exclusions", name, len(valid_files))
+
+    if not valid_files:
+        log.warning("[%s] No files to index after applying filters", name)
+        status = {
+            "name": name,
+            "path": str(root),
+            "file_count": 0,
+            "last_indexed": datetime.utcnow().isoformat() + "Z",
+        }
+        index_status[name] = status
+        return status
+
+    # Load documents from our filtered file list
     docs = SimpleDirectoryReader(
-        path,
-        recursive=True,
-        required_exts=SUPPORTED_EXTENSIONS,
-        exclude=exclude_paths,
+        input_files=valid_files,
         file_metadata=lambda fp: {"file_path": fp},
     ).load_data()
 
-    before = len(docs)
-    docs = [
-        d for d in docs
-        if Path(d.metadata.get("file_path", "")).stat().st_size <= MAX_FILE_BYTES
-    ]
-    dropped = before - len(docs)
-    if dropped:
-        log.info("[%s] Dropped %d oversized file(s)", name, dropped)
-
     if not docs:
-        log.warning(
-            "[%s] No supported files found in %s — skipping index", name, path)
+        log.warning("[%s] No documents loaded from files", name)
         status = {
             "name": name,
-            "path": path,
+            "path": str(root),
             "file_count": 0,
             "last_indexed": datetime.utcnow().isoformat() + "Z",
         }
@@ -262,7 +269,7 @@ def build_index(scope: dict, progress_callback=None) -> dict:
 
     status = {
         "name": name,
-        "path": path,
+        "path": str(root),
         "file_count": total,
         "last_indexed": datetime.utcnow().isoformat() + "Z",
     }
@@ -284,84 +291,6 @@ def build_all_indexes() -> list[dict]:
             log.error("[%s] Index failed: %s", scope["name"], e)
             results.append({"name": scope["name"], "error": str(e)})
     return results
-
-# ── on-demand embedding ────────────────────────────────────────────────────────
-
-
-def embed_files_on_demand(scope_name: str, file_paths: list[str]) -> VectorStoreIndex | None:
-    """
-    Embed a specific list of files into a temporary in-memory index.
-    Always re-embeds for freshness — does not touch the persistent Chroma index.
-    Returns a queryable index or None if no files could be read.
-    """
-    root = Path(next(
-        (s["path"] for s in config.WATCHED_DIRS if s["name"] == scope_name), ""
-    )).expanduser()
-
-    resolved = []
-    for p in file_paths:
-        candidate = Path(p) if Path(p).is_absolute() else root / p
-        if not candidate.exists():
-            log.warning(
-                "[%s] on-demand: file not found, skipping: %s", scope_name, p)
-            continue
-        if candidate.stat().st_size > MAX_FILE_BYTES:
-            log.warning(
-                "[%s] on-demand: file too large, skipping: %s", scope_name, p)
-            continue
-        resolved.append(str(candidate))
-
-    if not resolved:
-        log.warning("[%s] on-demand: no valid files to embed", scope_name)
-        return None
-
-    log.info("[%s] on-demand: embedding %d file(s): %s",
-             scope_name, len(resolved), [Path(p).name for p in resolved])
-
-    try:
-        docs = SimpleDirectoryReader(
-            input_files=resolved,
-            file_metadata=lambda fp: {"file_path": fp},
-        ).load_data()
-
-        if not docs:
-            log.warning(
-                "[%s] on-demand: no content loaded from files", scope_name)
-            return None
-
-        index = VectorStoreIndex.from_documents(docs, show_progress=False)
-        log.info("[%s] on-demand: index built with %d doc(s)",
-                 scope_name, len(docs))
-        return index
-
-    except Exception as e:
-        log.error("[%s] on-demand: embedding failed: %s", scope_name, e)
-        return None
-
-
-def query_on_demand(question: str, scope_name: str, file_paths: list[str]) -> str:
-    """
-    Embed the given files on demand and query them.
-    Returns context string for prompt injection.
-    """
-    index = embed_files_on_demand(scope_name, file_paths)
-    if index is None:
-        return f"[on-demand: could not read files for scope '{scope_name}']"
-
-    retriever = index.as_retriever(similarity_top_k=5)
-    nodes = retriever.retrieve(question)
-
-    if not nodes:
-        log.info("[%s] on-demand: no relevant nodes found", scope_name)
-        return ""
-
-    log.info("[%s] on-demand: retrieved %d node(s)", scope_name, len(nodes))
-    chunks = [f"--- on-demand context from scope: {scope_name} ---"]
-    for node in nodes:
-        source = node.metadata.get("file_path", "unknown")
-        chunks.append(f"# {source}\n{node.text}")
-
-    return "\n\n".join(chunks)
 
 # ── querying ───────────────────────────────────────────────────────────────────
 
