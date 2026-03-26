@@ -233,48 +233,47 @@ def build_index(scope: dict, progress_callback=None) -> dict:
         index_status[name] = status
         return status
 
-    # Load documents from our filtered file list
-    docs = SimpleDirectoryReader(
-        input_files=valid_files,
-        file_metadata=lambda fp: {"file_path": fp},
-    ).load_data()
+    # Embed files one at a time for progress tracking
+    total_files = len(valid_files)
+    log.info("[%s] Embedding %d files...", name, total_files)
 
-    if not docs:
-        log.warning("[%s] No documents loaded from files", name)
-        status = {
-            "name": name,
-            "path": str(root),
-            "file_count": 0,
-            "last_indexed": datetime.utcnow().isoformat() + "Z",
-        }
-        index_status[name] = status
-        return status
+    for i, file_path in enumerate(valid_files):
+        try:
+            # Load and embed this file
+            docs = SimpleDirectoryReader(
+                input_files=[file_path],
+                file_metadata=lambda fp: {"file_path": fp},
+            ).load_data()
 
-    total = len(docs)
-    log.info("[%s] Loaded %d documents, embedding...", name, total)
+            if docs:
+                VectorStoreIndex.from_documents(
+                    docs,
+                    storage_context=storage_context,
+                    show_progress=False,
+                )
 
-    for i, doc in enumerate(docs):
-        VectorStoreIndex.from_documents(
-            [doc],
-            storage_context=storage_context,
-            show_progress=False,
-        )
-        filename = Path(doc.metadata.get("file_path", "")).name
-        index_progress[name] = {"current": i +
-                                1, "total": total, "file": filename}
-        if progress_callback:
-            progress_callback(i + 1, total, filename)
+            filename = Path(file_path).name
+            index_progress[name] = {
+                "current": i + 1,
+                "total": total_files,
+                "file": filename
+            }
+            if progress_callback:
+                progress_callback(i + 1, total_files, filename)
+
+        except Exception as e:
+            log.warning("[%s] Failed to embed %s: %s", name, file_path, e)
 
     index_progress.pop(name, None)
 
     status = {
         "name": name,
         "path": str(root),
-        "file_count": total,
+        "file_count": total_files,
         "last_indexed": datetime.utcnow().isoformat() + "Z",
     }
     index_status[name] = status
-    log.info("[%s] Index complete — %d docs stored", name, total)
+    log.info("[%s] Index complete — %d files indexed", name, total_files)
     return status
 
 
