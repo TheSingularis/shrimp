@@ -72,6 +72,7 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [ ] **Per-scope prompt context** — Optional description per scope injected into system prompt when active.
 - [ ] **Index status indicator in header** — Small dot showing if active scopes are indexed.
 - [ ] **File edit history** — Track all edits with timestamps for session review.
+- [ ] **persist index dates between restarts** - When caching scope indexes, include the date so it properly populates when reloading the previous index from cache
 
 ---
 

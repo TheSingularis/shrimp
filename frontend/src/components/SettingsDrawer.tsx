@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
+import { getCustomInstructions, setCustomInstructions } from "../api";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -65,6 +66,9 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [pullPercent, setPullPercent] = useState<number | null>(null);
     const [ctxValue, setCtxValue] = useState(8192);
     const [ctxSaving, setCtxSaving] = useState(false);
+    const [customInstructions, setCustomInstructions] = useState("");
+    const [customInstructionsSaving, setCustomInstructionsSaving] = useState(false);
+    const customInstructionsTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -77,6 +81,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             .then((r) => r.json())
             .then(setLocalScopes);
         getCtx().then(setCtxValue).catch(() => {});
+        getCustomInstructions().then(setCustomInstructions).catch(() => {});
     }, [open]);
 
     async function handleCtxChange(value: number) {
@@ -87,6 +92,21 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         } finally {
             setCtxSaving(false);
         }
+    }
+
+    function handleCustomInstructionsChange(value: string) {
+        setCustomInstructions(value);
+
+        // Debounce save
+        if (customInstructionsTimerRef.current !== null) {
+            clearTimeout(customInstructionsTimerRef.current);
+        }
+        setCustomInstructionsSaving(true);
+        customInstructionsTimerRef.current = window.setTimeout(async () => {
+            await setCustomInstructions(value);
+            setCustomInstructionsSaving(false);
+            customInstructionsTimerRef.current = null;
+        }, 1000);
     }
 
     async function handleModelChange(model: string) {
@@ -317,6 +337,30 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         {ctxSaving && <span className="saving">saving…</span>}
                     </h2>
                     <ContextSlider value={ctxValue} onChange={handleCtxChange} />
+                </section>
+
+                <section className="drawer-section">
+                    <h2>
+                        Custom Instructions
+                        {customInstructionsSaving && <span className="saving">saving…</span>}
+                    </h2>
+                    <textarea
+                        value={customInstructions}
+                        onChange={(e) => handleCustomInstructionsChange(e.target.value)}
+                        placeholder="Add custom instructions to append to all prompts...&#10;&#10;Example: 'Always use TypeScript for code examples' or 'Prefer functional programming patterns'"
+                        rows={4}
+                        style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border)",
+                            background: "var(--bg)",
+                            color: "var(--text)",
+                            fontFamily: "inherit",
+                            fontSize: "0.85rem",
+                            resize: "vertical"
+                        }}
+                    />
                 </section>
 
                 <section className="drawer-section">
