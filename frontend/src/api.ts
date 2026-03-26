@@ -4,6 +4,7 @@ export interface Scope {
     name: string;
     path: string;
     enabled: boolean;
+    description?: string;
 }
 
 export interface Message {
@@ -198,4 +199,12 @@ export async function setCustomInstructions(custom_instructions: string): Promis
         body: JSON.stringify({ custom_instructions }),
     });
     if (!res.ok) throw new Error(`setCustomInstructions: ${res.status}`);
+}
+
+export async function generateScopeDescription(name: string): Promise<string> {
+    const res = await fetch(`${BASE}/scopes/${name}/generate-description`, {
+        method: "POST",
+    });
+    if (!res.ok) throw new Error(`generateScopeDescription: ${res.status}`);
+    return (await res.json()).description;
 }

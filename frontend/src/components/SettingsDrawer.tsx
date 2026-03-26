@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
-import { getCustomInstructions, setCustomInstructions } from "../api";
+import { getCustomInstructions, setCustomInstructions, generateScopeDescription } from "../api";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -69,6 +69,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [customInstructions, setCustomInstructions] = useState("");
     const [customInstructionsSaving, setCustomInstructionsSaving] = useState(false);
     const customInstructionsTimerRef = useRef<number | null>(null);
+    const [generatingDescription, setGeneratingDescription] = useState<string | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -153,6 +154,50 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         setNewName("");
         setNewPath("");
         setSaving(false);
+    }
+
+    function handleScopeDescriptionChange(name: string, description: string) {
+        // Update local state immediately
+        const updated = scopes.map((s) =>
+            s.name === name ? { ...s, description } : s
+        );
+        setLocalScopes(updated);
+
+        // Debounce the save
+        if (saveTimerRef.current !== null) {
+            clearTimeout(saveTimerRef.current);
+        }
+        setSaving(true);
+        saveTimerRef.current = window.setTimeout(async () => {
+            const result = await setScopes(updated);
+            setLocalScopes(result);
+            onScopesChanged(result);
+            setSaving(false);
+            saveTimerRef.current = null;
+        }, 1000);
+    }
+
+    async function handleGenerateDescription(name: string) {
+        setGeneratingDescription(name);
+        try {
+            const description = await generateScopeDescription(name);
+
+            // Update the scope with the generated description
+            const updated = scopes.map((s) =>
+                s.name === name ? { ...s, description } : s
+            );
+            setLocalScopes(updated);
+
+            // Save immediately (no debounce for generated descriptions)
+            const result = await setScopes(updated);
+            setLocalScopes(result);
+            onScopesChanged(result);
+        } catch (error) {
+            console.error(`Failed to generate description for ${name}:`, error);
+            alert(`Failed to generate description: ${error}`);
+        } finally {
+            setGeneratingDescription(null);
+        }
     }
 
     function statusFor(name: string) {
@@ -403,6 +448,38 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                                         ) : (
                                             <span className="scope-status unindexed">not indexed</span>
                                         )}
+                                        <div style={{ width: '100%', marginTop: '0.5rem' }}>
+                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                                                <textarea
+                                                    value={s.description || ""}
+                                                    onChange={(e) => handleScopeDescriptionChange(s.name, e.target.value)}
+                                                    placeholder="Optional: Add a description for this scope (e.g., 'React/TypeScript frontend codebase')..."
+                                                    rows={2}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '0.4rem',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid var(--border)',
+                                                        background: 'var(--bg)',
+                                                        color: 'var(--text)',
+                                                        fontFamily: 'inherit',
+                                                        fontSize: '0.75rem',
+                                                        resize: 'vertical'
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={() => handleGenerateDescription(s.name)}
+                                                    disabled={indexing !== null || generatingDescription !== null}
+                                                    style={{
+                                                        padding: '0.4rem 0.75rem',
+                                                        fontSize: '0.75rem',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                >
+                                                    {generatingDescription === s.name ? "⏳ Generating..." : "✨ Generate"}
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="scope-actions">
                                         <button
