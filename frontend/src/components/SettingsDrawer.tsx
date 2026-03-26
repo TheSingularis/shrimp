@@ -139,130 +139,83 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         return indexStatus.find((s) => s.name === name);
     }
 
-    async function handleIndexOne(name: string) {
-        setIndexing(name);
-        setIndexProgress({ ...indexProgress, [name]: { current: 0, total: 0, file: "" } });
+    function handleIndexOne(name: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            setIndexing(name);
+            setIndexProgress({ ...indexProgress, [name]: { current: 0, total: 0, file: "" } });
 
-        // Use SSE stream for real-time progress
-        const url = `${BASE}/index/${name}/stream`;
-        console.log(`[Index] Opening SSE stream: ${url}`);
-        const eventSource = new EventSource(url);
+            // Use SSE stream for real-time progress
+            const url = `${BASE}/index/${name}/stream`;
+            console.log(`[Index] Opening SSE stream: ${url}`);
+            const eventSource = new EventSource(url);
 
-        eventSource.onopen = () => {
-            console.log(`[Index] SSE connection opened for ${name}`);
-        };
+            eventSource.onopen = () => {
+                console.log(`[Index] SSE connection opened for ${name}`);
+            };
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log(`[Index] Progress update for ${name}:`, data);
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log(`[Index] Progress update for ${name}:`, data);
 
-                if (data.done) {
-                    console.log(`[Index] Indexing complete for ${name}`);
-                    eventSource.close();
-                    setIndexing(null);
-                    setIndexProgress((prev) => {
-                        const next = { ...prev };
-                        delete next[name];
-                        return next;
-                    });
-                    // Refresh status to show final file count
-                    getIndexStatus().then(setIndexStatus);
-                } else if (data.current && data.total) {
-                    setIndexProgress((prev) => ({
-                        ...prev,
-                        [name]: { current: data.current, total: data.total, file: data.file || "" }
-                    }));
-                } else if (data.ping) {
-                    // Ignore ping messages
+                    if (data.done) {
+                        console.log(`[Index] Indexing complete for ${name}`);
+                        eventSource.close();
+                        setIndexing(null);
+                        setIndexProgress((prev) => {
+                            const next = { ...prev };
+                            delete next[name];
+                            return next;
+                        });
+                        // Refresh status to show final file count
+                        getIndexStatus().then(setIndexStatus);
+                        resolve();
+                    } else if (data.current && data.total) {
+                        setIndexProgress((prev) => ({
+                            ...prev,
+                            [name]: { current: data.current, total: data.total, file: data.file || "" }
+                        }));
+                    } else if (data.ping) {
+                        // Ignore ping messages
+                    }
+                } catch (e) {
+                    console.error("[Index] Failed to parse progress:", e, event.data);
                 }
-            } catch (e) {
-                console.error("[Index] Failed to parse progress:", e, event.data);
-            }
-        };
+            };
 
-        eventSource.onerror = (err) => {
-            console.error(`[Index] SSE error for ${name}:`, err);
-            eventSource.close();
-            setIndexing(null);
-            setIndexProgress((prev) => {
-                const next = { ...prev };
-                delete next[name];
-                return next;
-            });
-        };
+            eventSource.onerror = (err) => {
+                console.error(`[Index] SSE error for ${name}:`, err);
+                eventSource.close();
+                setIndexing(null);
+                setIndexProgress((prev) => {
+                    const next = { ...prev };
+                    delete next[name];
+                    return next;
+                });
+                reject(err);
+            };
+        });
     }
 
     async function handleIndexAll() {
         setIndexing("all");
         const enabledScopes = scopes.filter((s) => s.enabled);
 
+        if (enabledScopes.length === 0) {
+            setIndexing(null);
+            return;
+        }
+
         console.log(`[Index All] Starting indexing for ${enabledScopes.length} scopes`);
 
-        // Track completion of all scopes
-        let completed = 0;
-        const total = enabledScopes.length;
-
-        enabledScopes.forEach((scope) => {
-            const name = scope.name;
-            const url = `${BASE}/index/${name}/stream`;
-            console.log(`[Index All] Opening SSE stream for ${name}: ${url}`);
-
-            setIndexProgress((prev) => ({ ...prev, [name]: { current: 0, total: 0, file: "" } }));
-
-            const eventSource = new EventSource(url);
-
-            eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.done) {
-                        console.log(`[Index All] Completed ${name} (${completed + 1}/${total})`);
-                        eventSource.close();
-                        setIndexProgress((prev) => {
-                            const next = { ...prev };
-                            delete next[name];
-                            return next;
-                        });
-
-                        completed++;
-                        if (completed === total) {
-                            console.log(`[Index All] All scopes complete`);
-                            setIndexing(null);
-                            getIndexStatus().then(setIndexStatus);
-                        }
-                    } else if (data.current && data.total) {
-                        setIndexProgress((prev) => ({
-                            ...prev,
-                            [name]: { current: data.current, total: data.total, file: data.file || "" }
-                        }));
-                    }
-                } catch (e) {
-                    console.error(`[Index All] Failed to parse progress for ${name}:`, e);
-                }
-            };
-
-            eventSource.onerror = (err) => {
-                console.error(`[Index All] SSE error for ${name}:`, err);
-                eventSource.close();
-                setIndexProgress((prev) => {
-                    const next = { ...prev };
-                    delete next[name];
-                    return next;
-                });
-
-                completed++;
-                if (completed === total) {
-                    setIndexing(null);
-                    getIndexStatus().then(setIndexStatus);
-                }
-            };
-        });
-
-        // If no enabled scopes, immediately finish
-        if (total === 0) {
-            setIndexing(null);
+        // Index each scope sequentially
+        for (const scope of enabledScopes) {
+            await handleIndexOne(scope.name);
         }
+
+        console.log(`[Index All] All scopes complete`);
+        setIndexing(null);
+        getIndexStatus().then(setIndexStatus);
     }
 
     async function handlePullModel() {
