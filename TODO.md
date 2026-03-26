@@ -6,14 +6,14 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ## 🎯 Tier 1: High Impact, Medium Effort (RECOMMENDED NEXT)
 
-- [ ] **Additional prompt instructions in settings** — Freetext field in settings that appends custom instructions to the system prompt. Huge flexibility gain for tuning SHRIMP's tone, focus, or domain knowledge per project without touching code. Persist to `config.py`.
-  - **Why first:** Enables per-project customization immediately. Simple to implement, massive UX improvement.
+- [x] **Additional prompt instructions in settings** — Freetext field in settings that appends custom instructions to the system prompt. Huge flexibility gain for tuning SHRIMP's tone, focus, or domain knowledge per project without touching code. Persist to `config.py`.
+  - **COMPLETED:** Global custom instructions + per-scope descriptions + auto-generate descriptions using LLM
 
-- [ ] **Save conversations** — Persist chat history to JSON files on disk (one file per conversation). Auto-save after each exchange.
-  - **Why second:** Foundation for all conversation management. Prevents losing work. Enables features below.
+- [x] **Save conversations** — Persist chat history to JSON files on disk (one file per conversation). Auto-save after each exchange.
+  - **COMPLETED:** Full conversation history system with sidebar, load/save, delete, rename, auto-save
 
 - [ ] **Retry prompt button** — Similar to ChatGPT/Claude, a button to regenerate the last assistant response. Common UX pattern users expect.
-  - **Why third:** Easy win, improves iteration workflow significantly.
+  - **Why next:** Easy win, improves iteration workflow significantly.
 
 ---
 
