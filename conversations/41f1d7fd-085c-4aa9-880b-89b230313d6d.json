@@ -1,0 +1,20 @@
+{
+  "conversation_id": "41f1d7fd-085c-4aa9-880b-89b230313d6d",
+  "title": "what can you tell me about the upcoming 8th entry in the Dun...",
+  "messages": [
+    {
+      "role": "user",
+      "content": "what can you tell me about the upcoming 8th entry in the Dungeon Crawler Carl series?"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm not sure I understand what you'd like me to do. Could you clarify?\n\nI can help you:\n- **Answer questions** about your files (e.g., 'how does authentication work?')\n- **Edit a single file** (e.g., 'update README.md to add installation instructions')\n- **Edit multiple files** (e.g., 'update README and CHANGELOG to document feature X')\n\nWhat would you like me to do?"
+    }
+  ],
+  "created_at": "2026-03-26T02:06:43.929828Z",
+  "updated_at": "2026-03-26T02:06:43.929844Z",
+  "active_scopes": [
+    "obsidian",
+    "shrimp"
+  ]
+}

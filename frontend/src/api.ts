@@ -208,3 +208,70 @@ export async function generateScopeDescription(name: string): Promise<string> {
     if (!res.ok) throw new Error(`generateScopeDescription: ${res.status}`);
     return (await res.json()).description;
 }
+
+// ── Conversations ───────────────────────────────────────────────────────────────
+
+export interface ConversationMetadata {
+    conversation_id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+    message_count: number;
+}
+
+export interface ConversationFull {
+    conversation_id: string;
+    title: string;
+    messages: Message[];
+    created_at: string;
+    updated_at: string;
+    active_scopes: string[];
+}
+
+export async function listConversations(): Promise<ConversationMetadata[]> {
+    const res = await fetch(`${BASE}/conversations`);
+    if (!res.ok) throw new Error(`listConversations: ${res.status}`);
+    return res.json();
+}
+
+export async function getConversation(id: string): Promise<ConversationFull> {
+    const res = await fetch(`${BASE}/conversations/${id}`);
+    if (!res.ok) throw new Error(`getConversation: ${res.status}`);
+    return res.json();
+}
+
+export async function saveConversation(
+    messages: Message[],
+    activeScopes: string[],
+    conversationId?: string,
+    title?: string
+): Promise<{ conversation_id: string; title: string }> {
+    const res = await fetch(`${BASE}/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            conversation_id: conversationId,
+            title,
+            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            active_scopes: activeScopes,
+        }),
+    });
+    if (!res.ok) throw new Error(`saveConversation: ${res.status}`);
+    return res.json();
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/conversations/${id}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) throw new Error(`deleteConversation: ${res.status}`);
+}
+
+export async function updateConversationTitle(id: string, title: string): Promise<void> {
+    const res = await fetch(`${BASE}/conversations/${id}/title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+    });
+    if (!res.ok) throw new Error(`updateConversationTitle: ${res.status}`);
+}
