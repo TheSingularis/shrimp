@@ -318,6 +318,7 @@ button:disabled {
     flex-direction: column;
     gap: 0.15rem;
     min-width: 0;
+    flex: 1;
 }
 
 .scope-name {
