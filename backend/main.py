@@ -937,9 +937,11 @@ async def pull_model(body: dict):
 @app.delete("/models/{model:path}")
 async def delete_model(model: str):
     async with httpx.AsyncClient() as client:
-        await client.delete(
+        await client.request(
+            "DELETE",
             f"{config.OLLAMA_HOST}/api/delete",
-            json={"name": model}
+            content=json.dumps({"name": model}),
+            headers={"Content-Type": "application/json"}
         )
     return {"ok": True}
 
