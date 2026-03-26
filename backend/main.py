@@ -211,12 +211,17 @@ async def chat(req: ChatRequest, request: Request):
     recent_history = req.history[-6:] if len(req.history) > 6 else req.history
 
     intent_prompt = (
-        "You are an intent detection assistant. Classify the user's request into one of four categories.\n\n"
+        "You are an intent detection assistant. Classify the user's request into one of FIVE categories.\n\n"
+        'Respond with {"intent": "general"} if:\n'
+        "- General knowledge question not about files/code: 'what is quantum computing?', 'tell me about the Dungeon Crawler Carl series'\n"
+        "- Current events, news, books, movies, general topics\n"
+        "- Personal conversation: 'how are you?', 'tell me a joke'\n"
+        "- Questions that clearly don't need file access\n\n"
         'Respond with {"intent": "question"} if:\n'
-        "- Asking how to do something: 'how would I add X?', 'what's the best way to Y?'\n"
-        "- Requesting explanation: 'how does X work?', 'explain the architecture'\n"
-        "- Seeking suggestions: 'how should I implement Z?', 'what changes are needed?'\n"
-        "- General discussion: 'tell me about X', 'what files handle Y?'\n\n"
+        "- Asking how to do something IN CODE/FILES: 'how would I add X to this codebase?', 'what's the best way to implement Y here?'\n"
+        "- Requesting explanation about THIS CODE: 'how does authentication work in this app?', 'explain the architecture'\n"
+        "- Seeking suggestions about FILES: 'how should I refactor Z?', 'what files handle authentication?'\n"
+        "- Questions that NEED file context to answer\n\n"
         'Respond with {"intent": "single_file_edit"} if:\n'
         "- Edit ONE specific file: 'update README to add X', 'fix the bug in main.py'\n"
         "- User explicitly names a single file to change\n"
@@ -232,11 +237,12 @@ async def chat(req: ChatRequest, request: Request):
         "- Cannot determine intent with confidence\n"
         "- Need more information from the user to proceed\n\n"
         "Key examples:\n"
-        "- 'how would I update README?' → question\n"
-        "- 'update README to include X' → single_file_edit\n"
-        "- 'update README and CHANGELOG' → multi_file_edit\n"
-        "- 'fix it' → unclear (which file? what needs fixing?)\n"
-        "- 'add feature X' → multi_file_edit (if X clearly needs multiple files) OR unclear (if not obvious)\n\n"
+        "- 'what can you tell me about Dungeon Crawler Carl?' → general (no files needed)\n"
+        "- 'how does authentication work in this app?' → question (needs to search files)\n"
+        "- 'how would I update README?' → question (asking about how, not doing it)\n"
+        "- 'update README to include X' → single_file_edit (actual edit request)\n"
+        "- 'update README and CHANGELOG' → multi_file_edit (multiple files)\n"
+        "- 'fix it' → unclear (which file? what needs fixing?)\n\n"
         "Consider conversation context for follow-ups.\n"
         "Respond with JSON only. No explanation.\n\n"
         f"LATEST USER MESSAGE: {req.message}"
@@ -262,7 +268,7 @@ async def chat(req: ChatRequest, request: Request):
             parsed = json.loads(raw)
             intent = parsed.get("intent", "question")
             # Validate intent value
-            if intent not in ["question", "single_file_edit", "multi_file_edit", "unclear"]:
+            if intent not in ["general", "question", "single_file_edit", "multi_file_edit", "unclear"]:
                 log.warning("chat: invalid intent '%s', defaulting to unclear", intent)
                 intent = "unclear"
             log.info("chat: intent detection — intent=%s", intent)
@@ -277,6 +283,7 @@ async def chat(req: ChatRequest, request: Request):
         clarification_message = (
             "I'm not sure I understand what you'd like me to do. Could you clarify?\n\n"
             "I can help you:\n"
+            "- **Answer general questions** (e.g., 'tell me about quantum computing')\n"
             "- **Answer questions** about your files (e.g., 'how does authentication work?')\n"
             "- **Edit a single file** (e.g., 'update README.md to add installation instructions')\n"
             "- **Edit multiple files** (e.g., 'update README and CHANGELOG to document feature X')\n\n"
@@ -287,6 +294,61 @@ async def chat(req: ChatRequest, request: Request):
             yield clarification_message
 
         return StreamingResponse(stream_clarification(), media_type="text/plain")
+
+    # ── step 1a.6: handle general questions (no file access needed) ───────────
+    if intent == "general":
+        log.info("chat: general question mode — no file access needed")
+
+        general_system_prompt = (
+            "You are SHRIMP*, a helpful AI assistant.\n\n"
+            "The user has asked a general knowledge question that doesn't require access to their files. "
+            "Answer their question directly using your general knowledge.\n\n"
+            "## Formatting\n"
+            "Respond using markdown formatting — use headers, bold, italics, lists, and code blocks where appropriate. "
+            "IMPORTANT: Never wrap your entire response in a ```markdown code fence. "
+            "Write markdown directly — your output is rendered in a markdown-aware chat UI. "
+            "Only use fenced code blocks (``` with a language tag) for actual code snippets."
+        )
+
+        # Inject custom instructions if configured
+        if config.CUSTOM_INSTRUCTIONS.strip():
+            general_system_prompt += f"\n\n## Custom Instructions\n{config.CUSTOM_INSTRUCTIONS}"
+
+        messages = [
+            {"role": "system", "content": general_system_prompt},
+            *req.history,
+            {"role": "user", "content": req.message},
+        ]
+
+        async def stream():
+            yield "__STAGE__thinking"
+            buffer = ""
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream(
+                    "POST",
+                    f"{config.OLLAMA_HOST}/api/chat",
+                    json={
+                        "model": config.OLLAMA_MODEL,
+                        "messages": messages,
+                        "stream": True,
+                        "options": {"num_ctx": config.NUM_CTX},
+                    },
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            chunk = data.get("message", {}).get("content", "")
+                            if chunk:
+                                buffer += chunk
+                                yield chunk
+                        except json.JSONDecodeError:
+                            pass
+            yield "__STAGE__done"
+            log.info("chat: general question answered — %d chars", len(buffer))
+
+        return StreamingResponse(stream(), media_type="text/plain")
 
     # ── step 1b: file selection ───────────────────────────────────────────────
     file_selection_prompt = (
