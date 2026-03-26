@@ -45,6 +45,7 @@ class Scope(BaseModel):
     name: str
     path: str
     enabled: bool
+    description: str = ""  # Optional description for scope context
 
 
 class ScopeUpdate(BaseModel):
@@ -62,6 +63,10 @@ class ApplyEditRequest(BaseModel):
 
 class CtxUpdate(BaseModel):
     num_ctx: int
+
+
+class CustomInstructionsUpdate(BaseModel):
+    custom_instructions: str
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -816,6 +821,20 @@ async def chat(req: ChatRequest, request: Request):
         "like Python, TypeScript, bash, etc."
     )
 
+    # Inject active scope descriptions
+    scope_descriptions = []
+    for scope_name in req.scopes:
+        scope = next((s for s in config.WATCHED_DIRS if s["name"] == scope_name), None)
+        if scope and scope.get("description"):
+            scope_descriptions.append(f"**{scope_name}**: {scope['description']}")
+
+    if scope_descriptions:
+        system_prompt += "\n\n## Active Scope Context\n" + "\n".join(scope_descriptions)
+
+    # Inject global custom instructions
+    if config.CUSTOM_INSTRUCTIONS.strip():
+        system_prompt += f"\n\n## Custom Instructions\n{config.CUSTOM_INSTRUCTIONS}"
+
     augmented_message = f"Here is a map of all files you have access to:\n\n{file_tree}\n\n"
     if context:
         augmented_message += f"Here is relevant file content:\n\n{context}\n\n"
@@ -1094,3 +1113,29 @@ async def set_ctx_setting(update: CtxUpdate):
         config_path.write_text(current)
         log.info("settings: NUM_CTX set to %d", update.num_ctx)
         return {"num_ctx": config.NUM_CTX}
+
+
+@app.get("/settings/custom-instructions")
+async def get_custom_instructions():
+    return {"custom_instructions": config.CUSTOM_INSTRUCTIONS}
+
+
+@app.post("/settings/custom-instructions")
+async def set_custom_instructions(update: CustomInstructionsUpdate):
+    config.CUSTOM_INSTRUCTIONS = update.custom_instructions
+    # persist to config.py
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    # Escape special regex characters in the value for safe replacement
+    escaped_value = update.custom_instructions.replace("\\", "\\\\").replace('"', '\\"')
+    if _re.search(r'CUSTOM_INSTRUCTIONS: str = ".*?"', current, _re.DOTALL):
+        current = _re.sub(
+            r'CUSTOM_INSTRUCTIONS: str = ".*?"',
+            f'CUSTOM_INSTRUCTIONS: str = "{escaped_value}"',
+            current,
+            flags=_re.DOTALL
+        )
+        config_path.write_text(current)
+        log.info("settings: CUSTOM_INSTRUCTIONS updated")
+        return {"custom_instructions": config.CUSTOM_INSTRUCTIONS}

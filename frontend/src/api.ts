@@ -184,3 +184,18 @@ export async function setCtx(num_ctx: number): Promise<void> {
     });
     if (!res.ok) throw new Error(`setCtx: ${res.status}`);
 }
+
+export async function getCustomInstructions(): Promise<string> {
+    const res = await fetch(`${BASE}/settings/custom-instructions`);
+    if (!res.ok) throw new Error(`getCustomInstructions: ${res.status}`);
+    return (await res.json()).custom_instructions;
+}
+
+export async function setCustomInstructions(custom_instructions: string): Promise<void> {
+    const res = await fetch(`${BASE}/settings/custom-instructions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ custom_instructions }),
+    });
+    if (!res.ok) throw new Error(`setCustomInstructions: ${res.status}`);
+}
