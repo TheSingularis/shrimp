@@ -195,25 +195,74 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
 
     async function handleIndexAll() {
         setIndexing("all");
-        await triggerIndexAll();
+        const enabledScopes = scopes.filter((s) => s.enabled);
 
-        // Poll status until all enabled scopes are indexed
-        const poll = setInterval(async () => {
-            const status = await getIndexStatus();
-            setIndexStatus(status);
+        console.log(`[Index All] Starting indexing for ${enabledScopes.length} scopes`);
 
-            // Check if all enabled scopes are done indexing
-            const enabledScopes = scopes.filter((s) => s.enabled);
-            const allDone = enabledScopes.every((scope) => {
-                const st = status.find((s) => s.name === scope.name);
-                return st?.last_indexed && !st?.indexing;
-            });
+        // Track completion of all scopes
+        let completed = 0;
+        const total = enabledScopes.length;
 
-            if (allDone) {
-                setIndexing(null);
-                clearInterval(poll);
-            }
-        }, 1000);
+        enabledScopes.forEach((scope) => {
+            const name = scope.name;
+            const url = `${BASE}/index/${name}/stream`;
+            console.log(`[Index All] Opening SSE stream for ${name}: ${url}`);
+
+            setIndexProgress((prev) => ({ ...prev, [name]: { current: 0, total: 0, file: "" } }));
+
+            const eventSource = new EventSource(url);
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.done) {
+                        console.log(`[Index All] Completed ${name} (${completed + 1}/${total})`);
+                        eventSource.close();
+                        setIndexProgress((prev) => {
+                            const next = { ...prev };
+                            delete next[name];
+                            return next;
+                        });
+
+                        completed++;
+                        if (completed === total) {
+                            console.log(`[Index All] All scopes complete`);
+                            setIndexing(null);
+                            getIndexStatus().then(setIndexStatus);
+                        }
+                    } else if (data.current && data.total) {
+                        setIndexProgress((prev) => ({
+                            ...prev,
+                            [name]: { current: data.current, total: data.total, file: data.file || "" }
+                        }));
+                    }
+                } catch (e) {
+                    console.error(`[Index All] Failed to parse progress for ${name}:`, e);
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error(`[Index All] SSE error for ${name}:`, err);
+                eventSource.close();
+                setIndexProgress((prev) => {
+                    const next = { ...prev };
+                    delete next[name];
+                    return next;
+                });
+
+                completed++;
+                if (completed === total) {
+                    setIndexing(null);
+                    getIndexStatus().then(setIndexStatus);
+                }
+            };
+        });
+
+        // If no enabled scopes, immediately finish
+        if (total === 0) {
+            setIndexing(null);
+        }
     }
 
     async function handlePullModel() {
