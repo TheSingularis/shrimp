@@ -7,6 +7,9 @@ backend/chroma_db/
 # config has local paths in it
 # backend/config.py
 
+# conversations are local
+conversations/
+
 # ollama logs
 .ollama/
 .ollama/bin/
