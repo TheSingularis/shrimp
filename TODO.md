@@ -40,6 +40,8 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 ## 🎨 Tier 3: Polish & Accessibility
 
 - [ ] **Update Branding** — Update styling to use shrimp icons (`frontend/public/icons`) and cohesive color scheme. Maybe add theme options in settings. Update ALL Icons to use a cohesive design.
+  - Rework settings page to utilize more screen space (possibly full window instead of drawer)
+  - Create a cohesive Styling Guide document defining colors, spacing, typography, component patterns
   - **Why now:** Visual polish improves perceived quality. Quick win.
 
 - [ ] **Mobile-responsive CSS** — Make layout work on small screens for phone/tablet access.
