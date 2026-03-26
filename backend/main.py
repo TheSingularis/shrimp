@@ -13,6 +13,7 @@ import queue
 import threading
 import config
 import rag
+import conversations
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +68,17 @@ class CtxUpdate(BaseModel):
 
 class CustomInstructionsUpdate(BaseModel):
     custom_instructions: str
+
+
+class SaveConversationRequest(BaseModel):
+    conversation_id: str | None = None
+    title: str | None = None
+    messages: list[dict]
+    active_scopes: list[str]
+
+
+class UpdateTitleRequest(BaseModel):
+    title: str
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -974,6 +986,71 @@ async def generate_scope_description(name: str):
 
     log.info("[%s] Generated description: %s", name, description)
     return {"description": description}
+
+
+# ── routes: conversations ─────────────────────────────────────────────────────
+
+
+@app.get("/conversations")
+async def list_conversations():
+    """List all conversations (metadata only)."""
+    return conversations.Conversation.list_all()
+
+
+@app.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    """Load a specific conversation."""
+    try:
+        conv = conversations.Conversation.load(conversation_id)
+        return conv.to_dict()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+
+@app.post("/conversations")
+async def save_conversation(req: SaveConversationRequest):
+    """Create or update a conversation."""
+    # Auto-generate title from first message if not provided
+    title = req.title
+    if not title and req.messages:
+        first_user_msg = next(
+            (m for m in req.messages if m.get("role") == "user"), None
+        )
+        if first_user_msg:
+            title = conversations.generate_title_from_message(
+                first_user_msg.get("content", "")
+            )
+
+    conv = conversations.Conversation(
+        conversation_id=req.conversation_id,
+        title=title,
+        messages=req.messages,
+        active_scopes=req.active_scopes,
+    )
+    conv.save()
+    return {"conversation_id": conv.conversation_id, "title": conv.title}
+
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation."""
+    try:
+        conversations.Conversation.delete(conversation_id)
+        return {"ok": True}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+
+@app.post("/conversations/{conversation_id}/title")
+async def update_conversation_title(conversation_id: str, req: UpdateTitleRequest):
+    """Update conversation title."""
+    try:
+        conv = conversations.Conversation.load(conversation_id)
+        conv.title = req.title
+        conv.save()
+        return {"ok": True, "title": conv.title}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
 
 # ── routes: models ────────────────────────────────────────────────────────────
