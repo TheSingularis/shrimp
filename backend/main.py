@@ -188,6 +188,46 @@ async def debug_find(filename: str, scope: str):
     return rag.find_file_in_scopes(filename, [scope])
 
 
+@app.post("/debug/prompt")
+async def debug_prompt(req: ChatRequest):
+    """Debug endpoint to see the system prompt and augmented message without calling the model."""
+    enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
+    active = [s for s in enabled if s["name"] in req.scopes] if req.scopes else enabled
+
+    if not active:
+        return {"error": "No active scopes selected"}
+
+    scope_names = [s["name"] for s in active]
+    file_tree = "\n".join(rag.get_structural_summary(scope_names))
+
+    # Build active scopes list
+    active_scope_list = ", ".join(f"'{s}'" for s in scope_names)
+
+    # Build system prompt (simplified version of the real one)
+    system_prompt = (
+        "You are SHRIMP*, a local AI assistant with access to the user's files.\n\n"
+        "## What You Have Access To\n"
+        f"You currently have access to these file scopes: {active_scope_list}\n"
+        f"Each scope is a directory containing files that you can read and analyze.\n"
+        f"When users ask about 'scopes', they're referring to these file collections.\n\n"
+        "[... rest of system prompt ...]"
+    )
+
+    # Build augmented message
+    augmented_message = (
+        f"## Available Files\n"
+        f"Here is the complete file tree for your active scopes ({active_scope_list}):\n\n"
+        f"```\n{file_tree}\n```\n\n"
+        f"## User Question\n{req.message}"
+    )
+
+    return {
+        "system_prompt": system_prompt,
+        "augmented_message": augmented_message,
+        "scope_names": scope_names,
+    }
+
+
 # ── routes: chat ──────────────────────────────────────────────────────────────
 
 
@@ -210,18 +250,27 @@ async def chat(req: ChatRequest, request: Request):
     # understood in context of what was just discussed.
     recent_history = req.history[-6:] if len(req.history) > 6 else req.history
 
+    # Build scope names hint for intent detection
+    scope_names_str = ", ".join(f"'{s}'" for s in scope_names)
+
     intent_prompt = (
         "You are an intent detection assistant. Classify the user's request into one of FIVE categories.\n\n"
+        f"IMPORTANT: The user has these file scopes active: {scope_names_str}\n"
+        f"If they mention any of these scope names (like 'tell me about the {scope_names[0]} project'), they're asking about THEIR files → use 'question' mode.\n"
+        "When in doubt about whether they're asking about THEIR files vs general knowledge, default to 'question' mode.\n\n"
         'Respond with {"intent": "general"} if:\n'
-        "- General knowledge question not about files/code: 'what is quantum computing?', 'tell me about the Dungeon Crawler Carl series'\n"
-        "- Current events, news, books, movies, general topics\n"
+        "- ONLY general knowledge questions: 'what is quantum computing?', 'who won the 2020 election?'\n"
+        "- Entertainment/media not in their files: 'tell me about the Dungeon Crawler Carl series'\n"
         "- Personal conversation: 'how are you?', 'tell me a joke'\n"
-        "- Questions that clearly don't need file access\n\n"
+        "- Questions that DEFINITELY don't relate to their files\n\n"
         'Respond with {"intent": "question"} if:\n'
-        "- Asking how to do something IN CODE/FILES: 'how would I add X to this codebase?', 'what's the best way to implement Y here?'\n"
-        "- Requesting explanation about THIS CODE: 'how does authentication work in this app?', 'explain the architecture'\n"
-        "- Seeking suggestions about FILES: 'how should I refactor Z?', 'what files handle authentication?'\n"
-        "- Questions that NEED file context to answer\n\n"
+        "- Questions about 'this project', 'this codebase', 'the app', 'these files' → ALWAYS question mode\n"
+        "- Mentions README, specific filenames, or file paths → ALWAYS question mode\n"
+        "- Questions about what scopes they have or what files are available → ALWAYS question mode\n"
+        "- Asking how to do something IN THIS CODE: 'how would I add X to this codebase?', 'what's the best way to implement Y here?'\n"
+        "- Requesting explanation about code/files: 'how does authentication work in this app?', 'explain the architecture'\n"
+        "- Seeking suggestions about files: 'how should I refactor Z?', 'what files handle authentication?'\n"
+        "- Broad questions like 'what is X?' when X could be a project/codebase (e.g. 'what is shrimp?' when they have a 'shrimp' scope)\n\n"
         'Respond with {"intent": "single_file_edit"} if:\n'
         "- Edit ONE specific file: 'update README to add X', 'fix the bug in main.py'\n"
         "- Create ONE new file: 'create a synopsis for the book', 'make a new config file'\n"
@@ -879,8 +928,16 @@ async def chat(req: ChatRequest, request: Request):
         return StreamingResponse(stream_multi_file_edit(), media_type="text/plain")
 
     # ── step 3b: normal chat path ─────────────────────────────────────────────
+
+    # Build active scopes list for system prompt
+    active_scope_list = ", ".join(f"'{s}'" for s in scope_names)
+
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files.\n\n"
+        "## What You Have Access To\n"
+        f"You currently have access to these file scopes: {active_scope_list}\n"
+        f"Each scope is a directory containing files that you can read and analyze.\n"
+        f"When users ask about 'scopes', they're referring to these file collections.\n\n"
         "## Your Role\n"
         "You're a collaborative assistant that helps users understand and modify their files. "
         "You work with code, documentation, notes, configuration files, and any text-based content. "
@@ -930,10 +987,14 @@ async def chat(req: ChatRequest, request: Request):
     if config.CUSTOM_INSTRUCTIONS.strip():
         system_prompt += f"\n\n## Custom Instructions\n{config.CUSTOM_INSTRUCTIONS}"
 
-    augmented_message = f"Here is a map of all files you have access to:\n\n{file_tree}\n\n"
+    augmented_message = (
+        f"## Available Files\n"
+        f"Here is the complete file tree for your active scopes ({active_scope_list}):\n\n"
+        f"```\n{file_tree}\n```\n\n"
+    )
     if context:
-        augmented_message += f"Here is relevant file content:\n\n{context}\n\n"
-    augmented_message += f"Now answer this question:\n{req.message}"
+        augmented_message += f"## Relevant File Content\n{context}\n\n"
+    augmented_message += f"## User Question\n{req.message}"
 
     messages = [
         {"role": "system", "content": system_prompt},
