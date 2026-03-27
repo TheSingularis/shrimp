@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
+import { type Scope, getScopes, getModels, setModel, setScopes, deleteScope, getCtx, setCtx } from "../api";
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
 import { getCustomInstructions, setCustomInstructions, generateScopeDescription } from "../api";
 import "./SettingsDrawer.css";
 
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname}:8000`;
 
 interface Props {
     open: boolean;
@@ -79,9 +79,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             setActiveModel(data.active);
         });
         getIndexStatus().then(setIndexStatus);
-        fetch("http://localhost:8000/settings/scopes")
-            .then((r) => r.json())
-            .then(setLocalScopes);
+        getScopes().then(setLocalScopes);
         getCtx().then(setCtxValue).catch(() => {});
         getCustomInstructions().then(setCustomInstructions).catch(() => {});
     }, [open]);
