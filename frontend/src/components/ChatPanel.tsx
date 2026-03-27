@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
 import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
+import { RefreshCw } from "lucide-react";
 
 interface Props {
     scopes: string[];
@@ -681,7 +682,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             if (content.includes("Expanding") && stage) {
                 return (
                     <div className="flex items-center gap-3 text-text-muted text-base">
-                        <span className="text-blue-primary font-mono animate-pulse">{spinner.frames[spinnerFrame]}</span>
+                        <span className="text-blue-primary font-mono animate-pulse" style={{ fontFamily: 'monospace' }}>{spinner.frames[spinnerFrame]}</span>
                         <span className="font-medium">{getStageLabel(stage)}</span>
                     </div>
                 );
@@ -790,62 +791,67 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             {/* Chat Panel - Modern Blue/Purple Design */}
             <div className="flex flex-col flex-1 h-full">
                 {/* Messages Area */}
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 py-8 space-y-12">
-                    {messages.map((msg, i) => {
-                        const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
-                        const isUser = msg.role === "user";
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-8 space-y-12">
+                    <div className="max-w-4xl mx-auto px-6 md:px-8">
+                        {messages.map((msg, i) => {
+                            const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+                            const isUser = msg.role === "user";
 
-                        return (
-                            <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                                {/* Role Label - Subtle, no uppercase */}
-                                <div className="flex items-center gap-3 mb-3">
-                                    <span className={`text-sm font-medium ${
-                                        isUser ? 'text-blue-primary' : 'text-text-muted'
-                                    }`}>
-                                        {msg.role}
-                                    </span>
-                                    {isLastAssistant && !streaming && (
-                                        <button
-                                            onClick={handleRetry}
-                                            title="Regenerate response"
-                                            className="text-sm px-3 py-1.5 rounded-lg border border-border hover:border-blue-primary hover:text-blue-primary transition-colors bg-bg-elevated/50"
-                                        >
-                                            ↻ Retry
-                                        </button>
+                            return (
+                                <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} ${i > 0 ? 'mt-12' : ''}`}>
+                                    {/* Role Label */}
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <span className={`text-base font-medium capitalize ${
+                                            isUser ? 'text-blue-primary' : 'text-text'
+                                        }`}>
+                                            {msg.role === 'user' ? 'You' : 'Assistant'}
+                                        </span>
+                                    </div>
+
+                                    {/* Message Content */}
+                                    {isUser ? (
+                                        <div className="bg-bg-elevated/40 rounded-2xl px-4 py-2 border border-border">
+                                            <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="max-w-3xl">
+                                                <div className="border-l-2 border-blue-primary pl-12 pr-6">
+                                                    {renderAssistantContent(msg, streaming && i === messages.length - 1)}
+                                                </div>
+                                            </div>
+                                            {/* Retry button - only on last assistant message */}
+                                            {isLastAssistant && !streaming && (
+                                                <button
+                                                    onClick={handleRetry}
+                                                    title="Regenerate response"
+                                                    className="mt-3 ml-8 p-0 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center text-text-muted hover:text-blue-primary transition-colors rounded hover:bg-bg-elevated/50"
+                                                >
+                                                    <RefreshCw size={16} strokeWidth={2} className="shrink-0" />
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
+                            );
+                        })}
 
-                                {/* Message Content */}
-                                {isUser ? (
-                                    <div className="max-w-[65%] bg-bg-elevated rounded-2xl px-5 py-4 shadow-lg border border-border">
-                                        <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
-                                    </div>
-                                ) : (
-                                    <div className="w-full max-w-3xl">
-                                        <div className="border-l-2 border-blue-primary pl-4">
-                                            {renderAssistantContent(msg, streaming && i === messages.length - 1)}
-                                        </div>
-                                    </div>
-                                )}
+                        {/* Typing Indicator */}
+                        {streaming && !responseStarted && (
+                            <div className="flex items-center gap-3 text-text-muted text-base mt-12">
+                                <span className="text-blue-primary font-mono animate-pulse" style={{ fontFamily: 'monospace' }}>{spinner.frames[spinnerFrame]}</span>
+                                <span className="font-medium">{getStageLabel(stage)}</span>
                             </div>
-                        );
-                    })}
+                        )}
 
-                    {/* Typing Indicator */}
-                    {streaming && !responseStarted && (
-                        <div className="flex items-center gap-3 text-text-muted text-base">
-                            <span className="text-blue-primary font-mono animate-pulse">{spinner.frames[spinnerFrame]}</span>
-                            <span className="font-medium">{getStageLabel(stage)}</span>
-                        </div>
-                    )}
-
-                    <div ref={bottomRef} />
+                        <div ref={bottomRef} />
+                    </div>
                 </div>
 
                 {/* Input Area - Sticky Bottom */}
                 <div className="shrink-0 border-t border-border bg-bg-dark/95 backdrop-blur-md">
-                    <div className="px-8 py-6">
-                        <div className="flex gap-4 items-center max-w-4xl mx-auto">
+                    <div className="py-2 px-6">
+                        <div className="flex gap-3 items-center max-w-3xl mx-auto">
                             <textarea
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
@@ -853,16 +859,16 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                 placeholder="Ask anything..."
                                 rows={1}
                                 disabled={streaming}
-                                className="flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-4 text-base
+                                className="flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-3.5 text-base
                                            focus:outline-none focus:ring-2 focus:ring-blue-primary/50 focus:border-blue-primary
                                            disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-text-muted
-                                           transition-shadow duration-200 shadow-sm focus:shadow-md leading-normal"
+                                           transition-shadow duration-200 shadow-sm focus:shadow-md leading-normal min-h-[52px]"
                             />
                             {streaming ? (
                                 <button
                                     onClick={cancel}
-                                    className="shrink-0 px-6 py-4 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30
-                                               text-red-400 font-medium transition-all flex items-center justify-center leading-none"
+                                    className="shrink-0 h-[52px] px-6 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30
+                                               text-red-400 font-medium transition-all flex items-center justify-center"
                                 >
                                     Stop
                                 </button>
@@ -870,11 +876,11 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                 <button
                                     onClick={submit}
                                     disabled={!input.trim()}
-                                    className="shrink-0 px-8 py-4 rounded-full bg-gradient-to-r from-blue-primary to-purple-accent
+                                    className="shrink-0 h-[52px] px-8 rounded-full bg-gradient-to-r from-blue-primary to-purple-accent
                                                hover:from-blue-hover hover:to-purple-accent text-white font-semibold
                                                transition-all disabled:opacity-30 disabled:cursor-not-allowed
                                                shadow-lg hover:shadow-xl hover:scale-105 active:scale-95
-                                               flex items-center justify-center leading-none"
+                                               flex items-center justify-center"
                                 >
                                     Send
                                 </button>
