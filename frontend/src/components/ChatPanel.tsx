@@ -810,8 +810,10 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
                                     {/* Message Content */}
                                     {isUser ? (
-                                        <div className="bg-bg-elevated/40 rounded-2xl px-4 py-2 border border-border">
-                                            <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
+                                        <div className="max-w-3xl">
+                                            <div className="border-r-2 border-blue-primary pr-12 pl-6 bg-bg-elevated/40 rounded-l-lg py-3">
+                                                <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
+                                            </div>
                                         </div>
                                     ) : (
                                         <>
@@ -838,7 +840,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
                         {/* Typing Indicator */}
                         {streaming && !responseStarted && (
-                            <div className="flex items-center gap-3 text-text-muted text-base mt-12">
+                            <div className="flex items-center gap-3 text-text-muted text-base mt-4">
                                 <span className="text-blue-primary font-mono animate-pulse" style={{ fontFamily: 'monospace' }}>{spinner.frames[spinnerFrame]}</span>
                                 <span className="font-medium">{getStageLabel(stage)}</span>
                             </div>
