@@ -83,6 +83,11 @@ tail -f .ollama/frontend.log         # Vite
 - Functional components only. React 19 + TypeScript.
 - Streaming uses Fetch API `ReadableStream` — no libraries.
 - No `any` types without a comment explaining why.
+- **iOS keyboard handling**: Use the `useVisualViewport` hook (in `frontend/src/hooks/useVisualViewport.ts`) for mobile keyboard support. Apply it at the app container level with `position: fixed` and let the hook dynamically adjust height. Key requirements:
+  - Apply hook to top-level container with `position: fixed, left: 0, right: 0, top: 0`
+  - Use `min-h-0` on scrollable content areas (critical for flexbox scrolling)
+  - Use `shrink-0` on fixed elements (header, input) to prevent compression
+  - Add `overflow: hidden` and `overscroll-behavior: none` to html/body in global CSS
 
 ### Dependencies
 - Add Python packages to the `pip install` block in `shell.nix`, not by hand.

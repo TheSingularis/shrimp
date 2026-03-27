@@ -1,4 +1,5 @@
 import { type Scope } from "../api";
+import "./ScopeSelector.css";
 
 interface Props {
     scopes: Scope[];

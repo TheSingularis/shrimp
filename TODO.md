@@ -12,16 +12,15 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [x] **Save conversations** — Persist chat history to JSON files on disk (one file per conversation). Auto-save after each exchange.
   - **COMPLETED:** Full conversation history system with sidebar, load/save, delete, rename, auto-save
 
-- [ ] **Retry prompt button** — Similar to ChatGPT/Claude, a button to regenerate the last assistant response. Common UX pattern users expect.
-  - **Why next:** Easy win, improves iteration workflow significantly.
+- [x] **Retry prompt button** — Similar to ChatGPT/Claude, a button to regenerate the last assistant response. Common UX pattern users expect.
+  - **COMPLETED:** Retry button appears on last assistant message, regenerates response with same user input
 
 ---
 
 ## 🏗️ Tier 2: Strategic Enablers (build on Tier 1)
 
-- [ ] **Multiple conversation tabs** — Extend saved conversations to support multiple named tabs open simultaneously in the UI. Enables parallel work on different topics/files.
-  - **Prerequisite:** Save conversations
-  - **Value:** Natural extension once persistence exists
+- [x] **Multiple conversation tabs** — Extend saved conversations to support multiple named tabs open simultaneously in the UI. Enables parallel work on different topics/files.
+  - **COMPLETED:** Browser-style tabs with separate state per tab, smart loading, auto-save on switch, and title auto-update
 
 - [ ] **Conversation Projects** — Group related conversations into projects for better organization.
   - Project sidebar with folders/categories

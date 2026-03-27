@@ -1,0 +1,327 @@
+/* drawer */
+.drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 360px;
+    height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 11;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.settings-drawer.open {
+    transform: translateX(0);
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.25rem;
+}
+
+.drawer-section {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.drawer-section h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.saving {
+    color: var(--accent);
+    font-size: 0.7rem;
+}
+
+/* model list */
+.model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.model-pill {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.model-pill.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
+/* scope list */
+.scope-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.scope-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.scope-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.scope-name {
+    font-size: 0.85rem;
+}
+
+.scope-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scope-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.toggle-btn {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.toggle-btn.on {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.delete-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+}
+
+.delete-btn:hover {
+    color: #f87171;
+    border-color: #f87171;
+}
+
+/* add scope form */
+.add-scope {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.add-scope input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+}
+
+.add-scope input:focus {
+    border-color: var(--accent);
+}
+
+.add-scope button {
+    align-self: flex-end;
+    padding: 0.4rem 1rem;
+}
+
+
+.scope-status {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.scope-status.unindexed {
+    color: #f87171;
+}
+
+.index-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.5rem;
+}
+
+.index-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.model-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pull-progress {
+    height: 4px;
+    background: var(--border, #333);
+    border-radius: 2px;
+    margin-top: 0.4rem;
+    overflow: hidden;
+}
+
+.pull-progress-bar {
+    height: 100%;
+    background: var(--accent, #7aa2f7);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+}
+
+/* ── context slider ──────────────────────────────────────────────────────── */
+
+.ctx-slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.ctx-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.ctx-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ctx-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ctx-slider-labels {
+    display: flex;
+    justify-content: space-between;
+}
+
+.ctx-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s;
+    font-family: monospace;
+}
+
+.ctx-label.active {
+    color: var(--accent);
+}
+
+.ctx-label:hover {
+    color: var(--text);
+}
+
+.ctx-slider-value {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+/* ── mobile responsive ───────────────────────────────────────────────────── */
+
+/* Touch devices (tablets and phones) */
+@media (max-width: 1024px) {
+    /* Settings drawer scales to screen */
+    .settings-drawer {
+        width: min(90%, 400px);
+    }
+}
+
+/* Small phones only */
+@media (max-width: 480px) {
+    .settings-drawer {
+        width: 100%;
+    }
+}

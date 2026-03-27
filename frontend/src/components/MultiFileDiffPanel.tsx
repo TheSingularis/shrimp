@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
+import "./MultiFileDiffPanel.css";
 
 interface MultiFileDiff {
     scope: string;
