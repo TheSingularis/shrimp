@@ -3,8 +3,57 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>frontend</title>
+    <script>
+      // Simple iOS keyboard detection
+      // Only adds bottom padding to messages area, doesn't resize app
+      (function() {
+        if (!window.visualViewport) return;
+
+        let lastHeight = window.visualViewport.height;
+
+        function checkKeyboard() {
+          const vvHeight = window.visualViewport.height;
+          const windowHeight = window.innerHeight;
+          const keyboardHeight = Math.max(0, windowHeight - vvHeight);
+
+          // Only update if height actually changed
+          if (vvHeight !== lastHeight) {
+            lastHeight = vvHeight;
+
+            // Add padding to messages to prevent keyboard overlap
+            const messages = document.querySelector('.messages');
+            if (messages && keyboardHeight > 0) {
+              messages.style.paddingBottom = `${keyboardHeight + 16}px`;
+            } else if (messages) {
+              messages.style.paddingBottom = '';
+            }
+
+            console.log('Keyboard:', keyboardHeight > 0 ? `${keyboardHeight}px` : 'closed');
+          }
+        }
+
+        // Check on viewport changes
+        window.visualViewport.addEventListener('resize', checkKeyboard);
+        window.visualViewport.addEventListener('scroll', checkKeyboard);
+
+        // Poll when input focused (Safari resize events are unreliable)
+        let pollTimer = null;
+        document.addEventListener('focusin', (e) => {
+          if (e.target.matches('input, textarea')) {
+            pollTimer = setInterval(checkKeyboard, 150);
+          }
+        });
+
+        document.addEventListener('focusout', (e) => {
+          if (e.target.matches('input, textarea')) {
+            if (pollTimer) clearInterval(pollTimer);
+            setTimeout(checkKeyboard, 300);
+          }
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

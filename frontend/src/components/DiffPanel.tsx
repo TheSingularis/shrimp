@@ -1,4 +1,5 @@
 import { DiffEditor } from "@monaco-editor/react";
+import "./DiffPanel.css";
 
 interface Props {
     path: string;

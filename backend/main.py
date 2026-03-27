@@ -224,7 +224,8 @@ async def chat(req: ChatRequest, request: Request):
         "- Questions that NEED file context to answer\n\n"
         'Respond with {"intent": "single_file_edit"} if:\n'
         "- Edit ONE specific file: 'update README to add X', 'fix the bug in main.py'\n"
-        "- User explicitly names a single file to change\n"
+        "- Create ONE new file: 'create a synopsis for the book', 'make a new config file'\n"
+        "- User explicitly names a single file to change or create\n"
         "- Follow-up confirmation: 'yes do it', 'go ahead' (if previous context was single-file)\n\n"
         'Respond with {"intent": "multi_file_edit"} if:\n'
         "- Edit MULTIPLE files: 'update README and CHANGELOG', 'refactor auth across main.py and auth.py'\n"
@@ -374,7 +375,8 @@ async def chat(req: ChatRequest, request: Request):
         '{"needs_files": false}\n'
         "- If specific files would help, use this format exactly: "
         '{"needs_files": true, "files": {"obsidian": ["path/to/file.md"]}}\n'
-        "- Only include files that actually exist in the tree below.\n"
+        "- Include existing files from the tree below, OR specify new file paths if creating new files.\n"
+        "- For new files, use a reasonable path within the scope (e.g., 'notes/book_synopsis.md').\n"
         "- Consider the full conversation — the user may be referring to a file "
         "mentioned earlier without naming it again.\n"
         "- Maximum 5 files total across all scopes.\n"
@@ -481,12 +483,16 @@ async def chat(req: ChatRequest, request: Request):
             if not paths:
                 continue
             if is_file_edit_intent:
-                # For edits: load full file content
+                # For edits: load full file content (or empty string for new files)
                 for path in paths:
                     try:
                         content = rag.read_file_from_scope(scope_name, path)
                         full_file_contents[path] = content
                         log.info("chat: loaded full file for edit: %s", path)
+                    except FileNotFoundError:
+                        # New file - treat as empty
+                        full_file_contents[path] = ""
+                        log.info("chat: new file will be created: %s", path)
                     except Exception as e:
                         log.warning(
                             "chat: could not read file %s: %s", path, e)
@@ -898,8 +904,7 @@ async def chat(req: ChatRequest, request: Request):
         "Admitting \"I don't have information about that\" is always better than being confidently wrong.\n"
         "- **Be helpful, not presumptuous** — explain first, act second\n"
         "- **Clarify ambiguity** — if unsure whether they want explanation or action, ask\n"
-        "- **Current limitation** — you can propose file edits, but only ONE file at a time currently. "
-        "Multi-file editing is in development.\n"
+        "- **File operations** — you can edit existing files, create new files, and work with multiple files simultaneously\n"
         "- **Be specific** — when suggesting changes, reference exact file paths and line numbers\n"
         "- **Adapt to content type** — code files need implementation details; notes/docs need clarity and structure\n\n"
         "## Formatting\n"
@@ -1099,12 +1104,30 @@ async def save_conversation(req: SaveConversationRequest):
                 first_user_msg.get("content", "")
             )
 
-    conv = conversations.Conversation(
-        conversation_id=req.conversation_id,
-        title=title,
-        messages=req.messages,
-        active_scopes=req.active_scopes,
-    )
+    # If updating an existing conversation, load it to preserve created_at
+    if req.conversation_id:
+        try:
+            conv = conversations.Conversation.load(req.conversation_id)
+            conv.messages = req.messages
+            conv.active_scopes = req.active_scopes
+            if title:
+                conv.title = title
+        except FileNotFoundError:
+            # Conversation doesn't exist yet, create new one
+            conv = conversations.Conversation(
+                conversation_id=req.conversation_id,
+                title=title,
+                messages=req.messages,
+                active_scopes=req.active_scopes,
+            )
+    else:
+        # New conversation
+        conv = conversations.Conversation(
+            conversation_id=req.conversation_id,
+            title=title,
+            messages=req.messages,
+            active_scopes=req.active_scopes,
+        )
     conv.save()
     return {"conversation_id": conv.conversation_id, "title": conv.title}
 
@@ -1297,6 +1320,9 @@ async def apply_edit(req: ApplyEditRequest):
         if not str(target).startswith(str(root)):
             raise HTTPException(
                 status_code=403, detail="Path escapes scope root")
+
+        # Create parent directories if they don't exist
+        target.parent.mkdir(parents=True, exist_ok=True)
 
         target.write_text(req.content, encoding="utf-8")
         log.info("apply_edit: wrote %s / %s", req.scope, req.path)

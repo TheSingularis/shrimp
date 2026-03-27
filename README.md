@@ -131,6 +131,30 @@ tail -f .ollama/frontend.log   # Vite
 
 ---
 
+## Network Access (Mobile/Tablet)
+
+SHRIMP can be accessed from other devices on your local network:
+
+1. Start SHRIMP: `nix-shell`
+2. Find your computer's IP address:
+   - Linux: `ip addr show | grep "inet "`
+   - macOS: `ifconfig | grep "inet "`
+3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
+
+**Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
+
+### Mobile Usage
+
+- The UI is optimized for touch devices and small screens
+- Diff viewers appear full-screen on mobile for better usability
+- iOS keyboard handling: on-screen keyboard properly adjusts the viewport, keeping all UI elements visible while typing
+- Settings drawer scales to screen width
+- All buttons meet the 44px touch target minimum for comfortable tapping
+- Both portrait and landscape orientations are supported
+- **iOS Safari keyboard**: The app properly handles the on-screen keyboard by shrinking the viewport (using the visualViewport API) so all UI elements remain visible when typing
+
+---
+
 
 ## Indexed file types & exclusions
 
@@ -347,6 +371,30 @@ tail -f .ollama/backend.log    # indexing progress, chat requests, errors
 tail -f .ollama/serve.log      # Ollama
 tail -f .ollama/frontend.log   # Vite
 ```
+
+---
+
+## Network Access (Mobile/Tablet)
+
+SHRIMP can be accessed from other devices on your local network:
+
+1. Start SHRIMP: `nix-shell`
+2. Find your computer's IP address:
+   - Linux: `ip addr show | grep "inet "`
+   - macOS: `ifconfig | grep "inet "`
+3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
+
+**Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
+
+### Mobile Usage
+
+- The UI is optimized for touch devices and small screens
+- Diff viewers appear full-screen on mobile for better usability
+- iOS keyboard handling: on-screen keyboard properly adjusts the viewport, keeping all UI elements visible while typing
+- Settings drawer scales to screen width
+- All buttons meet the 44px touch target minimum for comfortable tapping
+- Both portrait and landscape orientations are supported
+- **iOS Safari keyboard**: The app properly handles the on-screen keyboard by shrinking the viewport (using the visualViewport API) so all UI elements remain visible when typing
 
 ---
 

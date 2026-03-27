@@ -37,9 +37,11 @@ const mdComponents: Components = {
                         PreTag="div"
                         customStyle={{
                             margin: 0,
-                            borderRadius: "0 0 6px 6px",
-                            fontSize: "0.9rem",
+                            borderRadius: 0,
+                            fontSize: "0.95rem",
+                            background: "var(--color-bg-elevated)",
                             border: "none",
+                            padding: "1.25rem",
                         }}
                     >
                         {raw}
@@ -183,6 +185,46 @@ function getStageLabel(stage: string): string {
         }
     }
     return STAGE_LABELS[stage] ?? "Processing…";
+}
+
+// ── markdown completion helper ─────────────────────────────────────────────
+
+function completeIncompleteMarkdown(text: string): string {
+    // Temporarily close incomplete markdown elements during streaming
+    // to prevent visual snaps when they complete
+
+    let completed = text;
+
+    // Close unclosed code fences (```)
+    const codeFenceCount = (text.match(/```/g) || []).length;
+    if (codeFenceCount % 2 === 1) {
+        // Odd number of fences means one is unclosed
+        completed += "\n```";
+    }
+
+    // Close unclosed inline code (`)
+    // Only check the last line to avoid false positives in multi-line content
+    const lines = text.split("\n");
+    const lastLine = lines[lines.length - 1] || "";
+    const backtickCount = (lastLine.match(/`/g) || []).length;
+    if (backtickCount % 2 === 1) {
+        completed += "`";
+    }
+
+    // Close unclosed bold (**)
+    const boldCount = (text.match(/\*\*/g) || []).length;
+    if (boldCount % 2 === 1) {
+        completed += "**";
+    }
+
+    // Close unclosed italic (*)
+    // Count single * that aren't part of **
+    const singleStarMatches = text.match(/(?<!\*)\*(?!\*)/g) || [];
+    if (singleStarMatches.length % 2 === 1) {
+        completed += "*";
+    }
+
+    return completed;
 }
 
 export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
@@ -471,6 +513,153 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         }
     }
 
+    async function handleRetry() {
+        if (streaming) return;
+
+        // Find the last user message
+        const lastUserIndex = messages.findLastIndex(m => m.role === "user");
+        if (lastUserIndex === -1) return;
+
+        const lastUserMessage = messages[lastUserIndex];
+        const userInput = lastUserMessage.content;
+
+        // Remove the last assistant message to recreate history up to that point
+        const historyWithoutLastAssistant = messages.slice(0, -1);
+
+        // Re-add an empty assistant message for streaming
+        onMessagesChange([...historyWithoutLastAssistant, { role: "assistant", content: "" }]);
+        setStreaming(true);
+        setResponseStarted(false);
+
+        let fullResponse = "";
+
+        const pendingList = Object.values(pendingEdits);
+        const pendingFile: PendingFile | undefined =
+            pendingList.length === 1
+                ? { path: pendingList[0].path, content: pendingList[0].current, scope: pendingList[0].scope }
+                : undefined;
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        // Helper to flush displayable content
+        const flushContent = (content: string) => {
+            if (content) {
+                if (!responseStarted) setResponseStarted(true);
+                fullResponse += content;
+                onMessagesChange([
+                    ...historyWithoutLastAssistant,
+                    { role: "assistant", content: fullResponse },
+                ]);
+            }
+        };
+
+        // Possible partial prefixes of "__STAGE__" (in order of length, longest first)
+        const STAGE_PREFIXES = [
+            "__STAGE_",
+            "__STAGE",
+            "__STAG",
+            "__STA",
+            "__ST",
+            "__S",
+            "__",
+            "_",
+        ];
+
+        try {
+            // Pass history before the last user message (same as submit logic)
+            await sendChat(userInput, scopes, historyWithoutLastAssistant.slice(0, -1), (token) => {
+                // Buffer tokens to handle partial __STAGE__ tokens
+                stageBufferRef.current += token;
+
+                // Process buffer - may contain multiple stage tokens
+                let buffer = stageBufferRef.current;
+
+                // Keep extracting stage tokens until none remain
+                let stageMatch;
+                while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
+                    // Found a complete stage token - extract it
+                    const key = stageMatch[1];
+                    setStage(key);
+                    // Flush content before the stage token
+                    const beforeStage = buffer.slice(0, stageMatch.index);
+                    flushContent(beforeStage);
+                    // Continue with content after the stage token
+                    buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                }
+
+                // Check if buffer ends with a potential partial stage token
+                for (const prefix of STAGE_PREFIXES) {
+                    if (buffer.endsWith(prefix)) {
+                        // Hold the potential partial in buffer, flush the rest
+                        flushContent(buffer.slice(0, -prefix.length));
+                        stageBufferRef.current = prefix;
+                        return;
+                    }
+                }
+
+                // No partial stage token, flush entire buffer
+                flushContent(buffer);
+                stageBufferRef.current = "";
+            }, pendingFile, controller.signal);
+
+            // Flush any remaining buffer content after stream ends
+            if (stageBufferRef.current) {
+                fullResponse += stageBufferRef.current;
+                stageBufferRef.current = "";
+            }
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name !== "AbortError") {
+                console.error("sendChat error:", err);
+            }
+        } finally {
+            abortRef.current = null;
+            setStreaming(false);
+            setStage("");
+            stageBufferRef.current = "";
+        }
+
+        // if cancelled mid-stream, keep whatever was received as plain text
+        if (controller.signal.aborted) {
+            onMessagesChange([
+                ...historyWithoutLastAssistant,
+                { role: "assistant", content: fullResponse || "_(cancelled)_" },
+            ]);
+            return;
+        }
+
+        const { display, sentinel } = parseSentinel(fullResponse);
+
+        const assistantMsg: AssistantMessage = {
+            role: "assistant",
+            content: display,
+            sentinel: sentinel ?? undefined,
+            prose: display,
+        };
+
+        onMessagesChange([...historyWithoutLastAssistant, assistantMsg]);
+
+        // All file edits are now normalized to multi-file format (even single files)
+        if (sentinel?.type === "multi_file_edit") {
+            setMultiFileEdit(sentinel);
+
+            // Also populate pendingEdits for follow-up request tracking
+            setPendingEdits((prev) => {
+                const next = { ...prev };
+                for (const file of sentinel.files) {
+                    const existing = prev[file.path];
+                    next[file.path] = {
+                        scope: file.scope,
+                        path: file.path,
+                        original: existing?.original ?? file.original,
+                        current: file.new,
+                    };
+                }
+                return next;
+            });
+        }
+    }
+
     function handleKeyDown(e: React.KeyboardEvent) {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -491,14 +680,23 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             // During file edit streaming (content starts with "Expanding"), show stage indicator
             if (content.includes("Expanding") && stage) {
                 return (
-                    <div className="typing-indicator">
-                        <span className="spinner">{spinner.frames[spinnerFrame]}</span>
-                        <span className="stage-label">{getStageLabel(stage)}</span>
+                    <div className="flex items-center gap-3 text-text-muted text-base">
+                        <span className="text-blue-primary font-mono animate-pulse">{spinner.frames[spinnerFrame]}</span>
+                        <span className="font-medium">{getStageLabel(stage)}</span>
                     </div>
                 );
             }
 
-            return <pre className="content streaming">{visible}</pre>;
+            // Render markdown while streaming for real-time formatting
+            // Complete any incomplete markdown elements to prevent visual snaps
+            const completedMarkdown = completeIncompleteMarkdown(visible);
+            return (
+                <div className="content streaming">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {completedMarkdown}
+                    </ReactMarkdown>
+                </div>
+            );
         }
 
         if (sentinel?.type === "multi_file_edit") {
@@ -588,50 +786,105 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
     }
 
     return (
-        <div className="chat-layout">
-            <div className="chat-panel">
-                <div className="messages">
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`message ${msg.role}`}>
-                            <span className="role-label">{msg.role}</span>
-                            {msg.role === "assistant"
-                                ? renderAssistantContent(
-                                      msg,
-                                      streaming && i === messages.length - 1
-                                  )
-                                : <pre className="content">{msg.content}</pre>
-                            }
-                        </div>
-                    ))}
+        <div className="flex h-full bg-bg-dark">
+            {/* Chat Panel - Modern Blue/Purple Design */}
+            <div className="flex flex-col flex-1 h-full">
+                {/* Messages Area */}
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 py-8 space-y-12">
+                    {messages.map((msg, i) => {
+                        const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+                        const isUser = msg.role === "user";
+
+                        return (
+                            <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                                {/* Role Label - Subtle, no uppercase */}
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className={`text-sm font-medium ${
+                                        isUser ? 'text-blue-primary' : 'text-text-muted'
+                                    }`}>
+                                        {msg.role}
+                                    </span>
+                                    {isLastAssistant && !streaming && (
+                                        <button
+                                            onClick={handleRetry}
+                                            title="Regenerate response"
+                                            className="text-sm px-3 py-1.5 rounded-lg border border-border hover:border-blue-primary hover:text-blue-primary transition-colors bg-bg-elevated/50"
+                                        >
+                                            ↻ Retry
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Message Content */}
+                                {isUser ? (
+                                    <div className="max-w-[65%] bg-bg-elevated rounded-2xl px-5 py-4 shadow-lg border border-border">
+                                        <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
+                                    </div>
+                                ) : (
+                                    <div className="w-full max-w-3xl">
+                                        <div className="border-l-2 border-blue-primary pl-4">
+                                            {renderAssistantContent(msg, streaming && i === messages.length - 1)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {/* Typing Indicator */}
                     {streaming && !responseStarted && (
-                        <div className="typing-indicator">
-                            <span className="spinner">{spinner.frames[spinnerFrame]}</span>
-                            <span className="stage-label">{getStageLabel(stage)}</span>
+                        <div className="flex items-center gap-3 text-text-muted text-base">
+                            <span className="text-blue-primary font-mono animate-pulse">{spinner.frames[spinnerFrame]}</span>
+                            <span className="font-medium">{getStageLabel(stage)}</span>
                         </div>
                     )}
+
                     <div ref={bottomRef} />
                 </div>
-                <div className="input-row">
-                    <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Ask something... (Enter to send, Shift+Enter for newline)"
-                        rows={3}
-                        disabled={streaming}
-                    />
-                    {streaming ? (
-                        <button className="stop-btn" onClick={cancel}>
-                            ■ stop
-                        </button>
-                    ) : (
-                        <button onClick={submit} disabled={!input.trim()}>
-                            Send
-                        </button>
-                    )}
+
+                {/* Input Area - Sticky Bottom */}
+                <div className="shrink-0 border-t border-border bg-bg-dark/95 backdrop-blur-md">
+                    <div className="px-8 py-6">
+                        <div className="flex gap-4 items-center max-w-4xl mx-auto">
+                            <textarea
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Ask anything..."
+                                rows={1}
+                                disabled={streaming}
+                                className="flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-4 text-base
+                                           focus:outline-none focus:ring-2 focus:ring-blue-primary/50 focus:border-blue-primary
+                                           disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-text-muted
+                                           transition-shadow duration-200 shadow-sm focus:shadow-md leading-normal"
+                            />
+                            {streaming ? (
+                                <button
+                                    onClick={cancel}
+                                    className="shrink-0 px-6 py-4 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30
+                                               text-red-400 font-medium transition-all flex items-center justify-center leading-none"
+                                >
+                                    Stop
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={submit}
+                                    disabled={!input.trim()}
+                                    className="shrink-0 px-8 py-4 rounded-full bg-gradient-to-r from-blue-primary to-purple-accent
+                                               hover:from-blue-hover hover:to-purple-accent text-white font-semibold
+                                               transition-all disabled:opacity-30 disabled:cursor-not-allowed
+                                               shadow-lg hover:shadow-xl hover:scale-105 active:scale-95
+                                               flex items-center justify-center leading-none"
+                                >
+                                    Send
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
+            {/* Multi-File Diff Panel */}
             {multiFileEdit && (
                 <MultiFileDiffPanel
                     files={multiFileEdit.files}

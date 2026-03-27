@@ -3,6 +3,7 @@ import { type Scope, getModels, setModel, setScopes, deleteScope, getCtx, setCtx
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
 import { getCustomInstructions, setCustomInstructions, generateScopeDescription } from "../api";
+import "./SettingsDrawer.css";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 

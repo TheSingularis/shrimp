@@ -1,4 +1,4 @@
-const BASE = "http://localhost:8000";
+const BASE = `http://${window.location.hostname}:8000`;
 
 export interface Scope {
     name: string;
@@ -67,7 +67,7 @@ export async function sendChat(
     pendingFile?: PendingFile,
     signal?: AbortSignal,
 ): Promise<void> {
-    const res = await fetch("http://localhost:8000/chat", {
+    const res = await fetch(`${BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -113,7 +113,7 @@ export async function fetchFile(
     path: string,
 ): Promise<{ scope: string; path: string; content: string }> {
     const res = await fetch(
-        `http://localhost:8000/file?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`
+        `${BASE}/file?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`
     );
     if (!res.ok) throw new Error(`fetchFile: ${res.status}`);
     return res.json();
@@ -163,7 +163,7 @@ export async function applyEdit(
     path: string,
     content: string,
 ): Promise<void> {
-    const res = await fetch("http://localhost:8000/file/apply", {
+    const res = await fetch(`${BASE}/file/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope, path, content }),

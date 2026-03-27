@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { type ConversationMetadata, listConversations, deleteConversation, updateConversationTitle } from "../api";
+import "./ConversationSidebar.css";
 
 interface Props {
     open: boolean;

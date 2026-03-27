@@ -92,7 +92,7 @@ fuser -k 11434/tcp 2>/dev/null || true
 
 # ── 9. start ollama ───────────────────────────────────────────────────────────
 info "Starting Ollama..."
-OLLAMA_HOST="127.0.0.1:11434" \
+OLLAMA_HOST="0.0.0.0:11434" \
 OLLAMA_MODELS="$HOME/.ollama/models" \
 OLLAMA_KEEP_ALIVE="15m" \
 HSA_OVERRIDE_GFX_VERSION="12.0.0" \
@@ -117,6 +117,7 @@ mkdir -p "$SHRIMP_DIR/.ollama"
   python -m uvicorn main:app \
     --reload \
     --reload-dir . \
+    --host 0.0.0.0 \
     --port 8000 \
     &> "$SHRIMP_DIR/.ollama/backend.log" ) &
 BACKEND_PID=$!
@@ -149,18 +150,35 @@ vite_url="${vite_url:-http://localhost:5173}"
 sleep 2
 GPU_STATUS=$(ollama ps 2>/dev/null | grep -i "gpu" || echo "CPU (model not loaded yet)")
 
+# get local IP for network access (try multiple methods)
+LOCAL_IP=$(
+  # Try ip route - most reliable in containers
+  ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' ||
+  # Try hostname -I
+  hostname -I 2>/dev/null | awk '{print $1}' ||
+  # Try ip addr
+  ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1 ||
+  # Fallback: show placeholder with instructions
+  echo "<YOUR-IP>"
+)
+
 echo ""
 echo "┌─────────────────────────────────────────┐"
 echo "│           SHRIMP* is running            │"
 echo "│                                         │"
-echo "│  Ollama   →  http://127.0.0.1:11434     │"
-echo "│  API      →  http://127.0.0.1:8000      │"
-echo "│  API docs →  http://127.0.0.1:8000/docs │"
-printf  "│  UI       →  %-27s│\n" "$vite_url"
+echo "│  Local:                                 │"
+echo "│    UI     →  http://localhost:5173      │"
+echo "│    API    →  http://localhost:8000      │"
+echo "│    Ollama →  http://localhost:11434     │"
 echo "│                                         │"
-echo "│  logs: .ollama/serve.log                │"
-echo "│        .ollama/backend.log              │"
-echo "│        .ollama/frontend.log             │"
+echo "│  Network (LAN/Tailscale):               │"
+printf "│    UI     →  http://%-17s  │\n" "$LOCAL_IP:5173"
+printf "│    API    →  http://%-17s  │\n" "$LOCAL_IP:8000"
+echo "│                                         │"
+echo "│  Logs:                                  │"
+echo "│    .ollama/serve.log                    │"
+echo "│    .ollama/backend.log                  │"
+echo "│    .ollama/frontend.log                 │"
 echo "└─────────────────────────────────────────┘"
 echo ""
 info "GPU status: $GPU_STATUS"
