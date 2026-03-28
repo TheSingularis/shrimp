@@ -351,7 +351,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         setResponseStarted(false);
 
         let fullResponse = "";
-        const stageMarkers: StageMarker[] = []; // Track markers as they arrive
 
         const pendingList = Object.values(pendingEdits);
         const pendingFile: PendingFile | undefined =
@@ -369,7 +368,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 fullResponse += content;
                 onMessagesChange([
                     ...newHistory,
-                    { role: "assistant", content: fullResponse, stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined },
+                    { role: "assistant", content: fullResponse },
                 ]);
             }
         };
@@ -401,30 +400,12 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting tokens until none remain
+                // Keep extracting __STAGE__ tokens (strip these for live indicators)
                 let processed = true;
                 while (processed) {
                     processed = false;
 
-                    // Check for stage marker first (has JSON payload)
-                    const markerMatch = buffer.match(/__STAGE_MARKER__(\{[^}]*\})/);
-                    if (markerMatch) {
-                        processed = true;
-                        try {
-                            const marker = JSON.parse(markerMatch[1]) as StageMarker;
-                            stageMarkers.push(marker);
-                            // Flush content before the marker
-                            const beforeMarker = buffer.slice(0, markerMatch.index);
-                            flushContent(beforeMarker);
-                            // Continue with content after the marker
-                            buffer = buffer.slice(markerMatch.index! + markerMatch[0].length);
-                            continue;
-                        } catch (e) {
-                            console.error("Failed to parse stage marker:", e);
-                        }
-                    }
-
-                    // Check for regular stage token
+                    // Check for __STAGE__ tokens (strip these - they're for live indicators only)
                     const stageMatch = buffer.match(/__STAGE__(\w+)/);
                     if (stageMatch) {
                         processed = true;
@@ -433,11 +414,13 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                         // Flush content before the stage token
                         const beforeStage = buffer.slice(0, stageMatch.index);
                         flushContent(beforeStage);
-                        // Continue with content after the stage token
+                        // Continue with content after the stage token (skip the token itself)
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
                         continue;
                     }
                 }
+
+                // Keep __STAGE_MARKER__ tokens in the content - they'll be rendered inline
 
                 // Check if buffer ends with a potential partial stage token
                 for (const prefix of STAGE_PREFIXES) {
@@ -486,7 +469,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
-            stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined,
         };
 
         onMessagesChange([...newHistory, assistantMsg]);
@@ -683,30 +665,12 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting tokens until none remain
+                // Keep extracting __STAGE__ tokens (strip these for live indicators)
                 let processed = true;
                 while (processed) {
                     processed = false;
 
-                    // Check for stage marker first (has JSON payload)
-                    const markerMatch = buffer.match(/__STAGE_MARKER__(\{[^}]*\})/);
-                    if (markerMatch) {
-                        processed = true;
-                        try {
-                            const marker = JSON.parse(markerMatch[1]) as StageMarker;
-                            stageMarkers.push(marker);
-                            // Flush content before the marker
-                            const beforeMarker = buffer.slice(0, markerMatch.index);
-                            flushContent(beforeMarker);
-                            // Continue with content after the marker
-                            buffer = buffer.slice(markerMatch.index! + markerMatch[0].length);
-                            continue;
-                        } catch (e) {
-                            console.error("Failed to parse stage marker:", e);
-                        }
-                    }
-
-                    // Check for regular stage token
+                    // Check for __STAGE__ tokens (strip these - they're for live indicators only)
                     const stageMatch = buffer.match(/__STAGE__(\w+)/);
                     if (stageMatch) {
                         processed = true;
@@ -715,11 +679,13 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                         // Flush content before the stage token
                         const beforeStage = buffer.slice(0, stageMatch.index);
                         flushContent(beforeStage);
-                        // Continue with content after the stage token
+                        // Continue with content after the stage token (skip the token itself)
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
                         continue;
                     }
                 }
+
+                // Keep __STAGE_MARKER__ tokens in the content - they'll be rendered inline
 
                 // Check if buffer ends with a potential partial stage token
                 for (const prefix of STAGE_PREFIXES) {
@@ -768,7 +734,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
-            stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined,
         };
 
         onMessagesChange([...historyWithoutLastAssistant, assistantMsg]);
@@ -910,41 +875,65 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             );
         }
 
-        // Render content with stage markers below
-        const assistantMsg = msg as AssistantMessage;
-        if (assistantMsg.stageHistory && assistantMsg.stageHistory.length > 0) {
-            const markers = assistantMsg.stageHistory
-                .filter(marker => marker.type === "tools")
-                .map((marker, idx) => {
-                    const label = formatStageMarker(marker);
-                    if (label) {
-                        return (
-                            <div key={`marker-${idx}`} className="stage-marker">
-                                [{label}]
-                            </div>
-                        );
-                    }
-                    return null;
-                })
-                .filter(Boolean);
+        // Parse and render inline stage markers
+        const markerRegex = /__STAGE_MARKER__(\{[^}]*\})/g;
+        const parts: JSX.Element[] = [];
+        let lastIndex = 0;
+        let match;
+        let markerIndex = 0;
 
+        while ((match = markerRegex.exec(content)) !== null) {
+            // Add content before this marker
+            if (match.index > lastIndex) {
+                const textBefore = content.slice(lastIndex, match.index);
+                parts.push(
+                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {textBefore}
+                    </ReactMarkdown>
+                );
+            }
+
+            // Parse and add the marker
+            try {
+                const marker = JSON.parse(match[1]) as StageMarker;
+                const label = formatStageMarker(marker);
+                if (label) {
+                    parts.push(
+                        <div key={`marker-${markerIndex}`} className="stage-marker">
+                            [{label}]
+                        </div>
+                    );
+                }
+            } catch (e) {
+                console.error("Failed to parse stage marker:", e);
+            }
+
+            lastIndex = match.index + match[0].length;
+            markerIndex++;
+        }
+
+        // Add remaining content after last marker
+        if (lastIndex < content.length) {
+            const textAfter = content.slice(lastIndex);
+            parts.push(
+                <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {textAfter}
+                </ReactMarkdown>
+            );
+        }
+
+        // If no markers were found, just render the content normally
+        if (parts.length === 0) {
             return (
                 <div className="content">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                         {content}
                     </ReactMarkdown>
-                    {markers.length > 0 && markers}
                 </div>
             );
         }
 
-        return (
-            <div className="content">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                    {content}
-                </ReactMarkdown>
-            </div>
-        );
+        return <div className="content">{parts}</div>;
     }
 
     return (
