@@ -786,16 +786,68 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 );
             }
 
-            // Render markdown while streaming for real-time formatting
-            // Complete any incomplete markdown elements to prevent visual snaps
-            const completedMarkdown = completeIncompleteMarkdown(visible);
-            return (
-                <div className="content streaming">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+            // Parse inline markers even during streaming
+            const markerRegex = /__STAGE_MARKER__(\{[^}]*\})/g;
+            const parts: JSX.Element[] = [];
+            let lastIndex = 0;
+            let match;
+            let markerIndex = 0;
+
+            while ((match = markerRegex.exec(visible)) !== null) {
+                // Add content before this marker
+                if (match.index > lastIndex) {
+                    const textBefore = visible.slice(lastIndex, match.index);
+                    const completedMarkdown = completeIncompleteMarkdown(textBefore);
+                    parts.push(
+                        <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {completedMarkdown}
+                        </ReactMarkdown>
+                    );
+                }
+
+                // Parse and add the marker
+                try {
+                    const marker = JSON.parse(match[1]) as StageMarker;
+                    const label = formatStageMarker(marker);
+                    if (label) {
+                        parts.push(
+                            <div key={`marker-${markerIndex}`} className="stage-marker">
+                                [{label}]
+                            </div>
+                        );
+                    }
+                } catch (e) {
+                    // Ignore incomplete markers during streaming
+                }
+
+                lastIndex = match.index + match[0].length;
+                markerIndex++;
+            }
+
+            // Add remaining content after last marker
+            if (lastIndex < visible.length) {
+                const textAfter = visible.slice(lastIndex);
+                const completedMarkdown = completeIncompleteMarkdown(textAfter);
+                parts.push(
+                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
                         {completedMarkdown}
                     </ReactMarkdown>
-                </div>
-            );
+                );
+            }
+
+            // If no markers were found, render normally
+            if (parts.length === 0) {
+                const completedMarkdown = completeIncompleteMarkdown(visible);
+                return (
+                    <div className="content streaming">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {completedMarkdown}
+                        </ReactMarkdown>
+                    </div>
+                );
+            }
+
+            return <div className="content streaming">{parts}</div>;
         }
 
         if (sentinel?.type === "multi_file_edit") {
