@@ -389,6 +389,18 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
                         log.info(f"chat_with_tools: executing {tool_name}")
 
+                        # Emit stage indicator based on tool type
+                        if tool_name == "read_file":
+                            yield "__STAGE__reading"
+                        elif tool_name == "search_files":
+                            yield "__STAGE__searching"
+                        elif tool_name == "list_scope":
+                            yield "__STAGE__finding"
+                        elif tool_name == "propose_file_edit":
+                            yield "__STAGE__planning"
+                        else:
+                            yield "__STAGE__thinking"
+
                         # Execute tool
                         try:
                             result = executor.execute(tool_name, arguments)
@@ -401,6 +413,9 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                             "role": "tool",
                             "content": result
                         })
+
+                    # After tool execution, emit thinking stage for next model call
+                    yield "__STAGE__thinking"
 
             except Exception as e:
                 log.exception("chat_with_tools: iteration failed")
