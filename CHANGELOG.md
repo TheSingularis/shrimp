@@ -4,9 +4,46 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
-## [Unreleased] — 2026-03-27
+## [Unreleased] — 2026-03-28
 
 ### Added
+
+- **Shrimp branding with theme system**: Visual refresh with shrimp icon integration and 3 switchable color themes:
+  - **Shrimp logo**: PNG icon displays in header, favicon, and welcome screen for empty conversations
+  - **3 color themes**: Purple (violet-dominant, default), Shrimp (coral/pink/orange branding), and Blue (classic vibrant blue)
+  - **Theme switcher**: Change themes in Settings drawer with instant visual updates
+  - **Theme persistence**: Selected theme saves to backend config and loads on startup
+  - All UI elements (buttons, borders, code blocks, etc.) adapt to theme colors using CSS variables
+- **Expanded settings drawer**: Increased width from 360px to 480px (60% on tablets) with reorganized sections:
+  - THEME section at the top for easy access
+  - MODEL & CONTEXT grouped together
+  - CUSTOM INSTRUCTIONS section
+  - SCOPES with improved card-based layout
+  - Better organization and spacing throughout
+- **Consistent SVG icon system**: Replaced all emoji icons (⚙️, ✕, ✓, ✎) with Lucide React icons for:
+  - Settings buttons, close buttons, checkmarks
+  - Edit indicators, approve/reject actions
+  - Tab controls, conversation management
+  - Professional, scalable appearance across all screen sizes
+- **Welcome screen**: Empty conversation state shows shrimp hero icon with welcoming message
+- **Style guide documentation**: Comprehensive `docs/STYLE_GUIDE.md` documenting colors, typography, spacing, components, icons, animations, and responsive patterns
+- **Language setting**: Configurable response language in Settings with 6 language options (English, Spanish, French, German, Chinese, Japanese):
+  - Language preference persists to backend config
+  - Prepends "Respond in {language} only" to every user message for reliable language control
+  - Solves Qwen model multilingual issues where system prompts are ignored
+  - Backend config: `UI_LANGUAGE` setting with GET/POST endpoints at `/settings/language`
+- **Tool call artifact cleanup**: Removes raw tool call JSON, XML tags, and corrupted text from chat output:
+  - Strips `<tool_call>...</tool_call>` XML tags
+  - Removes standalone JSON like `{"name": "read_file", "arguments": {...}}`
+  - Cleans corrupted text patterns (e.g., "iNdEx")
+  - Applied to all content during streaming and final rendering
+- **Theme-aware UI accents**: All accent colors now dynamically change with theme selection:
+  - Loading spinner color matches theme primary
+  - Message border accents (user/assistant) use theme primary
+  - SHRIMP* asterisk in header uses theme primary
+  - "You" label on user messages uses theme primary
+  - Retry button hover state uses theme primary
+  - Input focus ring and border use theme primary
 
 - **Inline stage markers with real-time rendering**: Conversation history now shows greyed-out markers inline where actions occurred (e.g., "[Searched files: 'DND notes']", "[Read files: Session 21.md, combat-rules.md]"). Markers appear during streaming as tools complete, positioned naturally in the conversation flow. Include specific file paths, search queries, and scope names for full transparency. Parsed and styled in real-time - no raw tokens visible.
 - **Tool calling architecture**: Replaced prompt-chaining with Ollama's native function calling API. The LLM can now directly call tools (`read_file`, `search_files`, `list_scope`, `propose_file_edit`) in an agentic loop, eliminating brittle regex parsing and multiple LLM roundtrips. Features:
@@ -49,6 +86,14 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Changed
 
+- **Purple theme enhancement**: Blue/Purple theme shifted to be more purple-dominant (Tailwind violet-500/600) for clear distinction from Refined Blue theme
+- **Theme selector order**: Reordered to Shrimp, Purple, Blue (left to right) and simplified labels
+- **Theme-aware UI colors**: All hardcoded color references now use theme CSS variables for dynamic theming
+- **Settings drawer width**: Expanded from 360px to 480px on desktop for better content organization
+- **Responsive drawer sizing**: Tablets now use 60% width (was 90%) for better proportions
+- **Stage marker artifact cleanup**: Improved parsing to prevent stray JSON fragments from appearing in chat output
+- **Settings button styling**: Increased size and weight of settings gear icon for better visibility
+- **System prompts**: Added "Respond in English only" directive to all system prompts (main chat, intent detection, general knowledge, file editing, code review) as fallback language control
 - **Default model**: Switched from `qwen2.5-coder:7b` to `llama3.1:8b` for superior tool calling support (100% success rate in testing, fast 4-5s responses)
 - **Settings panel error display**: Error messages now appear as inline red text instead of intrusive alert popups. Input field clears automatically on error for better UX
 - **Model deletion behavior**: Deleting the currently active model now auto-selects a fallback model from available options instead of leaving no model selected

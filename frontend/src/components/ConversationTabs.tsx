@@ -1,3 +1,4 @@
+import { X, Plus } from "lucide-react";
 import "./ConversationTabs.css";
 
 interface ConversationTab {
@@ -33,12 +34,12 @@ export function ConversationTabs({ tabs, activeTabId, onSelectTab, onCloseTab, o
                             onCloseTab(tab.id);
                         }}
                     >
-                        ✕
+                        <X size={14} />
                     </button>
                 </div>
             ))}
             <button className="new-tab-btn" onClick={onNewTab}>
-                +
+                <Plus size={16} />
             </button>
         </div>
     );

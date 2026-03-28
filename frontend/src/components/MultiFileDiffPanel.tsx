@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
+import { X, Check, Edit3 } from "lucide-react";
 import "./MultiFileDiffPanel.css";
 
 interface MultiFileDiff {
@@ -60,11 +61,11 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
         <div className="multi-diff-panel">
             <div className="multi-diff-header">
                 <div className="multi-diff-title">
-                    <span className="multi-diff-icon">✎</span>
+                    <Edit3 size={16} className="multi-diff-icon" />
                     <span>Multi-File Edit Proposal ({files.length} files)</span>
                 </div>
                 <button className="close-btn" onClick={onClose} disabled={applying}>
-                    ✕
+                    <X size={18} />
                 </button>
             </div>
 
@@ -75,16 +76,16 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                     const filename = file.path.split("/").pop() ?? file.path;
                     const isNewFile = !file.original || file.original.trim() === "";
 
-                    let statusIcon = "";
+                    let statusIcon: JSX.Element | null = null;
                     let statusClass = "";
                     if (isApplied) {
-                        statusIcon = "✓";
+                        statusIcon = <Check size={14} />;
                         statusClass = "applied";
                     } else if (state.approved) {
-                        statusIcon = "✓";
+                        statusIcon = <Check size={14} />;
                         statusClass = "approved";
                     } else if (state.rejected) {
-                        statusIcon = "✕";
+                        statusIcon = <X size={14} />;
                         statusClass = "rejected";
                     }
 
@@ -130,7 +131,7 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                                 onClick={() => handleApprove(currentFile.path)}
                                 disabled={applying}
                             >
-                                {currentState.approved ? "✓ Approved" : "Approve"}
+                                {currentState.approved ? <><Check size={14} /> Approved</> : "Approve"}
                             </button>
                             <button
                                 className="reject-btn"
@@ -145,7 +146,9 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                         <span className="rejected-label">Rejected</span>
                     )}
                     {isApplied && (
-                        <span className="applied-label">✓ Applied</span>
+                        <span className="applied-label">
+                            <Check size={14} /> Applied
+                        </span>
                     )}
                 </div>
                 <button
