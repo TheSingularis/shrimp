@@ -811,14 +811,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                     {/* Message Content */}
                                     {isUser ? (
                                         <div className="max-w-3xl">
-                                            <div className="border-r-2 border-blue-primary pr-12 pl-6 bg-bg-elevated/40 rounded-l-lg py-3">
+                                            <div className="border-r-2 border-blue-primary pr-8 pl-6 bg-bg-elevated/40 rounded-l-lg py-3">
                                                 <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
                                             </div>
                                         </div>
                                     ) : (
                                         <>
                                             <div className="max-w-3xl">
-                                                <div className="border-l-2 border-blue-primary pl-12 pr-6">
+                                                <div className="border-l-2 border-blue-primary pl-8 pr-6">
                                                     {renderAssistantContent(msg, streaming && i === messages.length - 1)}
                                                 </div>
                                             </div>
@@ -827,7 +827,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                                 <button
                                                     onClick={handleRetry}
                                                     title="Regenerate response"
-                                                    className="mt-3 ml-8 p-0 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center text-text-muted hover:text-blue-primary transition-colors rounded hover:bg-bg-elevated/50"
+                                                    className="!px-3 !py-0 mt-3 ml-8 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center text-text-muted hover:text-blue-primary transition-colors rounded hover:bg-bg-elevated/50"
                                                 >
                                                     <RefreshCw size={16} strokeWidth={2} className="shrink-0" />
                                                 </button>

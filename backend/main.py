@@ -299,10 +299,11 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
     async def stream():
         nonlocal iteration, messages
 
-        yield "__STAGE__thinking"
-
         while iteration < max_iterations:
             iteration += 1
+
+            # Emit thinking stage at start of each iteration
+            yield "__STAGE__thinking"
 
             # Check timeout
             elapsed = asyncio.get_event_loop().time() - start_time
