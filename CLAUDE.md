@@ -69,8 +69,8 @@ tail -f .ollama/frontend.log         # Vite
 
 **Stage Indicators & Markers**:
 - **Live indicators**: During streaming, `__STAGE__<name>` tokens update the spinner label (e.g., "Searching...", "Reading file..."). These show what's happening right now.
-- **Persistent markers**: After response completes, `__STAGE_HISTORY__` sentinel contains the full execution trace. Frontend renders greyed-out markers like "[Searched files • 3 calls]" in conversation history.
-- **Implementation**: Backend tracks all content output and tool executions in `stage_history` list. Frontend parses `__STAGE_HISTORY__` sentinel and interleaves markers between content chunks.
+- **Incremental markers**: As each tool execution completes, backend emits `__STAGE_MARKER__<json>` tokens containing tool type, count, and details (file paths, queries, scopes). Frontend parses these during streaming and displays greyed-out markers like "[Read files: config.py, main.py]" in real-time.
+- **Implementation**: Backend tracks tool executions in `stage_history` list and emits individual markers after each tool batch completes. Frontend accumulates markers during streaming and renders them below message content.
 
 ## Key Conventions
 
