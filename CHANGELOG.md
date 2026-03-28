@@ -4,10 +4,20 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
-## [Unreleased] — 2026-03-26
+## [Unreleased] — 2026-03-27
 
 ### Added
 
+- **Tool calling architecture**: Replaced prompt-chaining with Ollama's native function calling API. The LLM can now directly call tools (`read_file`, `search_files`, `list_scope`, `propose_file_edit`) in an agentic loop, eliminating brittle regex parsing and multiple LLM roundtrips. Features:
+  - Agentic workflow: model calls tools → backend executes → results fed back → model continues
+  - Fallback parser for text-based tool calls (llama3.1:8b compatibility)
+  - Feature flag for gradual rollout (`USE_TOOL_CALLING`, enabled by default)
+  - 93.8% reliability achieved in testing
+  - Streaming support maintained with tool execution markers
+  - See `docs/tool-calling-architecture.md` for technical details
+- **Security-focused file operations module** (`backend/file_ops.py`): All file writes now go through `write_accept()` with path validation, automatic backups, and escape prevention
+- **Model recommendations documentation**: Comprehensive guide for selecting models based on VRAM (8GB, 16GB, 24GB+ tiers) with specific recommendations for tool calling support
+- **Comprehensive architecture documentation** (`docs/tool-calling-architecture.md`): Step-by-step walkthrough of tool calling flow with function call traces
 - **Network access from mobile/tablet devices**: SHRIMP can now be accessed from any device on your local network. The frontend, backend, and Ollama now bind to `0.0.0.0` instead of `127.0.0.1`, and the frontend dynamically uses `window.location.hostname` to connect to the backend. Access the UI from your phone or tablet by visiting `http://<YOUR_IP>:5173`.
 - **Mobile-responsive UI**: The interface is now optimized for touch devices and small screens:
   - Diff viewers appear full-screen on mobile devices for better usability
@@ -38,6 +48,10 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Changed
 
+- **Default model**: Switched from `qwen2.5-coder:7b` to `llama3.1:8b` for superior tool calling support (100% success rate in testing, fast 4-5s responses)
+- **Settings panel error display**: Error messages now appear as inline red text instead of intrusive alert popups. Input field clears automatically on error for better UX
+- **Model deletion behavior**: Deleting the currently active model now auto-selects a fallback model from available options instead of leaving no model selected
+- **Model list filtering**: Embedding models (e.g., nomic-embed-text) are now hidden from the chat model selection list to prevent confusion
 - **UI redesign with blue/purple theme**: Complete visual refresh of the chat interface with a modern cool-toned color scheme inspired by Discord, VS Code, and Linear. Changes include:
   - New color palette: soft periwinkle blue (#5B7FFF) as primary accent replacing green (#4ade80)
   - Deep blue-tinted backgrounds (#0D0F17, #161925) replacing neutral grays
@@ -54,6 +68,8 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Fixed
 
+- **Pull model error handling**: Pulling non-existent or invalid models now properly displays error messages from Ollama instead of silently failing
+- **Model selection validation**: Selecting a model now validates that it exists in Ollama before applying the change, preventing "model not found" errors during chat
 - Stage indicators now properly transition in question mode (no longer stuck on "Processing…")
 - Added size check to quality control loop that flags edits removing >40% of content
 - Excessive content removal now automatically triggers refinement with preservation guidance

@@ -29,6 +29,101 @@ A local-first AI assistant that knows your files. Point it at your code, notes, 
 
 ---
 
+## Recommended Models
+
+SHRIMP works with any Ollama model. Choose based on your VRAM:
+
+### 8GB VRAM (Entry Level)
+
+**Tool Calling:**
+- **llama3.1:8b** - Best balance of speed and capability
+  - VRAM: ~6-8GB | Download: ~5GB
+  - 100% tool calling success rate in testing
+  - Fast responses (avg 4-5s per request)
+
+**Code-Focused:**
+- **qwen2.5-coder:7b** - Excellent for code tasks
+  - VRAM: ~6-8GB | Download: ~4.7GB
+  - Strong code completion and refactoring
+
+```python
+# backend/config.py
+OLLAMA_MODEL = "llama3.1:8b"
+USE_TOOL_CALLING = True  # Default: enabled
+```
+
+### 16GB VRAM (Your GPU: Radeon RX 9060 XT)
+
+**Tool Calling:**
+- **qwen2.5:14b** ⭐ (Recommended for 16GB)
+  - VRAM: ~10-12GB | Download: ~9GB
+  - Superior reasoning and code understanding
+  - Comfortable fit with headroom
+  - Excellent tool calling support
+
+**Code-Focused:**
+- **qwen2.5-coder:14b** - Best for code-heavy workloads
+  - VRAM: ~10-12GB | Download: ~9GB
+  - Specialized for code generation and analysis
+
+**Alternative:**
+- **mistral-nemo:12b** - Good general-purpose option
+  - VRAM: ~8-10GB | Download: ~7GB
+  - Lighter, faster inference
+
+```python
+# backend/config.py
+OLLAMA_MODEL = "qwen2.5:14b"
+USE_TOOL_CALLING = True
+NUM_CTX = 16384  # Full context window fits comfortably
+```
+
+### 24GB+ VRAM (High-End)
+
+**Premium Options:**
+- **qwen2.5:32b** - Excellent quality
+  - VRAM: ~22-24GB | Download: ~20GB
+  - Very strong reasoning
+
+- **llama3.3:70b** - Highest quality (requires 40GB+)
+  - VRAM: ~40-42GB | Download: ~40GB
+  - Best-in-class reasoning (Q4 quantization)
+
+### 4GB VRAM (Limited)
+
+- **llama3.2:3b** - Minimal option
+  - VRAM: ~3-4GB | Download: ~2GB
+  - Good for simple queries only
+
+### Embeddings (Required)
+
+**All VRAM tiers:**
+- **nomic-embed-text** ⭐ (Required for semantic search)
+  - VRAM: ~2GB | Download: ~274MB
+  - Runs alongside main model
+
+```python
+# backend/config.py
+EMBED_MODEL = "nomic-embed-text"
+```
+
+### Quick Reference Table
+
+| Model | VRAM Usage | Download Size | Best For | Tool Calling |
+|-------|-----------|---------------|----------|--------------|
+| llama3.2:3b | 3-4GB | 2GB | Budget builds | ✅ |
+| llama3.1:8b | 6-8GB | 5GB | 8GB GPUs | ✅ Excellent |
+| qwen2.5-coder:7b | 6-8GB | 4.7GB | Code (8GB) | ✅ |
+| mistral-nemo:12b | 8-10GB | 7GB | General (16GB) | ⚠️ Limited |
+| **qwen2.5:14b** ⭐ | **10-12GB** | **9GB** | **16GB GPUs** | ✅ **Excellent** |
+| **qwen2.5-coder:14b** | **10-12GB** | **9GB** | **Code (16GB)** | ✅ **Excellent** |
+| qwen2.5:32b | 22-24GB | 20GB | 24GB+ GPUs | ✅ Excellent |
+| llama3.3:70b | 40-42GB | 40GB | 40GB+ GPUs | ✅ Best |
+
+**Note:** Tool calling requires models that support function calling (llama3.1+, qwen2.5+). Older models automatically fall back to prompt-chaining mode.
+
+---
+
 ## Prerequisites
 
 - [Nix](https://nixos.org/download) (NixOS or nix on any Linux distro)

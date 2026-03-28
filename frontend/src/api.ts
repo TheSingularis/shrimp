@@ -45,11 +45,16 @@ export async function getModels(): Promise<{ models: string[]; active: string }>
 }
 
 export async function setModel(model: string): Promise<void> {
-    await fetch(`${BASE}/settings/model`, {
+    const res = await fetch(`${BASE}/settings/model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model }),
     });
+
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.detail || `Failed to set model: ${res.status}`);
+    }
 }
 
 export async function deleteScope(name: string): Promise<Scope[]> {
@@ -129,9 +134,14 @@ export async function pullModel(
         body: JSON.stringify({ model }),
     });
 
+    if (!res.ok) {
+        throw new Error(`Failed to pull model: ${res.status} ${res.statusText}`);
+    }
+
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let lastError: string | null = null;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -143,11 +153,24 @@ export async function pullModel(
             if (!line.trim()) continue;
             try {
                 const data = JSON.parse(line);
+
+                // Check for error in Ollama response
+                if (data.error) {
+                    lastError = data.error;
+                    throw new Error(data.error);
+                }
+
                 const percent = data.total
                     ? Math.round((data.completed / data.total) * 100)
                     : null;
                 onProgress(data.status ?? "", percent);
-            } catch {}
+            } catch (e) {
+                // If it's our thrown error, re-throw it
+                if (e instanceof Error && e.message === lastError) {
+                    throw e;
+                }
+                // Otherwise ignore JSON parse errors
+            }
         }
     }
 }

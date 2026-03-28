@@ -682,7 +682,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             if (content.includes("Expanding") && stage) {
                 return (
                     <div className="flex items-center gap-3 text-text-muted text-base">
-                        <span className="text-blue-primary font-mono animate-pulse" style={{ fontFamily: 'monospace' }}>{spinner.frames[spinnerFrame]}</span>
+                        <span className="text-blue-primary animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre' }}>{spinner.frames[spinnerFrame]}</span>
                         <span className="font-medium">{getStageLabel(stage)}</span>
                     </div>
                 );
@@ -792,7 +792,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             <div className="flex flex-col flex-1 h-full">
                 {/* Messages Area */}
                 <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-8 space-y-12">
-                    <div className="max-w-4xl mx-auto px-6 md:px-8">
+                    <div className="max-w-6xl mx-auto px-6 md:px-8">
                         {messages.map((msg, i) => {
                             const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
                             const isUser = msg.role === "user";
@@ -841,7 +841,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                         {/* Typing Indicator */}
                         {streaming && !responseStarted && (
                             <div className="flex items-center gap-3 text-text-muted text-base mt-4">
-                                <span className="text-blue-primary font-mono animate-pulse" style={{ fontFamily: 'monospace' }}>{spinner.frames[spinnerFrame]}</span>
+                                <span className="text-blue-primary animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre' }}>{spinner.frames[spinnerFrame]}</span>
                                 <span className="font-medium">{getStageLabel(stage)}</span>
                             </div>
                         )}

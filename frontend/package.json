@@ -12,10 +12,12 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@fontsource/inter": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
     "@mui/material": "^7.3.9",
     "@mui/system": "^7.3.9",
     "cli-spinners": "^3.4.0",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
