@@ -8,7 +8,7 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Added
 
-- **Persistent stage markers**: Conversation history now shows greyed-out markers indicating what actions the assistant performed (e.g., "[Searched files]", "[Read files • 2 calls]"). These markers appear after the response completes, providing a permanent record of tool usage while maintaining the live spinner for real-time feedback during processing.
+- **Incremental stage markers with file details**: Conversation history now shows greyed-out markers as actions complete in real-time (e.g., "[Searched files: 'DND notes']", "[Read files: Session 21.md, combat-rules.md]"). Markers appear during streaming and include specific file paths, queries, and scopes, providing full transparency into tool usage. Works alongside the live spinner for comprehensive feedback.
 - **Tool calling architecture**: Replaced prompt-chaining with Ollama's native function calling API. The LLM can now directly call tools (`read_file`, `search_files`, `list_scope`, `propose_file_edit`) in an agentic loop, eliminating brittle regex parsing and multiple LLM roundtrips. Features:
   - Agentic workflow: model calls tools → backend executes → results fed back → model continues
   - Fallback parser for text-based tool calls (llama3.1:8b compatibility)

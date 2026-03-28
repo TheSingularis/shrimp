@@ -411,22 +411,36 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     else:
                         yield "__STAGE__thinking"
 
-                    # Track tool execution in stage history
+                    # Track tool execution in stage history with details
                     tool_summary = {
                         "type": "tools",
                         "stage": first_tool,
                         "count": len(tool_calls),
-                        "tools": [t.get("function", {}).get("name") for t in tool_calls]
+                        "tools": [t.get("function", {}).get("name") for t in tool_calls],
+                        "details": []
                     }
-                    stage_history.append(tool_summary)
 
-                    # Execute tools
+                    # Execute tools and collect details
                     for tool_call in tool_calls:
                         func = tool_call.get("function", {})
                         tool_name = func.get("name")
                         arguments = func.get("arguments", {})
 
                         log.info(f"chat_with_tools: executing {tool_name}")
+
+                        # Extract details for display
+                        if tool_name == "read_file":
+                            path = arguments.get("path", "unknown")
+                            tool_summary["details"].append(path)
+                        elif tool_name == "search_files":
+                            query = arguments.get("query", "")
+                            tool_summary["details"].append(f'"{query}"')
+                        elif tool_name == "list_scope":
+                            scope = arguments.get("scope", "")
+                            tool_summary["details"].append(f"{scope} scope")
+                        elif tool_name == "propose_file_edit":
+                            path = arguments.get("path", "unknown")
+                            tool_summary["details"].append(path)
 
                         # Execute tool
                         try:
@@ -440,6 +454,12 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                             "role": "tool",
                             "content": result
                         })
+
+                    # Emit incremental stage marker after tools complete
+                    stage_history.append(tool_summary)
+                    marker_sentinel = json.dumps(tool_summary)
+                    yield f"\n\n__STAGE_MARKER__{marker_sentinel}"
+                    log.info(f"chat_with_tools: emitted stage marker for {first_tool} with {len(tool_summary['details'])} details")
 
             except Exception as e:
                 log.exception("chat_with_tools: iteration failed")
@@ -493,12 +513,6 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                 sentinel = json.dumps({"files": file_diffs})
                 yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
                 log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
-
-        # Emit stage history for persistent markers
-        if stage_history:
-            sentinel = json.dumps({"stages": stage_history})
-            yield f"\n\n__STAGE_HISTORY__{sentinel}"
-            log.info(f"chat_with_tools: emitted stage history with {len(stage_history)} entries")
 
         yield "__STAGE__done"
         log.info(f"chat_with_tools: completed in {iteration} iterations")

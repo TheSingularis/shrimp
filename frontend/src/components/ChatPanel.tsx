@@ -88,6 +88,7 @@ interface StageMarker {
     stage: string;
     count?: number;
     tools?: string[];
+    details?: string[];
 }
 
 interface AssistantMessage extends Message {
@@ -111,29 +112,13 @@ interface PendingEdit {
 
 const SENTINEL_PREFIX = "__SHRIMP_EDIT__";
 const MULTI_SENTINEL_PREFIX = "__SHRIMP_MULTI_EDIT__";
-const STAGE_HISTORY_PREFIX = "__STAGE_HISTORY__";
 
 function parseSentinel(content: string): {
     display: string;
     sentinel: Sentinel | null;
-    stageHistory: StageMarker[] | null;
 } {
-    // Check for stage history first
-    let stageHistory: StageMarker[] | null = null;
-    let idx = content.indexOf(STAGE_HISTORY_PREFIX);
-    if (idx !== -1) {
-        const raw = content.slice(idx + STAGE_HISTORY_PREFIX.length);
-        try {
-            const parsed = JSON.parse(raw);
-            stageHistory = parsed.stages;
-            content = content.slice(0, idx).trim();
-        } catch {
-            // Ignore parsing errors
-        }
-    }
-
     // Check for multi-file sentinel
-    idx = content.indexOf(MULTI_SENTINEL_PREFIX);
+    let idx = content.indexOf(MULTI_SENTINEL_PREFIX);
     let prefix = MULTI_SENTINEL_PREFIX;
     let isSingleFile = false;
 
@@ -144,7 +129,7 @@ function parseSentinel(content: string): {
         isSingleFile = true;
     }
 
-    if (idx === -1) return { display: content, sentinel: null, stageHistory };
+    if (idx === -1) return { display: content, sentinel: null };
 
     const display = content.slice(0, idx).trim();
     const raw = content.slice(idx + prefix.length);
@@ -169,9 +154,9 @@ function parseSentinel(content: string): {
         const prose = editMarkerIdx !== -1
             ? display.slice(0, editMarkerIdx).trim()
             : display;
-        return { display: prose, sentinel, stageHistory };
+        return { display: prose, sentinel };
     } catch {
-        return { display, sentinel: null, stageHistory };
+        return { display, sentinel: null };
     }
 }
 
@@ -226,6 +211,21 @@ function formatStageMarker(marker: StageMarker): string {
 
     const label = baseLabel[marker.stage] || "Processed";
 
+    // Add details if available
+    if (marker.details && marker.details.length > 0) {
+        // For file paths, show just the filename
+        const formatted = marker.details.map(d => {
+            // If it looks like a file path, extract just the filename
+            if (d.includes("/")) {
+                return d.split("/").pop() || d;
+            }
+            return d;
+        }).join(", ");
+
+        return `${label}: ${formatted}`;
+    }
+
+    // Fallback to count-based label
     if (marker.count && marker.count > 1) {
         return `${label} • ${marker.count} calls`;
     }
@@ -351,6 +351,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         setResponseStarted(false);
 
         let fullResponse = "";
+        const stageMarkers: StageMarker[] = []; // Track markers as they arrive
 
         const pendingList = Object.values(pendingEdits);
         const pendingFile: PendingFile | undefined =
@@ -368,13 +369,20 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 fullResponse += content;
                 onMessagesChange([
                     ...newHistory,
-                    { role: "assistant", content: fullResponse },
+                    { role: "assistant", content: fullResponse, stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined },
                 ]);
             }
         };
 
-        // Possible partial prefixes of "__STAGE__" (in order of length, longest first)
+        // Possible partial prefixes of "__STAGE__" and "__STAGE_MARKER__" (in order of length, longest first)
         const STAGE_PREFIXES = [
+            "__STAGE_MARKER_",
+            "__STAGE_MARKER",
+            "__STAGE_MARKE",
+            "__STAGE_MARK",
+            "__STAGE_MAR",
+            "__STAGE_MA",
+            "__STAGE_M",
             "__STAGE_",
             "__STAGE",
             "__STAG",
@@ -387,23 +395,48 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
         try {
             await sendChat(augmentedInput, scopes, messages, (token) => {
-                // Buffer tokens to handle partial __STAGE__ tokens
+                // Buffer tokens to handle partial __STAGE__ and __STAGE_MARKER__ tokens
                 stageBufferRef.current += token;
 
-                // Process buffer - may contain multiple stage tokens
+                // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting stage tokens until none remain
-                let stageMatch;
-                while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
-                    // Found a complete stage token - extract it
-                    const key = stageMatch[1];
-                    updateStageWithMinDuration(key);
-                    // Flush content before the stage token
-                    const beforeStage = buffer.slice(0, stageMatch.index);
-                    flushContent(beforeStage);
-                    // Continue with content after the stage token
-                    buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                // Keep extracting tokens until none remain
+                let processed = true;
+                while (processed) {
+                    processed = false;
+
+                    // Check for stage marker first (has JSON payload)
+                    const markerMatch = buffer.match(/__STAGE_MARKER__(\{[^}]*\})/);
+                    if (markerMatch) {
+                        processed = true;
+                        try {
+                            const marker = JSON.parse(markerMatch[1]) as StageMarker;
+                            stageMarkers.push(marker);
+                            // Flush content before the marker
+                            const beforeMarker = buffer.slice(0, markerMatch.index);
+                            flushContent(beforeMarker);
+                            // Continue with content after the marker
+                            buffer = buffer.slice(markerMatch.index! + markerMatch[0].length);
+                            continue;
+                        } catch (e) {
+                            console.error("Failed to parse stage marker:", e);
+                        }
+                    }
+
+                    // Check for regular stage token
+                    const stageMatch = buffer.match(/__STAGE__(\w+)/);
+                    if (stageMatch) {
+                        processed = true;
+                        const key = stageMatch[1];
+                        updateStageWithMinDuration(key);
+                        // Flush content before the stage token
+                        const beforeStage = buffer.slice(0, stageMatch.index);
+                        flushContent(beforeStage);
+                        // Continue with content after the stage token
+                        buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                        continue;
+                    }
                 }
 
                 // Check if buffer ends with a potential partial stage token
@@ -446,14 +479,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             return;
         }
 
-        const { display, sentinel, stageHistory } = parseSentinel(fullResponse);
+        const { display, sentinel } = parseSentinel(fullResponse);
 
         const assistantMsg: AssistantMessage = {
             role: "assistant",
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
-            stageHistory: stageHistory ?? undefined,
+            stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined,
         };
 
         onMessagesChange([...newHistory, assistantMsg]);
@@ -599,6 +632,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         setResponseStarted(false);
 
         let fullResponse = "";
+        const stageMarkers: StageMarker[] = []; // Track markers as they arrive
 
         const pendingList = Object.values(pendingEdits);
         const pendingFile: PendingFile | undefined =
@@ -616,13 +650,20 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 fullResponse += content;
                 onMessagesChange([
                     ...historyWithoutLastAssistant,
-                    { role: "assistant", content: fullResponse },
+                    { role: "assistant", content: fullResponse, stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined },
                 ]);
             }
         };
 
-        // Possible partial prefixes of "__STAGE__" (in order of length, longest first)
+        // Possible partial prefixes of "__STAGE__" and "__STAGE_MARKER__" (in order of length, longest first)
         const STAGE_PREFIXES = [
+            "__STAGE_MARKER_",
+            "__STAGE_MARKER",
+            "__STAGE_MARKE",
+            "__STAGE_MARK",
+            "__STAGE_MAR",
+            "__STAGE_MA",
+            "__STAGE_M",
             "__STAGE_",
             "__STAGE",
             "__STAG",
@@ -636,23 +677,48 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         try {
             // Pass history before the last user message (same as submit logic)
             await sendChat(userInput, scopes, historyWithoutLastAssistant.slice(0, -1), (token) => {
-                // Buffer tokens to handle partial __STAGE__ tokens
+                // Buffer tokens to handle partial __STAGE__ and __STAGE_MARKER__ tokens
                 stageBufferRef.current += token;
 
-                // Process buffer - may contain multiple stage tokens
+                // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting stage tokens until none remain
-                let stageMatch;
-                while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
-                    // Found a complete stage token - extract it
-                    const key = stageMatch[1];
-                    updateStageWithMinDuration(key);
-                    // Flush content before the stage token
-                    const beforeStage = buffer.slice(0, stageMatch.index);
-                    flushContent(beforeStage);
-                    // Continue with content after the stage token
-                    buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                // Keep extracting tokens until none remain
+                let processed = true;
+                while (processed) {
+                    processed = false;
+
+                    // Check for stage marker first (has JSON payload)
+                    const markerMatch = buffer.match(/__STAGE_MARKER__(\{[^}]*\})/);
+                    if (markerMatch) {
+                        processed = true;
+                        try {
+                            const marker = JSON.parse(markerMatch[1]) as StageMarker;
+                            stageMarkers.push(marker);
+                            // Flush content before the marker
+                            const beforeMarker = buffer.slice(0, markerMatch.index);
+                            flushContent(beforeMarker);
+                            // Continue with content after the marker
+                            buffer = buffer.slice(markerMatch.index! + markerMatch[0].length);
+                            continue;
+                        } catch (e) {
+                            console.error("Failed to parse stage marker:", e);
+                        }
+                    }
+
+                    // Check for regular stage token
+                    const stageMatch = buffer.match(/__STAGE__(\w+)/);
+                    if (stageMatch) {
+                        processed = true;
+                        const key = stageMatch[1];
+                        updateStageWithMinDuration(key);
+                        // Flush content before the stage token
+                        const beforeStage = buffer.slice(0, stageMatch.index);
+                        flushContent(beforeStage);
+                        // Continue with content after the stage token
+                        buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                        continue;
+                    }
                 }
 
                 // Check if buffer ends with a potential partial stage token
@@ -695,14 +761,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             return;
         }
 
-        const { display, sentinel, stageHistory } = parseSentinel(fullResponse);
+        const { display, sentinel } = parseSentinel(fullResponse);
 
         const assistantMsg: AssistantMessage = {
             role: "assistant",
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
-            stageHistory: stageHistory ?? undefined,
+            stageHistory: stageMarkers.length > 0 ? stageMarkers : undefined,
         };
 
         onMessagesChange([...historyWithoutLastAssistant, assistantMsg]);
@@ -844,74 +910,32 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             );
         }
 
-        // Render content with stage markers interleaved
+        // Render content with stage markers below
         const assistantMsg = msg as AssistantMessage;
         if (assistantMsg.stageHistory && assistantMsg.stageHistory.length > 0) {
-            // Try to interleave markers between content chunks
-            // Strategy: alternate between content markers and tool markers
-            const elements: JSX.Element[] = [];
-            let contentChunks = content.split(/\n\n+/).filter(s => s.trim());
+            const markers = assistantMsg.stageHistory
+                .filter(marker => marker.type === "tools")
+                .map((marker, idx) => {
+                    const label = formatStageMarker(marker);
+                    if (label) {
+                        return (
+                            <div key={`marker-${idx}`} className="stage-marker">
+                                [{label}]
+                            </div>
+                        );
+                    }
+                    return null;
+                })
+                .filter(Boolean);
 
-            // If we only have one content chunk, show all markers at the end
-            if (contentChunks.length === 1) {
-                elements.push(
-                    <ReactMarkdown key="content-0" remarkPlugins={[remarkGfm]} components={mdComponents}>
+            return (
+                <div className="content">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                         {content}
                     </ReactMarkdown>
-                );
-
-                // Add all tool markers
-                assistantMsg.stageHistory
-                    .filter(marker => marker.type === "tools")
-                    .forEach((marker, idx) => {
-                        const label = formatStageMarker(marker);
-                        if (label) {
-                            elements.push(
-                                <div key={`marker-${idx}`} className="stage-marker">
-                                    [{label}]
-                                </div>
-                            );
-                        }
-                    });
-            } else {
-                // Multiple chunks: try to interleave
-                let contentIndex = 0;
-                let toolMarkerIndex = 0;
-                const toolMarkers = assistantMsg.stageHistory.filter(m => m.type === "tools");
-
-                for (const marker of assistantMsg.stageHistory) {
-                    if (marker.type === "content" && contentIndex < contentChunks.length) {
-                        elements.push(
-                            <ReactMarkdown key={`content-${contentIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                                {contentChunks[contentIndex]}
-                            </ReactMarkdown>
-                        );
-                        contentIndex++;
-                    } else if (marker.type === "tools") {
-                        const label = formatStageMarker(marker);
-                        if (label) {
-                            elements.push(
-                                <div key={`marker-${toolMarkerIndex}`} className="stage-marker">
-                                    [{label}]
-                                </div>
-                            );
-                        }
-                        toolMarkerIndex++;
-                    }
-                }
-
-                // Add any remaining content chunks
-                while (contentIndex < contentChunks.length) {
-                    elements.push(
-                        <ReactMarkdown key={`content-${contentIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {contentChunks[contentIndex]}
-                        </ReactMarkdown>
-                    );
-                    contentIndex++;
-                }
-            }
-
-            return <div className="content">{elements}</div>;
+                    {markers.length > 0 && markers}
+                </div>
+            );
         }
 
         return (
