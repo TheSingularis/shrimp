@@ -298,6 +298,7 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
     async def stream():
         nonlocal iteration, messages
+        had_content_before_tools = False  # Track if we need line break before next content
 
         while iteration < max_iterations:
             iteration += 1
@@ -375,12 +376,20 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
                     # Stream content to user if present (and not just tool calls)
                     if content and not content.strip().startswith('{"name":'):
+                        # Add line break if resuming after tool execution
+                        if had_content_before_tools:
+                            yield "\n\n"
+                            had_content_before_tools = False
                         yield content
 
                     # Check if we're done (no tool calls)
                     if not tool_calls:
                         log.info("chat_with_tools: no tool calls - done")
                         break
+
+                    # Mark that we had content before tools (for next iteration's line break)
+                    if content:
+                        had_content_before_tools = True
 
                     # Emit stage indicator based on first tool type (to avoid rapid switching)
                     # This stage will "stick" throughout tool execution
