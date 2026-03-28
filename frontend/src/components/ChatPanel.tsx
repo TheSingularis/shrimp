@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
 import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Check, X, Edit3 } from "lucide-react";
 
 interface Props {
     scopes: string[];
@@ -766,8 +766,22 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         }
     }
 
+    // Clean up tool call artifacts from content
+    function cleanToolCallArtifacts(text: string): string {
+        return text
+            // Remove <tool_call> XML tags and their content
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+            // Remove standalone JSON tool calls like {"name": "read_file", "arguments": {...}}
+            .replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}/g, '')
+            // Remove corrupted text patterns like "iNdEx"
+            .replace(/\biNdEx\b/g, '')
+            // Clean up extra whitespace left behind
+            .replace(/\n\s*\n\s*\n/g, '\n\n')
+            .trim();
+    }
+
     function renderAssistantContent(msg: ChatMessage, isStreaming: boolean) {
-        const content = msg.content;
+        const content = cleanToolCallArtifacts(msg.content);
         const sentinel = (msg as AssistantMessage).sentinel;
 
         if (isStreaming) {
@@ -780,7 +794,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             if (content.includes("Expanding") && stage) {
                 return (
                     <div className="flex items-center gap-3 text-text-muted text-base">
-                        <span className="text-blue-primary animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre' }}>{spinner.frames[spinnerFrame]}</span>
+                        <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
                         <span className="font-medium">{getStageLabel(stage)}</span>
                     </div>
                 );
@@ -876,7 +890,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                         }}
                                     >
                                         <span className="file-edit-pill-icon">
-                                            {isApplied ? "✓" : isDiscarded ? "✕" : "✎"}
+                                            {isApplied ? <Check size={14} /> : isDiscarded ? <X size={14} /> : <Edit3 size={14} />}
                                         </span>
                                         <span className="file-edit-pill-name">{filename}</span>
                                         <span className="file-edit-pill-action">
@@ -928,7 +942,8 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         }
 
         // Parse and render inline stage markers
-        const markerRegex = /__STAGE_MARKER__(\{[^}]*\})/g;
+        // Updated regex to handle JSON with nested objects (non-greedy)
+        const markerRegex = /__STAGE_MARKER__(\{.*?\}(?=\s|$|__STAGE_MARKER__|[^\{]))/g;
         const parts: JSX.Element[] = [];
         let lastIndex = 0;
         let match;
@@ -937,12 +952,16 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
         while ((match = markerRegex.exec(content)) !== null) {
             // Add content before this marker
             if (match.index > lastIndex) {
-                const textBefore = content.slice(lastIndex, match.index);
-                parts.push(
-                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                        {textBefore}
-                    </ReactMarkdown>
-                );
+                let textBefore = content.slice(lastIndex, match.index);
+                // Clean up any trailing artifacts like ", {" or "]}]}" from split JSON
+                textBefore = textBefore.replace(/,\s*\{\s*$/, '').replace(/\]\}\]\}\s*$/, '').trim();
+                if (textBefore) {
+                    parts.push(
+                        <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {textBefore}
+                        </ReactMarkdown>
+                    );
+                }
             }
 
             // Parse and add the marker
@@ -966,12 +985,16 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
         // Add remaining content after last marker
         if (lastIndex < content.length) {
-            const textAfter = content.slice(lastIndex);
-            parts.push(
-                <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                    {textAfter}
-                </ReactMarkdown>
-            );
+            let textAfter = content.slice(lastIndex);
+            // Clean up any leading artifacts like "]}" or ", {" from split JSON
+            textAfter = textAfter.replace(/^\s*,\s*\{/, '').replace(/^\s*\]\}/, '').trim();
+            if (textAfter) {
+                parts.push(
+                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {textAfter}
+                    </ReactMarkdown>
+                );
+            }
         }
 
         // If no markers were found, just render the content normally
@@ -995,6 +1018,24 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 {/* Messages Area */}
                 <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-8 space-y-12">
                     <div className="max-w-6xl mx-auto px-6 md:px-8">
+                        {/* Welcome Screen */}
+                        {messages.length === 0 && (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center opacity-70">
+                                <img
+                                    src="/icons/shrimp(1).png"
+                                    alt="SHRIMP"
+                                    className="w-32 h-32 mb-8"
+                                />
+                                <h1 className="text-3xl font-semibold mb-2">
+                                    Welcome to SHRIMP<span style={{ color: 'var(--theme-primary)' }}>*</span>
+                                </h1>
+                                <p className="text-lg mb-2">Self-Hosted RAG Intelligence Model Project</p>
+                                <p className="text-text-muted max-w-md mt-4">
+                                    Ask me about your indexed files, and I'll help you find what you need.
+                                </p>
+                            </div>
+                        )}
+
                         {messages.map((msg, i) => {
                             const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
                             const isUser = msg.role === "user";
@@ -1003,9 +1044,10 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                 <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} ${i > 0 ? 'mt-12' : ''}`}>
                                     {/* Role Label */}
                                     <div className="flex items-center gap-3 mb-3">
-                                        <span className={`text-base font-medium capitalize ${
-                                            isUser ? 'text-blue-primary' : 'text-text'
-                                        }`}>
+                                        <span
+                                            className="text-base font-medium capitalize"
+                                            style={{ color: isUser ? 'var(--theme-primary)' : 'var(--color-text)' }}
+                                        >
                                             {msg.role === 'user' ? 'You' : 'Assistant'}
                                         </span>
                                     </div>
@@ -1013,14 +1055,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                     {/* Message Content */}
                                     {isUser ? (
                                         <div className="max-w-3xl">
-                                            <div className="border-r-2 border-blue-primary pr-8 pl-6 bg-bg-elevated/40 rounded-l-lg py-3">
+                                            <div className="border-r-2 pr-8 pl-6 bg-bg-elevated/40 rounded-l-lg py-3" style={{ borderColor: 'var(--theme-primary)' }}>
                                                 <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
                                             </div>
                                         </div>
                                     ) : (
                                         <>
                                             <div className="max-w-3xl">
-                                                <div className="border-l-2 border-blue-primary pl-8 pr-6">
+                                                <div className="border-l-2 pl-8 pr-6" style={{ borderColor: 'var(--theme-primary)' }}>
                                                     {renderAssistantContent(msg, streaming && i === messages.length - 1)}
                                                 </div>
                                             </div>
@@ -1029,7 +1071,8 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                                 <button
                                                     onClick={handleRetry}
                                                     title="Regenerate response"
-                                                    className="!px-3 !py-0 mt-3 ml-8 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center text-text-muted hover:text-blue-primary transition-colors rounded hover:bg-bg-elevated/50"
+                                                    className="retry-button !px-3 !py-0 mt-3 ml-8 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center transition-colors rounded hover:bg-bg-elevated/50"
+                                                    style={{ color: 'var(--color-text-muted)' }}
                                                 >
                                                     <RefreshCw size={16} strokeWidth={2} className="shrink-0" />
                                                 </button>
@@ -1043,7 +1086,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                         {/* Typing Indicator */}
                         {streaming && !responseStarted && (
                             <div className="flex items-center gap-3 text-text-muted text-base mt-4">
-                                <span className="text-blue-primary animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre' }}>{spinner.frames[spinnerFrame]}</span>
+                                <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
                                 <span className="font-medium">{getStageLabel(stage)}</span>
                             </div>
                         )}
@@ -1063,10 +1106,10 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                                 placeholder="Ask anything..."
                                 rows={1}
                                 disabled={streaming}
-                                className="flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-3.5 text-base
-                                           focus:outline-none focus:ring-2 focus:ring-blue-primary/50 focus:border-blue-primary
+                                className="chat-input flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-3.5 text-base
+                                           focus:outline-none focus:ring-2 focus:shadow-md
                                            disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-text-muted
-                                           transition-shadow duration-200 shadow-sm focus:shadow-md leading-normal min-h-[52px]"
+                                           transition-shadow duration-200 shadow-sm leading-normal min-h-[52px]"
                             />
                             {streaming ? (
                                 <button

@@ -4,6 +4,8 @@ EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
 NUM_CTX: int = 8192
 CUSTOM_INSTRUCTIONS: str = ""
+UI_THEME: str = "shrimp"  # "blue-purple" | "shrimp" | "refined-blue"
+UI_LANGUAGE: str = "English"  # Language for LLM responses
 
 # Tool calling configuration (Phase 0-1)
 USE_TOOL_CALLING: bool = True  # Feature flag - ENABLED for testing

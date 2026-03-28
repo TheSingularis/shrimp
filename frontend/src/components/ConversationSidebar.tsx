@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { type ConversationMetadata, listConversations, deleteConversation, updateConversationTitle } from "../api";
+import { X, MessageSquarePlus } from "lucide-react";
 import "./ConversationSidebar.css";
 
 interface Props {
@@ -139,7 +140,7 @@ export function ConversationSidebar({
                                     onClick={(e) => handleDelete(conv.conversation_id, e)}
                                     title="Delete conversation"
                                 >
-                                    ✕
+                                    <X size={14} />
                                 </button>
                             </div>
                         ))

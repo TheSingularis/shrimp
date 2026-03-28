@@ -224,6 +224,36 @@ export async function setCustomInstructions(custom_instructions: string): Promis
     if (!res.ok) throw new Error(`setCustomInstructions: ${res.status}`);
 }
 
+export async function getTheme(): Promise<string> {
+    const res = await fetch(`${BASE}/settings/theme`);
+    if (!res.ok) throw new Error(`getTheme: ${res.status}`);
+    return (await res.json()).theme;
+}
+
+export async function setTheme(theme: string): Promise<void> {
+    const res = await fetch(`${BASE}/settings/theme`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme }),
+    });
+    if (!res.ok) throw new Error(`setTheme: ${res.status}`);
+}
+
+export async function getLanguage(): Promise<string> {
+    const res = await fetch(`${BASE}/settings/language`);
+    if (!res.ok) throw new Error(`getLanguage: ${res.status}`);
+    return (await res.json()).language;
+}
+
+export async function setLanguage(language: string): Promise<void> {
+    const res = await fetch(`${BASE}/settings/language`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language }),
+    });
+    if (!res.ok) throw new Error(`setLanguage: ${res.status}`);
+}
+
 export async function generateScopeDescription(name: string): Promise<string> {
     const res = await fetch(`${BASE}/scopes/${name}/generate-description`, {
         method: "POST",

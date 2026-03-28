@@ -3,6 +3,8 @@ import { type Scope, getScopes, getModels, setModel, setScopes, deleteScope, get
 import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } from "../api"
 import { pullModel, deleteModel } from "../api";
 import { getCustomInstructions, setCustomInstructions, generateScopeDescription } from "../api";
+import { getTheme, setTheme, getLanguage, setLanguage } from "../api";
+import { X } from "lucide-react";
 import "./SettingsDrawer.css";
 
 const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname}:8000`;
@@ -73,6 +75,8 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [customInstructionsSaving, setCustomInstructionsSaving] = useState(false);
     const customInstructionsTimerRef = useRef<number | null>(null);
     const [generatingDescription, setGeneratingDescription] = useState<string | null>(null);
+    const [currentTheme, setCurrentTheme] = useState("blue-purple");
+    const [currentLanguage, setCurrentLanguage] = useState("English");
 
     useEffect(() => {
         if (!open) return;
@@ -84,6 +88,8 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         getScopes().then(setLocalScopes);
         getCtx().then(setCtxValue).catch(() => {});
         getCustomInstructions().then(setCustomInstructions).catch(() => {});
+        getTheme().then(setCurrentTheme).catch(() => {});
+        getLanguage().then(setCurrentLanguage).catch(() => {});
     }, [open]);
 
     async function handleCtxChange(value: number) {
@@ -109,6 +115,18 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             setCustomInstructionsSaving(false);
             customInstructionsTimerRef.current = null;
         }, 1000);
+    }
+
+    async function handleThemeChange(theme: string) {
+        setCurrentTheme(theme);
+        await setTheme(theme);
+        // Update the theme class on the html element
+        document.documentElement.className = `theme-${theme}`;
+    }
+
+    async function handleLanguageChange(language: string) {
+        setCurrentLanguage(language);
+        await setLanguage(language);
     }
 
     async function handleModelChange(model: string) {
@@ -335,8 +353,76 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             <div className={`settings-drawer ${open ? "open" : ""}`}>
                 <div className="drawer-header">
                     <span>Settings</span>
-                    <button className="close-btn" onClick={onClose}>✕</button>
+                    <button className="close-btn" onClick={onClose}>
+                        <X size={18} />
+                    </button>
                 </div>
+
+                <section className="drawer-section">
+                    <h2>THEME</h2>
+                    <div className="theme-pills">
+                        <button
+                            className={`theme-pill ${currentTheme === "shrimp" ? "active" : ""}`}
+                            onClick={() => handleThemeChange("shrimp")}
+                        >
+                            Shrimp
+                        </button>
+                        <button
+                            className={`theme-pill ${currentTheme === "blue-purple" ? "active" : ""}`}
+                            onClick={() => handleThemeChange("blue-purple")}
+                        >
+                            Purple
+                        </button>
+                        <button
+                            className={`theme-pill ${currentTheme === "refined-blue" ? "active" : ""}`}
+                            onClick={() => handleThemeChange("refined-blue")}
+                        >
+                            Blue
+                        </button>
+                    </div>
+                </section>
+
+                <section className="drawer-section">
+                    <h2>LANGUAGE</h2>
+                    <div className="theme-pills">
+                        <button
+                            className={`theme-pill ${currentLanguage === "English" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("English")}
+                        >
+                            English
+                        </button>
+                        <button
+                            className={`theme-pill ${currentLanguage === "Spanish" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("Spanish")}
+                        >
+                            Spanish
+                        </button>
+                        <button
+                            className={`theme-pill ${currentLanguage === "French" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("French")}
+                        >
+                            French
+                        </button>
+                        <button
+                            className={`theme-pill ${currentLanguage === "German" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("German")}
+                        >
+                            German
+                        </button>
+                        <button
+                            className={`theme-pill ${currentLanguage === "Chinese" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("Chinese")}
+                        >
+                            Chinese
+                        </button>
+                        <button
+                            className={`theme-pill ${currentLanguage === "Japanese" ? "active" : ""}`}
+                            onClick={() => handleLanguageChange("Japanese")}
+                        >
+                            Japanese
+                        </button>
+                    </div>
+                </section>
 
                 <section className="drawer-section">
                     <h2>Model</h2>
@@ -357,7 +443,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                                     onClick={() => handleDeleteModel(m)}
                                     title="Remove model"
                                 >
-                                    ✕
+                                    <X size={16} />
                                 </button>
                             </div>
                         ))}

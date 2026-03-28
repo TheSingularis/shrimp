@@ -72,6 +72,14 @@ class CustomInstructionsUpdate(BaseModel):
     custom_instructions: str
 
 
+class ThemeUpdate(BaseModel):
+    theme: str
+
+
+class LanguageUpdate(BaseModel):
+    language: str
+
+
 class SaveConversationRequest(BaseModel):
     conversation_id: str | None = None
     title: str | None = None
@@ -266,6 +274,7 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
         "- `search_files(query, scopes)` - Semantic search across files\n"
         "- `propose_file_edit(scope, path, new_content, explanation)` - Propose file changes\n\n"
         "## Behavior\n"
+        "- **IMPORTANT: Always respond in English only.** Never use other languages in your responses.\n"
         "- For questions: Use search_files or read_file to find relevant information, then answer\n"
         "- For edits: Read the current file first, then propose changes with clear explanations\n"
         "- Be thorough: Call multiple tools if needed to gather complete context\n"
@@ -522,6 +531,10 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
 @app.post("/chat")
 async def chat(req: ChatRequest, request: Request):
+    # Prepend language instruction to user message
+    if config.UI_LANGUAGE and config.UI_LANGUAGE.strip():
+        req.message = f"**Respond in {config.UI_LANGUAGE} only.** {req.message}"
+
     # Feature flag: use tool calling if enabled
     if config.USE_TOOL_CALLING:
         log.info("chat: routing to tool calling implementation")
@@ -550,6 +563,7 @@ async def chat(req: ChatRequest, request: Request):
 
     intent_prompt = (
         "You are an intent detection assistant. Classify the user's request into one of FIVE categories.\n\n"
+        "IMPORTANT: Respond in English only.\n\n"
         f"IMPORTANT: The user has these file scopes active: {scope_names_str}\n"
         f"If they mention any of these scope names (like 'tell me about the {scope_names[0]} project'), they're asking about THEIR files → use 'question' mode.\n"
         "When in doubt about whether they're asking about THEIR files vs general knowledge, default to 'question' mode.\n\n"
@@ -646,6 +660,7 @@ async def chat(req: ChatRequest, request: Request):
 
         general_system_prompt = (
             "You are SHRIMP*, a helpful AI assistant.\n\n"
+            "**IMPORTANT: Always respond in English only.** Never use other languages.\n\n"
             "## CRITICAL RULE: DO NOT HALLUCINATE\n"
             "**THIS IS THE MOST IMPORTANT RULE**: If you don't have reliable information about something, "
             "you MUST say \"I don't know\" or \"I'm not familiar with that.\"\n\n"
@@ -894,7 +909,8 @@ async def chat(req: ChatRequest, request: Request):
             log.info("chat: no section match found, editing full file")
 
         edit_system_prompt = (
-            "You are a file editing assistant. You will be given a single section of "
+            "You are a file editing assistant. Respond in English only. "
+            "You will be given a single section of "
             "a file and an edit instruction. Return ONLY the updated section content. "
             "No explanation, no preamble, no other sections, no commentary. "
             "Preserve the header line exactly as-is. "
@@ -1019,7 +1035,8 @@ async def chat(req: ChatRequest, request: Request):
             file_list = file_list[:5]
 
         edit_system_prompt = (
-            "You are a file editing assistant. You will be given file content and an edit "
+            "You are a file editing assistant. Respond in English only. "
+            "You will be given file content and an edit "
             "instruction. Return ONLY the updated file content. "
             "No explanation, no preamble, no commentary. "
             "Do not wrap the content in markdown fences. "
@@ -1027,7 +1044,8 @@ async def chat(req: ChatRequest, request: Request):
         )
 
         critique_system_prompt = (
-            "You are a code review assistant. Review a proposed file edit and identify issues.\n\n"
+            "You are a code review assistant. Respond in English only. "
+            "Review a proposed file edit and identify issues.\n\n"
             "Respond with JSON only:\n"
             '{"has_issues": true/false, "issues": ["issue1", "issue2"], "suggestions": ["suggestion1"]}\n\n'
             "Common issues to check:\n"
@@ -1783,3 +1801,56 @@ async def set_custom_instructions(update: CustomInstructionsUpdate):
         config_path.write_text(current)
         log.info("settings: CUSTOM_INSTRUCTIONS updated")
         return {"custom_instructions": config.CUSTOM_INSTRUCTIONS}
+
+
+@app.get("/settings/theme")
+async def get_theme():
+    return {"theme": config.UI_THEME}
+
+
+@app.post("/settings/theme")
+async def set_theme(update: ThemeUpdate):
+    # Validate theme value
+    valid_themes = ["blue-purple", "shrimp", "refined-blue"]
+    if update.theme not in valid_themes:
+        raise HTTPException(status_code=400, detail=f"Invalid theme. Must be one of: {valid_themes}")
+
+    config.UI_THEME = update.theme
+    # persist to config.py
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    if _re.search(r'UI_THEME: str = ".*?"', current):
+        current = _re.sub(
+            r'UI_THEME: str = ".*?"',
+            f'UI_THEME: str = "{update.theme}"',
+            current
+        )
+        config_path.write_text(current)
+        log.info("settings: UI_THEME set to %s", update.theme)
+        return {"theme": config.UI_THEME}
+
+
+@app.get("/settings/language")
+async def get_language():
+    return {"language": config.UI_LANGUAGE}
+
+
+@app.post("/settings/language")
+async def set_language(update: LanguageUpdate):
+    config.UI_LANGUAGE = update.language
+    # persist to config.py
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    # Escape special characters in language name
+    escaped_lang = update.language.replace("\\", "\\\\").replace('"', '\\"')
+    if _re.search(r'UI_LANGUAGE: str = ".*?"', current):
+        current = _re.sub(
+            r'UI_LANGUAGE: str = ".*?"',
+            f'UI_LANGUAGE: str = "{escaped_lang}"',
+            current
+        )
+        config_path.write_text(current)
+        log.info("settings: UI_LANGUAGE set to %s", update.language)
+        return {"language": config.UI_LANGUAGE}

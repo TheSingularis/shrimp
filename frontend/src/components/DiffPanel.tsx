@@ -1,4 +1,5 @@
 import { DiffEditor } from "@monaco-editor/react";
+import { X, Check, Edit3 } from "lucide-react";
 import "./DiffPanel.css";
 
 interface Props {
@@ -37,7 +38,7 @@ export function DiffPanel({
         <div className="diff-panel">
             <div className="diff-panel-header">
                 <span className="diff-panel-title">
-                    <span className="diff-panel-icon">✎</span>
+                    <Edit3 size={16} className="diff-panel-icon" />
                     {filename}
                 </span>
                 <span className="diff-panel-path">{path}</span>
@@ -61,9 +62,13 @@ export function DiffPanel({
                             </>
                     )}
                     {applied && (
-                        <span className="diff-panel-applied">✓ applied</span>
+                        <span className="diff-panel-applied">
+                            <Check size={14} /> applied
+                        </span>
                     )}
-                    <button className="close-btn" onClick={onClose}>✕</button>
+                    <button className="close-btn" onClick={onClose}>
+                        <X size={18} />
+                    </button>
                 </div>
             </div>
             <div className="diff-panel-editor">

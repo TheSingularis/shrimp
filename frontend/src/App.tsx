@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { getScopes, type Scope, type Message, getConversation, saveConversation } from "./api";
+import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ScopeSelector } from "./components/ScopeSelector";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { ConversationSidebar } from "./components/ConversationSidebar";
 import { ConversationTabs } from "./components/ConversationTabs";
 import { useVisualViewport } from "./hooks/useVisualViewport";
+import { Settings } from "lucide-react";
 import "./index.css";
 
 interface ConversationTab {
@@ -46,6 +47,14 @@ export default function App() {
     useVisualViewport(appContainerRef);
 
     useEffect(() => {
+        // Load theme
+        getTheme().then((theme) => {
+            document.documentElement.className = `theme-${theme}`;
+        }).catch(() => {
+            // Default to blue-purple if theme loading fails
+            document.documentElement.className = "theme-blue-purple";
+        });
+
         getScopes().then((data) => {
             setScopes(data);
             // Create initial tab with all enabled scopes
@@ -261,9 +270,16 @@ export default function App() {
             {/* Header - Modern Design */}
             <header className="shrink-0 flex items-center pl-4 md:pl-6 pr-2 md:pr-3 py-3 border-b border-shrimp-border bg-shrimp-surface/50 backdrop-blur-sm">
                 <div className="flex items-center gap-4 flex-1">
-                    <h1 className="text-lg font-bold tracking-tight">
-                        SHRIMP<span className="text-shrimp-accent">*</span>
-                    </h1>
+                    <div className="flex items-center gap-2">
+                        <img
+                            src="/icons/shrimp(1).png"
+                            alt="SHRIMP"
+                            className="w-8 h-8"
+                        />
+                        <h1 className="text-lg font-bold tracking-tight">
+                            SHRIMP<span style={{ color: 'var(--theme-primary)' }}>*</span>
+                        </h1>
+                    </div>
                     <ScopeSelector
                         scopes={scopes}
                         selected={activeTab?.selectedScopes ?? []}
@@ -272,8 +288,9 @@ export default function App() {
                 </div>
                 <button
                     onClick={() => setSettingsOpen(true)}
-                    className="w-9 h-9 rounded-lg hover:bg-shrimp-surface transition-colors flex items-center justify-center text-xl shrink-0"
+                    className="w-9 h-9 rounded-lg hover:bg-shrimp-surface transition-colors flex items-center justify-center shrink-0 text-2xl font-semibold"
                     title="Settings"
+                    style={{ color: 'var(--color-text-muted)' }}
                 >
                     ⚙
                 </button>
