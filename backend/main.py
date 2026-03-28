@@ -299,6 +299,7 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
     async def stream():
         nonlocal iteration, messages
         had_content_before_tools = False  # Track if we need line break before next content
+        stage_history = []  # Track all stages and tool calls for persistent markers
 
         while iteration < max_iterations:
             iteration += 1
@@ -376,6 +377,11 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
                     # Stream content to user if present (and not just tool calls)
                     if content and not content.strip().startswith('{"name":'):
+                        # Track content output in stage history
+                        stage_history.append({
+                            "type": "content",
+                            "stage": "output"
+                        })
                         # Add line break if resuming after tool execution
                         if had_content_before_tools:
                             yield "\n\n"
@@ -404,6 +410,15 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         yield "__STAGE__planning"
                     else:
                         yield "__STAGE__thinking"
+
+                    # Track tool execution in stage history
+                    tool_summary = {
+                        "type": "tools",
+                        "stage": first_tool,
+                        "count": len(tool_calls),
+                        "tools": [t.get("function", {}).get("name") for t in tool_calls]
+                    }
+                    stage_history.append(tool_summary)
 
                     # Execute tools
                     for tool_call in tool_calls:
@@ -478,6 +493,12 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                 sentinel = json.dumps({"files": file_diffs})
                 yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
                 log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
+
+        # Emit stage history for persistent markers
+        if stage_history:
+            sentinel = json.dumps({"stages": stage_history})
+            yield f"\n\n__STAGE_HISTORY__{sentinel}"
+            log.info(f"chat_with_tools: emitted stage history with {len(stage_history)} entries")
 
         yield "__STAGE__done"
         log.info(f"chat_with_tools: completed in {iteration} iterations")
