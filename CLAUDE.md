@@ -37,7 +37,7 @@ tail -f .ollama/frontend.log         # Vite
 
 ### Frontend (`frontend/src/`)
 - `api.ts` — All backend communication. **Components never call `fetch` directly.**
-- `components/ChatPanel.tsx` — Streaming chat UI. Parses `__SHRIMP_EDIT__` and `__SHRIMP_MULTI_EDIT__` sentinels. Handles stage indicators.
+- `components/ChatPanel.tsx` — Streaming chat UI. Parses `__SHRIMP_EDIT__`, `__SHRIMP_MULTI_EDIT__`, and `__STAGE_HISTORY__` sentinels. Handles live stage indicators during streaming and persistent stage markers after completion.
 - `components/DiffPanel.tsx` — Monaco diff editor for single-file edit review.
 - `components/MultiFileDiffPanel.tsx` — Tabbed Monaco diff viewer for multi-file edits with per-file approve/reject.
 - `components/SettingsDrawer.tsx` — Model/scope management, index controls.
@@ -60,12 +60,17 @@ tail -f .ollama/frontend.log         # Vite
 7. Stream response with `__SHRIMP_EDIT__` sentinel
 8. DiffPanel shows proposed change
 
-**Multi-File Edit Mode** (NEW):
+**Multi-File Edit Mode**:
 5. Load all file contents (up to 5 files)
 6. For each file: generate edit sequentially (N LLM calls)
 7. Stream response with stage tokens + `__SHRIMP_MULTI_EDIT__` sentinel
 8. MultiFileDiffPanel shows tabbed diffs with approve/reject controls
 9. User approves subset → batch apply
+
+**Stage Indicators & Markers**:
+- **Live indicators**: During streaming, `__STAGE__<name>` tokens update the spinner label (e.g., "Searching...", "Reading file..."). These show what's happening right now.
+- **Persistent markers**: After response completes, `__STAGE_HISTORY__` sentinel contains the full execution trace. Frontend renders greyed-out markers like "[Searched files • 3 calls]" in conversation history.
+- **Implementation**: Backend tracks all content output and tool executions in `stage_history` list. Frontend parses `__STAGE_HISTORY__` sentinel and interleaves markers between content chunks.
 
 ## Key Conventions
 

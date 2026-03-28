@@ -106,6 +106,16 @@ button:disabled {
     line-height: 1.7;
 }
 
+/* stage markers - greyed out persistent indicators */
+.stage-marker {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+    margin: 0.75rem 0;
+    padding-left: 1rem;
+    opacity: 0.6;
+}
+
 .content p {
     margin: 0 0 0.75rem;
 }

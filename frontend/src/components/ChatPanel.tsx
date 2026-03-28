@@ -83,10 +83,18 @@ interface MultiFileEditSentinel {
 
 type Sentinel = FileEditSentinel | FileEditAmbiguousSentinel | MultiFileEditSentinel;
 
+interface StageMarker {
+    type: "content" | "tools";
+    stage: string;
+    count?: number;
+    tools?: string[];
+}
+
 interface AssistantMessage extends Message {
     role: "assistant";
     sentinel?: Sentinel;
     prose?: string;
+    stageHistory?: StageMarker[];
 }
 
 type ChatMessage = Message | AssistantMessage;
@@ -103,13 +111,29 @@ interface PendingEdit {
 
 const SENTINEL_PREFIX = "__SHRIMP_EDIT__";
 const MULTI_SENTINEL_PREFIX = "__SHRIMP_MULTI_EDIT__";
+const STAGE_HISTORY_PREFIX = "__STAGE_HISTORY__";
 
 function parseSentinel(content: string): {
     display: string;
     sentinel: Sentinel | null;
+    stageHistory: StageMarker[] | null;
 } {
-    // Check for multi-file sentinel first
-    let idx = content.indexOf(MULTI_SENTINEL_PREFIX);
+    // Check for stage history first
+    let stageHistory: StageMarker[] | null = null;
+    let idx = content.indexOf(STAGE_HISTORY_PREFIX);
+    if (idx !== -1) {
+        const raw = content.slice(idx + STAGE_HISTORY_PREFIX.length);
+        try {
+            const parsed = JSON.parse(raw);
+            stageHistory = parsed.stages;
+            content = content.slice(0, idx).trim();
+        } catch {
+            // Ignore parsing errors
+        }
+    }
+
+    // Check for multi-file sentinel
+    idx = content.indexOf(MULTI_SENTINEL_PREFIX);
     let prefix = MULTI_SENTINEL_PREFIX;
     let isSingleFile = false;
 
@@ -120,7 +144,7 @@ function parseSentinel(content: string): {
         isSingleFile = true;
     }
 
-    if (idx === -1) return { display: content, sentinel: null };
+    if (idx === -1) return { display: content, sentinel: null, stageHistory };
 
     const display = content.slice(0, idx).trim();
     const raw = content.slice(idx + prefix.length);
@@ -145,9 +169,9 @@ function parseSentinel(content: string): {
         const prose = editMarkerIdx !== -1
             ? display.slice(0, editMarkerIdx).trim()
             : display;
-        return { display: prose, sentinel };
+        return { display: prose, sentinel, stageHistory };
     } catch {
-        return { display, sentinel: null };
+        return { display, sentinel: null, stageHistory };
     }
 }
 
@@ -186,6 +210,26 @@ function getStageLabel(stage: string): string {
         }
     }
     return STAGE_LABELS[stage] ?? "Processing…";
+}
+
+// ── stage marker formatting ────────────────────────────────────────────────
+
+function formatStageMarker(marker: StageMarker): string {
+    if (marker.type !== "tools") return "";
+
+    const baseLabel: Record<string, string> = {
+        "read_file": "Read files",
+        "search_files": "Searched files",
+        "list_scope": "Listed files",
+        "propose_file_edit": "Planned changes"
+    };
+
+    const label = baseLabel[marker.stage] || "Processed";
+
+    if (marker.count && marker.count > 1) {
+        return `${label} • ${marker.count} calls`;
+    }
+    return label;
 }
 
 // ── markdown completion helper ─────────────────────────────────────────────
@@ -402,13 +446,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             return;
         }
 
-        const { display, sentinel } = parseSentinel(fullResponse);
+        const { display, sentinel, stageHistory } = parseSentinel(fullResponse);
 
         const assistantMsg: AssistantMessage = {
             role: "assistant",
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
+            stageHistory: stageHistory ?? undefined,
         };
 
         onMessagesChange([...newHistory, assistantMsg]);
@@ -650,13 +695,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
             return;
         }
 
-        const { display, sentinel } = parseSentinel(fullResponse);
+        const { display, sentinel, stageHistory } = parseSentinel(fullResponse);
 
         const assistantMsg: AssistantMessage = {
             role: "assistant",
             content: display,
             sentinel: sentinel ?? undefined,
             prose: display,
+            stageHistory: stageHistory ?? undefined,
         };
 
         onMessagesChange([...historyWithoutLastAssistant, assistantMsg]);
@@ -796,6 +842,76 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                     </div>
                 </div>
             );
+        }
+
+        // Render content with stage markers interleaved
+        const assistantMsg = msg as AssistantMessage;
+        if (assistantMsg.stageHistory && assistantMsg.stageHistory.length > 0) {
+            // Try to interleave markers between content chunks
+            // Strategy: alternate between content markers and tool markers
+            const elements: JSX.Element[] = [];
+            let contentChunks = content.split(/\n\n+/).filter(s => s.trim());
+
+            // If we only have one content chunk, show all markers at the end
+            if (contentChunks.length === 1) {
+                elements.push(
+                    <ReactMarkdown key="content-0" remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {content}
+                    </ReactMarkdown>
+                );
+
+                // Add all tool markers
+                assistantMsg.stageHistory
+                    .filter(marker => marker.type === "tools")
+                    .forEach((marker, idx) => {
+                        const label = formatStageMarker(marker);
+                        if (label) {
+                            elements.push(
+                                <div key={`marker-${idx}`} className="stage-marker">
+                                    [{label}]
+                                </div>
+                            );
+                        }
+                    });
+            } else {
+                // Multiple chunks: try to interleave
+                let contentIndex = 0;
+                let toolMarkerIndex = 0;
+                const toolMarkers = assistantMsg.stageHistory.filter(m => m.type === "tools");
+
+                for (const marker of assistantMsg.stageHistory) {
+                    if (marker.type === "content" && contentIndex < contentChunks.length) {
+                        elements.push(
+                            <ReactMarkdown key={`content-${contentIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                                {contentChunks[contentIndex]}
+                            </ReactMarkdown>
+                        );
+                        contentIndex++;
+                    } else if (marker.type === "tools") {
+                        const label = formatStageMarker(marker);
+                        if (label) {
+                            elements.push(
+                                <div key={`marker-${toolMarkerIndex}`} className="stage-marker">
+                                    [{label}]
+                                </div>
+                            );
+                        }
+                        toolMarkerIndex++;
+                    }
+                }
+
+                // Add any remaining content chunks
+                while (contentIndex < contentChunks.length) {
+                    elements.push(
+                        <ReactMarkdown key={`content-${contentIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {contentChunks[contentIndex]}
+                        </ReactMarkdown>
+                    );
+                    contentIndex++;
+                }
+            }
+
+            return <div className="content">{elements}</div>;
         }
 
         return (
