@@ -65,6 +65,8 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     const [pulling, setPulling] = useState(false);
     const [pullStatus, setPullStatus] = useState<string | null>(null);
     const [pullPercent, setPullPercent] = useState<number | null>(null);
+    const [pullError, setPullError] = useState<string | null>(null);
+    const [modelError, setModelError] = useState<string | null>(null);
     const [ctxValue, setCtxValue] = useState(8192);
     const [ctxSaving, setCtxSaving] = useState(false);
     const [customInstructions, setCustomInstructions] = useState("");
@@ -110,8 +112,18 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
     }
 
     async function handleModelChange(model: string) {
-        setActiveModel(model);
-        await setModel(model);
+        setModelError(null);
+        try {
+            await setModel(model);
+            setActiveModel(model);
+        } catch (error) {
+            console.error("Failed to set model:", error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            setModelError(`Failed to set model: ${errorMsg}`);
+            // Reload to get current state from backend
+            const data = await getModels();
+            setActiveModel(data.active);
+        }
     }
 
     async function handleToggleScope(name: string) {
@@ -287,6 +299,7 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
         setPulling(true);
         setPullStatus("starting...");
         setPullPercent(null);
+        setPullError(null);
         try {
             await pullModel(pullInput.trim(), (status, percent) => {
                 setPullStatus(status);
@@ -297,8 +310,12 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
             setActiveModel(data.active);
             setPullInput("");
             setPullStatus("done");
-        } catch {
-            setPullStatus("error pulling model");
+            setPullError(null);
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : "Unknown error";
+            setPullError(`Failed to pull model: ${errorMsg}`);
+            setPullStatus(null);
+            setPullInput(""); // Clear input on error
         } finally {
             setPulling(false);
             setPullPercent(null);
@@ -346,11 +363,20 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         ))}
                     </div>
 
+                    {modelError && (
+                        <div style={{ marginTop: "0.4rem", color: "#ef4444", fontSize: "0.875rem" }}>
+                            {modelError}
+                        </div>
+                    )}
+
                     <div className="add-scope" style={{ marginTop: "0.75rem" }}>
                         <input
                             placeholder="e.g. qwen2.5-coder:7b"
                             value={pullInput}
-                            onChange={(e) => setPullInput(e.target.value)}
+                            onChange={(e) => {
+                                setPullInput(e.target.value);
+                                setPullError(null); // Clear error when typing
+                            }}
                             onKeyDown={(e) => e.key === "Enter" && handlePullModel()}
                             disabled={pulling}
                         />
@@ -359,7 +385,13 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         </button>
                     </div>
 
-                    {pullStatus && (
+                    {pullError && (
+                        <div style={{ marginTop: "0.4rem", color: "#ef4444", fontSize: "0.875rem" }}>
+                            {pullError}
+                        </div>
+                    )}
+
+                    {pullStatus && !pullError && (
                         <div className="scope-status" style={{ marginTop: "0.4rem" }}>
                             {pullStatus}
                             {pullPercent !== null && ` - ${pullPercent}%`}

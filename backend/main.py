@@ -14,6 +14,8 @@ import threading
 import config
 import rag
 import conversations
+import tool_executor
+import file_ops
 
 logging.basicConfig(
     level=logging.INFO,
@@ -230,9 +232,243 @@ async def debug_prompt(req: ChatRequest):
 
 # ── routes: chat ──────────────────────────────────────────────────────────────
 
+async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingResponse:
+    """
+    Tool calling implementation using Ollama's native function calling API.
+
+    Replaces the prompt-chaining architecture with an agentic loop:
+    1. Build system prompt with available scopes
+    2. Call Ollama with tool definitions
+    3. Execute tools as requested by LLM
+    4. Feed results back and repeat until done
+    5. Emit sentinels if edits were proposed
+
+    Feature flag: config.USE_TOOL_CALLING must be True
+    """
+    enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
+    active = [s for s in enabled if s["name"] in req.scopes] if req.scopes else enabled
+
+    if not active:
+        raise HTTPException(status_code=400, detail="No active scopes selected")
+
+    scope_names = [s["name"] for s in active]
+    log.info("chat_with_tools: scopes=%s  message=%r", scope_names, req.message[:80])
+
+    # Build system prompt
+    scope_names_str = ", ".join(f"'{s}'" for s in scope_names)
+    system_prompt = (
+        "You are SHRIMP*, a local AI assistant with access to the user's files via tools.\n\n"
+        f"## Available Scopes\n"
+        f"You have access to these file scopes: {scope_names_str}\n"
+        f"Use the tools provided to:\n"
+        "- `list_scope(scope)` - See what files are in a scope\n"
+        "- `read_file(scope, path)` - Read a specific file\n"
+        "- `search_files(query, scopes)` - Semantic search across files\n"
+        "- `propose_file_edit(scope, path, new_content, explanation)` - Propose file changes\n\n"
+        "## Behavior\n"
+        "- For questions: Use search_files or read_file to find relevant information, then answer\n"
+        "- For edits: Read the current file first, then propose changes with clear explanations\n"
+        "- Be thorough: Call multiple tools if needed to gather complete context\n"
+        "- Be efficient: Don't repeat tool calls unnecessarily\n\n"
+        "## Formatting\n"
+        "- Use markdown: headers, lists, code blocks, etc.\n"
+        "- Never wrap your response in a markdown code fence\n"
+        "- When showing code, use fenced code blocks with language tags\n"
+    )
+
+    # Inject custom instructions if configured
+    if config.CUSTOM_INSTRUCTIONS.strip():
+        system_prompt += f"\n\n## Custom Instructions\n{config.CUSTOM_INSTRUCTIONS}"
+
+    # Build messages
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *req.history,
+        {"role": "user", "content": req.message},
+    ]
+
+    # Initialize tool executor
+    executor = tool_executor.ToolExecutor()
+    tools = tool_executor.build_tool_definitions()
+
+    # Agentic loop state
+    iteration = 0
+    max_iterations = config.TOOL_CALLING_MAX_ITERATIONS
+    start_time = asyncio.get_event_loop().time()
+
+    async def stream():
+        nonlocal iteration, messages
+
+        yield "__STAGE__thinking"
+
+        while iteration < max_iterations:
+            iteration += 1
+
+            # Check timeout
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > config.TOOL_CALLING_TIMEOUT_SECONDS:
+                log.warning(f"chat_with_tools: timeout after {elapsed:.1f}s")
+                yield "\n\n[Timeout: operation took too long]"
+                break
+
+            log.info(f"chat_with_tools: iteration {iteration}/{max_iterations}")
+
+            try:
+                # Call Ollama with tools
+                async with httpx.AsyncClient(timeout=None) as client:
+                    resp = await client.post(
+                        f"{config.OLLAMA_HOST}/api/chat",
+                        json={
+                            "model": config.OLLAMA_MODEL,
+                            "messages": messages,
+                            "tools": tools,
+                            "stream": False,  # Tool calling requires non-streaming for now
+                            "options": {"num_ctx": config.NUM_CTX},
+                        },
+                    )
+
+                    if resp.status_code != 200:
+                        log.error(f"chat_with_tools: Ollama error {resp.status_code}: {resp.text}")
+                        yield f"\n\n[Error: Ollama returned {resp.status_code}]"
+                        break
+
+                    data = resp.json()
+                    message = data.get("message", {})
+                    content = message.get("content", "")
+                    tool_calls = message.get("tool_calls", [])
+
+                    # Fallback: Parse tool calls from content if model outputs JSON text
+                    # Some models (like llama3.1:8b) output tool calls as text instead
+                    # of using the structured tool_calls field
+                    if not tool_calls and content and '{"name":' in content:
+                        import re
+                        # Look for JSON objects with "name" and "parameters" fields
+                        # Match both single-line and multi-line JSON
+                        json_pattern = r'\{"name":\s*"([^"]+)",\s*"parameters":\s*(\{[^\}]*\})\}'
+                        matches = re.findall(json_pattern, content, re.DOTALL)
+                        if matches:
+                            log.info(f"chat_with_tools: parsing {len(matches)} tool calls from content")
+                            tool_calls = []
+                            for tool_name, params_str in matches:
+                                try:
+                                    # Parse parameters (handle both quoted and unquoted keys)
+                                    # Fix common JSON issues: unquoted keys, single quotes
+                                    params_str = params_str.replace("'", '"')
+                                    params = json.loads(params_str)
+                                    tool_calls.append({
+                                        "function": {
+                                            "name": tool_name,
+                                            "arguments": params
+                                        }
+                                    })
+                                    log.info(f"chat_with_tools: parsed tool call - {tool_name}({params})")
+                                except json.JSONDecodeError as e:
+                                    log.warning(f"Failed to parse tool call parameters: {params_str} - {e}")
+
+                            # Don't stream content that's just tool call JSON
+                            if tool_calls:
+                                content = ""
+
+                    # Append assistant message to history
+                    messages.append(message)
+
+                    # Stream content to user if present (and not just tool calls)
+                    if content and not content.strip().startswith('{"name":'):
+                        yield content
+
+                    # Check if we're done (no tool calls)
+                    if not tool_calls:
+                        log.info("chat_with_tools: no tool calls - done")
+                        break
+
+                    # Execute tools
+                    for tool_call in tool_calls:
+                        func = tool_call.get("function", {})
+                        tool_name = func.get("name")
+                        arguments = func.get("arguments", {})
+
+                        log.info(f"chat_with_tools: executing {tool_name}")
+
+                        # Execute tool
+                        try:
+                            result = executor.execute(tool_name, arguments)
+                        except Exception as e:
+                            log.exception(f"chat_with_tools: tool execution failed")
+                            result = f"Error: {str(e)}"
+
+                        # Append tool result to messages
+                        messages.append({
+                            "role": "tool",
+                            "content": result
+                        })
+
+            except Exception as e:
+                log.exception("chat_with_tools: iteration failed")
+                yield f"\n\n[Error: {str(e)}]"
+                break
+
+        # Check if max iterations reached
+        if iteration >= max_iterations:
+            log.warning("chat_with_tools: max iterations reached")
+            yield "\n\n[Max iterations reached]"
+
+        # Emit sentinels if edits were proposed
+        if executor.has_proposed_edits():
+            edits = executor.get_proposed_edits()
+
+            if len(edits) == 1:
+                # Single file edit
+                edit = edits[0]
+
+                # Read original content for diff
+                try:
+                    original = rag.read_file_from_scope(edit["scope"], edit["path"])
+                except:
+                    original = ""
+
+                sentinel = json.dumps({
+                    "scope": edit["scope"],
+                    "path": edit["path"],
+                    "old": original,
+                    "new": edit["new_content"],
+                })
+                yield f"\n\n__SHRIMP_EDIT__{sentinel}"
+                log.info(f"chat_with_tools: emitted single edit sentinel for {edit['scope']}/{edit['path']}")
+
+            else:
+                # Multi-file edit
+                file_diffs = []
+                for edit in edits:
+                    try:
+                        original = rag.read_file_from_scope(edit["scope"], edit["path"])
+                    except:
+                        original = ""
+
+                    file_diffs.append({
+                        "scope": edit["scope"],
+                        "path": edit["path"],
+                        "old": original,
+                        "new": edit["new_content"],
+                    })
+
+                sentinel = json.dumps({"files": file_diffs})
+                yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
+                log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
+
+        yield "__STAGE__done"
+        log.info(f"chat_with_tools: completed in {iteration} iterations")
+
+    return StreamingResponse(stream(), media_type="text/plain")
+
 
 @app.post("/chat")
 async def chat(req: ChatRequest, request: Request):
+    # Feature flag: use tool calling if enabled
+    if config.USE_TOOL_CALLING:
+        log.info("chat: routing to tool calling implementation")
+        return await chat_with_tools(req, request)
+
+    # Original prompt-chaining implementation (fallback)
     enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
     active = [s for s in enabled if s["name"]
               in req.scopes] if req.scopes else enabled
@@ -1223,19 +1459,51 @@ async def get_models():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{config.OLLAMA_HOST}/api/tags")
         data = resp.json()
+        # Filter out embedding models (they're not for chat)
+        chat_models = [
+            m["name"] for m in data.get("models", [])
+            if "embed" not in m["name"].lower()  # Exclude nomic-embed-text, etc.
+        ]
         return {
-            "models": [m["name"] for m in data.get("models", [])],
+            "models": chat_models,
             "active": config.OLLAMA_MODEL,
         }
 
 
 @app.post("/settings/model")
 async def set_model(update: ModelUpdate):
+    # Validate model exists in Ollama before setting it
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{config.OLLAMA_HOST}/api/tags")
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Cannot connect to Ollama. Make sure it's running."
+                )
+
+            data = resp.json()
+            available_models = [m["name"] for m in data.get("models", [])]
+
+            # Check if requested model exists
+            if update.model not in available_models:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Model '{update.model}' not found. Available models: {', '.join(available_models[:5])}. Pull it first with: ollama pull {update.model}"
+                )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot connect to Ollama: {str(e)}"
+        )
+
+    # Model exists, proceed with update
     config.OLLAMA_MODEL = update.model
     rag.Settings.llm = __import__('llama_index.llms.ollama', fromlist=['Ollama']).Ollama(
         model=update.model, request_timeout=120.0
     )
     write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
+    log.info(f"Model updated to: {update.model}")
     return {"active": config.OLLAMA_MODEL}
 
 
@@ -1265,6 +1533,24 @@ async def delete_model(model: str):
             content=json.dumps({"name": model}),
             headers={"Content-Type": "application/json"}
         )
+
+    # If deleted model was the active one, switch to another available model
+    if config.OLLAMA_MODEL == model:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{config.OLLAMA_HOST}/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                available = [m["name"] for m in data.get("models", [])
+                           if not m["name"].startswith("nomic-embed")]  # Exclude embed models
+                if available:
+                    new_model = available[0]
+                    config.OLLAMA_MODEL = new_model
+                    rag.Settings.llm = __import__('llama_index.llms.ollama', fromlist=['Ollama']).Ollama(
+                        model=new_model, request_timeout=120.0
+                    )
+                    write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
+                    log.info(f"Active model was deleted, switched to: {new_model}")
+
     return {"ok": True}
 
 
@@ -1367,27 +1653,17 @@ async def read_file(scope: str, path: str):
 @app.post("/file/apply")
 async def apply_edit(req: ApplyEditRequest):
     try:
-        root = Path(next(
-            (s["path"]
-             for s in config.WATCHED_DIRS if s["name"] == req.scope), ""
-        )).expanduser().resolve()
+        # Use secure file write operation
+        file_ops.write_accept(
+            scope=req.scope,
+            path=req.path,
+            content=req.content,
+            create_backup=True
+        )
 
-        if not root:
-            raise HTTPException(
-                status_code=404, detail=f"Scope '{req.scope}' not found")
-
-        target = (root / req.path).resolve()
-
-        if not str(target).startswith(str(root)):
-            raise HTTPException(
-                status_code=403, detail="Path escapes scope root")
-
-        # Create parent directories if they don't exist
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        target.write_text(req.content, encoding="utf-8")
         log.info("apply_edit: wrote %s / %s", req.scope, req.path)
 
+        # Rebuild structural map for scope
         scope = next(
             (s for s in config.WATCHED_DIRS if s["name"] == req.scope), None)
         if scope:
@@ -1396,9 +1672,12 @@ async def apply_edit(req: ApplyEditRequest):
             )
 
         return {"scope": req.scope, "path": req.path, "status": "applied"}
-    except HTTPException:
-        raise
+    except file_ops.FileOperationError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        log.exception("apply_edit: unexpected error")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ── routes: ctx ────────────────────────────────────────────────
