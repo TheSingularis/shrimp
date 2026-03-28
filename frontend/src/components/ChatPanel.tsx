@@ -249,8 +249,29 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
     const stageBufferRef = useRef<string>("");
+    const lastStageChangeRef = useRef<{ stage: string; timestamp: number }>({ stage: "", timestamp: 0 });
     const spinner = cliSpinners.bouncingBar;
     const [spinnerFrame, setSpinnerFrame] = useState(0);
+
+    // Helper to update stage with minimum duration for important stages
+    const updateStageWithMinDuration = (newStage: string) => {
+        const now = Date.now();
+        const { stage: currentStage, timestamp: lastChange } = lastStageChangeRef.current;
+        const timeSinceChange = now - lastChange;
+        const minDuration = 500; // 500ms
+
+        // Important stages that should be visible for at least minDuration
+        const stickyStages = ["reading", "searching", "finding", "planning"];
+
+        // If current stage is sticky and hasn't been shown for min duration, ignore the change
+        if (stickyStages.includes(currentStage) && timeSinceChange < minDuration) {
+            return; // Ignore this stage change
+        }
+
+        // Apply the new stage
+        setStage(newStage);
+        lastStageChangeRef.current = { stage: newStage, timestamp: now };
+    };
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -333,7 +354,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
                     // Found a complete stage token - extract it
                     const key = stageMatch[1];
-                    setStage(key);
+                    updateStageWithMinDuration(key);
                     // Flush content before the stage token
                     const beforeStage = buffer.slice(0, stageMatch.index);
                     flushContent(beforeStage);
@@ -581,7 +602,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 while ((stageMatch = buffer.match(/__STAGE__(\w+)/))) {
                     // Found a complete stage token - extract it
                     const key = stageMatch[1];
-                    setStage(key);
+                    updateStageWithMinDuration(key);
                     // Flush content before the stage token
                     const beforeStage = buffer.slice(0, stageMatch.index);
                     flushContent(beforeStage);
