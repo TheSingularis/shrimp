@@ -68,9 +68,10 @@ tail -f .ollama/frontend.log         # Vite
 9. User approves subset → batch apply
 
 **Stage Indicators & Markers**:
-- **Live indicators**: During streaming, `__STAGE__<name>` tokens update the spinner label (e.g., "Searching...", "Reading file..."). These show what's happening right now.
-- **Incremental markers**: As each tool execution completes, backend emits `__STAGE_MARKER__<json>` tokens containing tool type, count, and details (file paths, queries, scopes). Frontend parses these during streaming and displays greyed-out markers like "[Read files: config.py, main.py]" in real-time.
-- **Implementation**: Backend tracks tool executions in `stage_history` list and emits individual markers after each tool batch completes. Frontend accumulates markers during streaming and renders them below message content.
+- **Live indicators**: During streaming, `__STAGE__<name>` tokens update the spinner label (e.g., "Searching...", "Reading file..."). Stripped from visible content.
+- **Inline markers**: Backend emits `__STAGE_MARKER__<json>` tokens after each tool execution, containing tool type, count, and details (file paths, queries, scopes). Tokens remain in content stream at their original positions.
+- **Real-time rendering**: Frontend parses `__STAGE_MARKER__` tokens during streaming and renders styled markers inline (e.g., "[Read files: config.py, main.py]"). Markers appear where they occurred in the conversation flow, not at the end.
+- **Implementation**: Backend emits markers immediately after tool execution. Frontend keeps markers in content, parses during both streaming and final render, splits content by markers, and interleaves styled marker divs between content chunks.
 
 ## Key Conventions
 
