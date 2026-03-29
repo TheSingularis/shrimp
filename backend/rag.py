@@ -76,14 +76,19 @@ def _hydrate_status() -> None:
     Populate index_status from existing ChromaDB collections on startup.
     Survives uvicorn --reload restarts where in-memory state is lost.
     """
-    scope_map = {s["name"]: s for s in config.WATCHED_DIRS}
+    # Create reverse mapping from sanitized collection name to original scope
+    sanitized_to_scope = {
+        sanitize_collection_name(s["name"]): s for s in config.WATCHED_DIRS
+    }
     try:
         for col in chroma_client.list_collections():
-            name = col.name
-            if name not in scope_map:
+            collection_name = col.name
+            if collection_name not in sanitized_to_scope:
                 continue
+            scope = sanitized_to_scope[collection_name]
+            name = scope["name"]
             count = col.count()
-            path = str(Path(scope_map[name]["path"]).expanduser())
+            path = str(Path(scope["path"]).expanduser())
             index_status[name] = {
                 "name": name,
                 "path": path,
@@ -161,6 +166,31 @@ def get_structural_summary(scope_names: list[str], max_files: int = 150) -> str:
     return "\n".join(lines)
 
 
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+
+def sanitize_collection_name(name: str) -> str:
+    """
+    Sanitize scope name for use as ChromaDB collection name.
+    ChromaDB requires collection names to:
+    - Start and end with alphanumeric characters
+    - Contain only alphanumerics, underscores, and hyphens
+    - Be between 3-63 characters
+    """
+    # Replace spaces and invalid characters with underscores
+    sanitized = name.replace(" ", "_")
+    # Remove any remaining invalid characters
+    sanitized = "".join(c if c.isalnum() or c in "_-" else "_" for c in sanitized)
+    # Ensure it starts with alphanumeric
+    sanitized = sanitized.lstrip("_-")
+    # Ensure it ends with alphanumeric
+    sanitized = sanitized.rstrip("_-")
+    # Ensure minimum length
+    if len(sanitized) < 3:
+        sanitized = f"scope_{sanitized}"
+    return sanitized
+
+
 # ── index management ───────────────────────────────────────────────────────────
 
 
@@ -187,21 +217,22 @@ def build_index(scope: dict, progress_callback=None) -> dict:
     Returns status info.
     """
     name = scope["name"]
+    collection_name = sanitize_collection_name(name)
     root = Path(scope["path"]).expanduser()
 
-    log.info("[%s] Starting index of %s", name, root)
+    log.info("[%s] Starting index of %s (collection: %s)", name, root, collection_name)
 
     if not root.exists():
         log.error("[%s] Directory not found: %s", name, root)
         raise FileNotFoundError(f"Directory not found: {root}")
 
     try:
-        chroma_client.delete_collection(name)
-        log.debug("[%s] Dropped existing Chroma collection", name)
+        chroma_client.delete_collection(collection_name)
+        log.debug("[%s] Dropped existing Chroma collection: %s", name, collection_name)
     except Exception:
         pass
 
-    collection = chroma_client.get_or_create_collection(name)
+    collection = chroma_client.get_or_create_collection(collection_name)
     vector_store = ChromaVectorStore(chroma_collection=collection)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
@@ -304,7 +335,8 @@ def query_scopes(question: str, scope_names: list[str]) -> str:
     context_chunks = []
 
     for name in scope_names:
-        index = get_index(name)
+        collection_name = sanitize_collection_name(name)
+        index = get_index(collection_name)
         if index is None:
             log.warning("[%s] Not indexed yet — skipping RAG retrieval", name)
             context_chunks.append(f"[scope '{name}' has not been indexed yet]")
