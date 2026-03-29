@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme } from "./api";
+import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ScopeSelector } from "./components/ScopeSelector";
 import { SettingsDrawer } from "./components/SettingsDrawer";
@@ -36,6 +36,7 @@ export default function App() {
     const [scopes, setScopes] = useState<Scope[]>([]);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [projects, setProjects] = useState<Project[]>([]);
 
     // Tab state
     const [tabs, setTabs] = useState<ConversationTab[]>([]);
@@ -53,6 +54,11 @@ export default function App() {
         }).catch(() => {
             // Default to blue-purple if theme loading fails
             document.documentElement.className = "theme-blue-purple";
+        });
+
+        // Load projects
+        listProjects().then((data) => {
+            setProjects(data.projects);
         });
 
         getScopes().then((data) => {
@@ -265,6 +271,8 @@ export default function App() {
                 currentConversationId={activeTab?.conversationId ?? null}
                 onSelectConversation={handleLoadConversation}
                 onNewConversation={handleNewConversation}
+                projects={projects}
+                onProjectsChange={setProjects}
             />
 
             {/* Header - Modern Design */}
