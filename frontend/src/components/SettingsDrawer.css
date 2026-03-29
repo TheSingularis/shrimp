@@ -105,28 +105,55 @@
     text-align: left;
 }
 
-/* Hardware recommendation badges */
+/* Hardware recommendation badges - colored dots that expand on hover */
 .hw-badge {
-    font-size: 0.65rem;
-    padding: 0.15rem 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    font-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    cursor: help;
+}
+
+.hw-badge:hover {
+    width: auto;
+    height: auto;
     border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    white-space: nowrap;
 }
 
 .hw-badge-green {
+    background: #10b981;
+}
+
+.hw-badge-green:hover {
     background: #10b981;
     color: #fff;
 }
 
 .hw-badge-yellow {
     background: #f59e0b;
+}
+
+.hw-badge-yellow:hover {
+    background: #f59e0b;
     color: #000;
 }
 
 .hw-badge-red {
+    background: #ef4444;
+}
+
+.hw-badge-red:hover {
     background: #ef4444;
     color: #fff;
 }
