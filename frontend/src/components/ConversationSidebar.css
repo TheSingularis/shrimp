@@ -81,8 +81,12 @@
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     border-radius: 6px;
-    cursor: pointer;
+    cursor: grab;
     transition: background 0.2s;
+}
+
+.conversation-item:active {
+    cursor: grabbing;
 }
 
 .conversation-item:hover {
@@ -158,4 +162,344 @@
     .conversation-sidebar {
         width: 100%;
     }
+}
+
+/* ── project sections ─────────────────────────────────────────────────────── */
+
+.project-section {
+    margin-bottom: 0.5rem;
+    transition: background 0.2s;
+}
+
+.project-section.drag-over {
+    background: var(--accent-dim);
+    border-radius: 6px;
+}
+
+.project-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0 4px 4px 0;
+    transition: background 0.2s;
+    font-size: 0.85rem;
+    position: relative;
+    border-left: 3px solid var(--accent);
+}
+
+.project-header:hover {
+    background: var(--bg);
+}
+
+.project-header-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    cursor: pointer;
+}
+
+.project-expand-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.project-folder-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.project-color-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.project-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.project-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.delete-project-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.project-header:hover .delete-project-btn {
+    opacity: 1;
+}
+
+.delete-project-btn:hover {
+    color: var(--text);
+}
+
+.project-conversations {
+    padding-left: 1.5rem;
+    margin-top: 0.25rem;
+}
+
+.empty-project {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.5rem 0.75rem;
+    font-style: italic;
+}
+
+.new-project-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    margin-top: 1rem;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+}
+
+.new-project-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ── context menu ─────────────────────────────────────────────────────────── */
+
+.context-menu {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 1000;
+    padding: 0.25rem;
+}
+
+.context-menu-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.context-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+
+.context-menu-item:hover {
+    background: var(--bg);
+}
+
+.project-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── project modal ────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 480px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s;
+}
+
+.modal-close-btn:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.modal-body label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.label-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.modal-body input[type="text"],
+.modal-body textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.625rem 0.875rem;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9375rem;
+    transition: border-color 0.2s;
+}
+
+.modal-body input[type="text"]:focus,
+.modal-body textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.modal-body textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.color-picker-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.color-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.5rem;
+}
+
+.color-option {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.color-option:hover {
+    transform: scale(1.1);
+}
+
+.color-option.selected {
+    border-color: var(--text);
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #000;
+}
+
+.btn-primary:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+.btn-secondary:hover {
+    background: var(--bg);
 }
