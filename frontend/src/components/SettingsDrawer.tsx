@@ -50,6 +50,46 @@ function ContextSlider({ value, onChange }: { value: number; onChange: (v: numbe
     );
 }
 
+// ── model size detection ───────────────────────────────────────────────────────
+
+function getModelSize(modelName: string): number | null {
+    // Extract parameter count from model name (e.g., "llama3.1:8b" -> 8)
+    const match = modelName.match(/:(\d+(?:\.\d+)?)b/i);
+    return match ? parseFloat(match[1]) : null;
+}
+
+function getHardwareRecommendation(modelName: string): {
+    badge: string;
+    color: string;
+    tip: string;
+} {
+    const size = getModelSize(modelName);
+
+    if (size === null) {
+        return { badge: "", color: "", tip: "" };
+    }
+
+    if (size <= 7) {
+        return {
+            badge: "CPU OK",
+            color: "green",
+            tip: "Works well on CPU (no GPU needed)"
+        };
+    } else if (size <= 14) {
+        return {
+            badge: "GPU Recommended",
+            color: "yellow",
+            tip: "Runs on CPU but GPU recommended for better speed"
+        };
+    } else {
+        return {
+            badge: "GPU Required",
+            color: "red",
+            tip: "Very slow on CPU, GPU strongly recommended"
+        };
+    }
+}
+
 // ── component ──────────────────────────────────────────────────────────────────
 
 export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
@@ -430,23 +470,32 @@ export function SettingsDrawer({ open, onClose, onScopesChanged }: Props) {
                         {models.length === 0 && (
                             <span className="scope-status unindexed">no models installed</span>
                         )}
-                        {models.map((m) => (
-                            <div key={m} className="model-row">
-                                <button
-                                    className={`model-pill ${m === activeModel ? "active" : ""}`}
-                                    onClick={() => handleModelChange(m)}
-                                >
-                                    {m}
-                                </button>
-                                <button
-                                    className="delete-btn"
-                                    onClick={() => handleDeleteModel(m)}
-                                    title="Remove model"
-                                >
-                                    <X size={16} />
-                                </button>
-                            </div>
-                        ))}
+                        {models.map((m) => {
+                            const hwInfo = getHardwareRecommendation(m);
+                            return (
+                                <div key={m} className="model-row">
+                                    <button
+                                        className={`model-pill ${m === activeModel ? "active" : ""}`}
+                                        onClick={() => handleModelChange(m)}
+                                        title={hwInfo.tip || m}
+                                    >
+                                        <span className="model-name">{m}</span>
+                                        {hwInfo.badge && (
+                                            <span className={`hw-badge hw-badge-${hwInfo.color}`}>
+                                                {hwInfo.badge}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        className="delete-btn"
+                                        onClick={() => handleDeleteModel(m)}
+                                        title="Remove model"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {modelError && (

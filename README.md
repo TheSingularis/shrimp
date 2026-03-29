@@ -31,9 +31,50 @@ A local-first AI assistant that knows your files. Point it at your code, notes, 
 
 ## Recommended Models
 
-SHRIMP works with any Ollama model. Choose based on your VRAM:
+SHRIMP works with any Ollama model. Choose based on your hardware:
 
-### 8GB VRAM (Entry Level)
+### CPU Only (No GPU / Low VRAM)
+
+Perfect for laptops and systems without dedicated GPUs (like Framework 13). Ollama automatically uses CPU when no GPU is available.
+
+**Best for CPU:**
+- **llama3.1:8b** - Excellent balance ⭐ (Recommended for CPU)
+  - RAM: ~8-10GB | Download: ~5GB
+  - Good tool calling support
+  - Reasonable speed on modern CPUs (~10-20s per response)
+  - Reduce context to 4096 for better performance
+
+- **qwen2.5:7b** - Solid alternative
+  - RAM: ~7-9GB | Download: ~4.7GB
+  - Good quality responses
+  - Slightly faster than 8B models
+
+**Fast & Light (for slower CPUs):**
+- **phi3.5:3.8b** - Very fast responses
+  - RAM: ~4-5GB | Download: ~2.3GB
+  - Great for quick questions
+  - Lower quality but 3-5x faster
+
+- **qwen2.5:3b** - Compact option
+  - RAM: ~3-4GB | Download: ~2GB
+  - Good for basic tasks
+
+```python
+# backend/config.py (CPU-optimized)
+OLLAMA_MODEL = "llama3.1:8b"
+NUM_CTX = 4096  # Lower context = faster inference
+USE_TOOL_CALLING = True
+```
+
+**Performance Tips for CPU:**
+- Use models ≤8B parameters
+- Reduce `NUM_CTX` to 4096 (Settings → Context Window)
+- Close other heavy applications during inference
+- Expect 10-30s response times vs 2-5s on GPU
+
+---
+
+### 8GB VRAM (Entry Level GPU)
 
 **Tool Calling:**
 - **llama3.1:8b** - Best balance of speed and capability
