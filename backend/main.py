@@ -14,8 +14,10 @@ import threading
 import config
 import rag
 import conversations
+import projects
 import tool_executor
 import file_ops
+from urllib.parse import unquote
 
 logging.basicConfig(
     level=logging.INFO,
@@ -89,6 +91,29 @@ class SaveConversationRequest(BaseModel):
 
 class UpdateTitleRequest(BaseModel):
     title: str
+
+
+class ProjectSettings(BaseModel):
+    default_scopes: list[str] = []
+    custom_instructions: str = ""
+
+
+class CreateProjectRequest(BaseModel):
+    name: str
+    description: str = ""
+    color: str = "#3b82f6"
+    settings: ProjectSettings = ProjectSettings()
+
+
+class UpdateProjectRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    color: str | None = None
+    settings: ProjectSettings | None = None
+
+
+class MoveConversationRequest(BaseModel):
+    project_id: str | None  # null = move to uncategorized
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -164,6 +189,8 @@ def extract_section(content: str, message: str) -> tuple[str, int, int] | None:
 async def startup():
     log.info("Server process startup - hydrating state...")
     loop = asyncio.get_event_loop()
+    # Run migration first
+    await loop.run_in_executor(None, projects.migrate_to_projects)
     await loop.run_in_executor(None, rag._hydrate_status)
     await loop.run_in_executor(None, rag.build_all_structural_maps)
     log.info("Startup complete - structural maps and index status ready")
@@ -272,11 +299,20 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
         "- `list_scope(scope)` - See what files are in a scope\n"
         "- `read_file(scope, path)` - Read a specific file\n"
         "- `search_files(query, scopes)` - Semantic search across files\n"
-        "- `propose_file_edit(scope, path, new_content, explanation)` - Propose file changes\n\n"
+        "- `propose_file_edit(scope, path, new_content, explanation)` - Propose edits to existing files OR create new files\n\n"
+        "## Creating & Editing Files — CRITICAL RULES\n"
+        "**NEVER claim to have created or edited a file without calling `propose_file_edit`!**\n"
+        "- Files are ONLY created/edited when you call the tool and the user approves it\n"
+        "- The user will see a diff editor ONLY if you call the tool\n"
+        "- If you don't call the tool, NOTHING happens — no file is created or modified\n"
+        "- To create a new file: call `propose_file_edit(scope, 'filename.md', content, explanation)`\n"
+        "- To edit existing file: call `propose_file_edit(scope, 'path/to/file', new_content, explanation)`\n"
+        "- After calling the tool, wait for user approval — don't say \"file created\" until they approve\n\n"
         "## Behavior\n"
         "- **IMPORTANT: Always respond in English only.** Never use other languages in your responses.\n"
         "- For questions: Use search_files or read_file to find relevant information, then answer\n"
         "- For edits: Read the current file first, then propose changes with clear explanations\n"
+        "- For new files: Call propose_file_edit and include the full file content in new_content\n"
         "- Be thorough: Call multiple tools if needed to gather complete context\n"
         "- Be efficient: Don't repeat tool calls unnecessarily\n\n"
         "## Formatting\n"
@@ -488,16 +524,17 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                 # Single file edit
                 edit = edits[0]
 
-                # Read original content for diff
+                # Read original content for diff (empty string for new files)
                 try:
                     original = rag.read_file_from_scope(edit["scope"], edit["path"])
                 except:
-                    original = ""
+                    original = ""  # New file
 
                 sentinel = json.dumps({
+                    "type": "file_edit",
                     "scope": edit["scope"],
                     "path": edit["path"],
-                    "old": original,
+                    "original": original,
                     "new": edit["new_content"],
                 })
                 yield f"\n\n__SHRIMP_EDIT__{sentinel}"
@@ -510,16 +547,19 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     try:
                         original = rag.read_file_from_scope(edit["scope"], edit["path"])
                     except:
-                        original = ""
+                        original = ""  # New file
 
                     file_diffs.append({
                         "scope": edit["scope"],
                         "path": edit["path"],
-                        "old": original,
+                        "original": original,
                         "new": edit["new_content"],
                     })
 
-                sentinel = json.dumps({"files": file_diffs})
+                sentinel = json.dumps({
+                    "type": "multi_file_edit",
+                    "files": file_diffs
+                })
                 yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
                 log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
 
@@ -1528,6 +1568,70 @@ async def update_conversation_title(conversation_id: str, req: UpdateTitleReques
         raise HTTPException(status_code=404, detail="Conversation not found")
 
 
+# ── routes: projects ──────────────────────────────────────────────────────────
+
+
+@app.get("/projects")
+async def list_projects():
+    """Get all projects"""
+    return projects.Project.load_all()
+
+
+@app.post("/projects")
+async def create_project(req: CreateProjectRequest):
+    """Create a new project"""
+    project = projects.Project.create(
+        name=req.name,
+        description=req.description,
+        color=req.color,
+        settings=req.settings.dict()
+    )
+    return project
+
+
+@app.put("/projects/{project_id}")
+async def update_project(project_id: str, req: UpdateProjectRequest):
+    """Update an existing project"""
+    try:
+        updates = {k: v for k, v in req.dict().items() if v is not None}
+        if "settings" in updates and updates["settings"] is not None:
+            updates["settings"] = updates["settings"]
+        project = projects.Project.update(project_id, **updates)
+        return project
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project (moves conversations to uncategorized)"""
+    try:
+        # Move all conversations in this project to null
+        convs = conversations.Conversation.list_all()
+        for conv in convs:
+            if conv.get("project_id") == project_id:
+                full_conv = conversations.Conversation.load(conv["conversation_id"])
+                full_conv.project_id = None
+                full_conv.save()
+
+        projects.Project.delete(project_id)
+        return {"status": "deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/conversations/{conversation_id}/project")
+async def move_conversation_to_project(conversation_id: str, req: MoveConversationRequest):
+    """Move a conversation to a different project"""
+    try:
+        conv = conversations.Conversation.load(conversation_id)
+        conv.project_id = req.project_id
+        conv.save()
+        return {"status": "moved", "conversation_id": conversation_id, "project_id": req.project_id}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+
 # ── routes: models ────────────────────────────────────────────────────────────
 
 
@@ -1661,30 +1765,36 @@ async def refresh_structural():
 
 @app.post("/index/{name}")
 async def index_one(name: str):
-    scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
+    log.info("index_one: %s", name)
+    decoded_name = unquote(name)
+    log.info("index_one_decoded: %s", decoded_name)
+    scope = next((s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
     if not scope:
         raise HTTPException(
-            status_code=404, detail=f"Scope '{name}' not found")
+            status_code=404, detail=f"Scope '{decoded_name}' not found")
 
     def run():
         rag.build_index(scope)
     threading.Thread(target=run, daemon=True).start()
-    return {"status": "indexing started", "scope": name}
+    return {"status": "indexing started", "scope": decoded_name}
 
 
 @app.get("/index/{name}/stream")
 async def index_stream(name: str):
-    scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
+    log.info("index_stream: %s", name)
+    decoded_name = unquote(name)
+    log.info("index_stream_decoded: %s", decoded_name)
+    scope = next((s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
     if not scope:
         raise HTTPException(
-            status_code=404, detail=f"Scope '{name}' not found")
+            status_code=404, detail=f"Scope '{decoded_name}' not found")
 
     q: queue.Queue = queue.Queue()
 
     def callback(current: int, total: int, filename: str):
         progress = {"current": current, "total": total,
                     "file": filename, "done": False}
-        log.info("[%s] Progress: %d/%d - %s", name, current, total, filename)
+        log.info("[%s] Progress: %d/%d - %s", decoded_name, current, total, filename)
         q.put(progress)
 
     def run_index():
