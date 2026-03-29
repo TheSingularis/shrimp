@@ -270,6 +270,7 @@ export interface ConversationMetadata {
     created_at: string;
     updated_at: string;
     message_count: number;
+    project_id: string | null;
 }
 
 export interface ConversationFull {
@@ -279,6 +280,7 @@ export interface ConversationFull {
     created_at: string;
     updated_at: string;
     active_scopes: string[];
+    project_id: string | null;
 }
 
 export async function listConversations(): Promise<ConversationMetadata[]> {
@@ -327,4 +329,84 @@ export async function updateConversationTitle(id: string, title: string): Promis
         body: JSON.stringify({ title }),
     });
     if (!res.ok) throw new Error(`updateConversationTitle: ${res.status}`);
+}
+
+// ── Projects ────────────────────────────────────────────────────────────────────
+
+export interface ProjectSettings {
+    default_scopes: string[];
+    custom_instructions: string;
+}
+
+export interface Project {
+    project_id: string;
+    name: string;
+    description: string;
+    color: string;
+    created_at: string;
+    updated_at: string;
+    settings: ProjectSettings;
+}
+
+export interface ProjectsData {
+    projects: Project[];
+    default_project_id: string | null;
+}
+
+export async function listProjects(): Promise<ProjectsData> {
+    const res = await fetch(`${BASE}/projects`);
+    if (!res.ok) throw new Error("Failed to list projects");
+    return res.json();
+}
+
+export async function createProject(
+    name: string,
+    description?: string,
+    color?: string,
+    settings?: ProjectSettings
+): Promise<Project> {
+    const res = await fetch(`${BASE}/projects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            name,
+            description: description || "",
+            color: color || "#3b82f6",
+            settings: settings || { default_scopes: [], custom_instructions: "" }
+        }),
+    });
+    if (!res.ok) throw new Error("Failed to create project");
+    return res.json();
+}
+
+export async function updateProject(
+    projectId: string,
+    updates: Partial<Omit<Project, "project_id" | "created_at" | "updated_at">>
+): Promise<Project> {
+    const res = await fetch(`${BASE}/projects/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error("Failed to update project");
+    return res.json();
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+    const res = await fetch(`${BASE}/projects/${projectId}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete project");
+}
+
+export async function moveConversationToProject(
+    conversationId: string,
+    projectId: string | null
+): Promise<void> {
+    const res = await fetch(`${BASE}/conversations/${conversationId}/project`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+    });
+    if (!res.ok) throw new Error("Failed to move conversation");
 }
