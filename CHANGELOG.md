@@ -143,6 +143,7 @@ All notable changes to SHRIMP* will be documented in this file.
   - Updated system prompt to explicitly forbid claiming file creation without calling the tool
   - Added stronger instructions that files are ONLY created when `propose_file_edit` tool is called
   - New files (where original content is empty) now properly trigger diff editor for user approval
+- **Scope indexing with spaces in names**: Fixed ChromaDB collection naming bug that prevented indexing scopes with spaces in their names (e.g., "test scope"). Scope names are now sanitized by replacing spaces with underscores and removing invalid characters while preserving original names in the UI and API.
 
 
 ## [v0.1.0] — 2025-07-15
