@@ -22,13 +22,14 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [x] **Multiple conversation tabs** — Extend saved conversations to support multiple named tabs open simultaneously in the UI. Enables parallel work on different topics/files.
   - **COMPLETED:** Browser-style tabs with separate state per tab, smart loading, auto-save on switch, and title auto-update
 
-- [ ] **Conversation Projects** — Group related conversations into projects for better organization.
-  - Project sidebar with folders/categories
-  - Move conversations between projects
-  - Project-level context/settings
-  - Similar to Claude.ai's Projects feature
-  - **Prerequisite:** Save conversations
-  - **Value:** Better organization for users working on multiple codebases/topics
+- [x] **Conversation Projects** — Group related conversations into projects for better organization.
+  - **COMPLETED:** Project creation/deletion, drag-and-drop to move conversations, collapsible folders, color-coded indicators
+  - **Future enhancements:**
+    - [ ] Project settings modal (edit name, description, color)
+    - [ ] Per-project default scopes
+    - [ ] Per-project custom instructions
+    - [ ] Project templates for quick setup
+    - [ ] Project statistics (conversation count, activity timeline)
 
 ---
 

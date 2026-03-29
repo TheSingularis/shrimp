@@ -11,6 +11,7 @@ A local-first AI assistant that knows your files. Point it at your code, notes, 
 - **Chat with context** — ask questions about your own files and get answers grounded in their actual content
 - **File editing** — propose changes to single or multiple files with diff preview before applying
 - **Multi-file editing** — edit up to 5 files in one request (e.g., "update README and CHANGELOG to document feature X")
+- **Project organization** — group related conversations into projects with custom names and colors
 - **Multiple scopes** — index separate directories (e.g. "code" and "notes") and toggle which ones are active per conversation
 - **Streaming responses** — LLM output streams token-by-token in real time with progress indicators
 - **Fully local** — no cloud APIs, no telemetry, no accounts

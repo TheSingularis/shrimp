@@ -4,9 +4,21 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
-## [Unreleased] — 2026-03-28
+## [Unreleased] — 2026-03-29
 
 ### Added
+
+- **Project organization for conversations**: Group related conversations into projects with custom names, descriptions, and colors:
+  - Create projects with modal UI featuring name, description, and 8 preset color options
+  - Delete projects from the conversation sidebar
+  - Move conversations between projects via drag-and-drop or right-click context menu
+  - Collapsible project folders with conversation counts
+  - Visual feedback during drag operations (highlighted drop zones)
+  - Projects persist to `projects.json` file with automatic migration
+  - Uncategorized section for conversations without a project
+  - Theme-aware left accent border on project headers (uses primary theme color)
+  - Small colored dot indicators show each project's custom color
+  - Expanded state persists to localStorage
 
 - **Shrimp branding with theme system**: Visual refresh with shrimp icon integration and 3 switchable color themes:
   - **Shrimp logo**: PNG icon displays in header, favicon, and welcome screen for empty conversations
@@ -126,6 +138,11 @@ All notable changes to SHRIMP* will be documented in this file.
   - Proper flex layout with `min-h-0` on message list for correct scrolling behavior
   - Global CSS rules to prevent page scrolling and rubber-banding on iOS
 - **UI alignment fixes**: Settings button now properly hugs the right edge of the header, and send/stop buttons are perfectly centered with consistent padding
+- **File creation flow**: Fixed bug where LLM would claim to create files without showing diff editor:
+  - Backend now emits correct sentinel format with `type` field and `original` instead of `old`
+  - Updated system prompt to explicitly forbid claiming file creation without calling the tool
+  - Added stronger instructions that files are ONLY created when `propose_file_edit` tool is called
+  - New files (where original content is empty) now properly trigger diff editor for user approval
 
 
 ## [v0.1.0] — 2025-07-15
