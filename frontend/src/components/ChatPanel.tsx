@@ -309,10 +309,12 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
         // If current stage is sticky and hasn't been shown for min duration, ignore the change
         if (stickyStages.includes(currentStage) && timeSinceChange < minDuration) {
+            console.log(`[Spinner] Stage change BLOCKED: "${currentStage}" → "${newStage}" (only ${timeSinceChange}ms elapsed, need ${minDuration}ms)`);
             return; // Ignore this stage change
         }
 
         // Apply the new stage
+        console.log(`[Spinner] Stage changed: "${currentStage}" → "${newStage}" (after ${timeSinceChange}ms)`);
         setStage(newStage);
         lastStageChangeRef.current = { stage: newStage, timestamp: now };
     };
@@ -324,19 +326,33 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
     useEffect(() => {
         // Run spinner when waiting for response to start, or during file edit streaming with stage
         const shouldSpin = streaming && (!responseStarted || (stage && stage !== "done"));
+
+        console.log(`[Spinner] State check: streaming=${streaming}, responseStarted=${responseStarted}, stage="${stage}", shouldSpin=${shouldSpin}`);
+
         if (shouldSpin) {
+            console.log(`[Spinner] STARTING animation (stage: "${stage}")`);
             const interval = setInterval(() => {
                 setSpinnerFrame((prev) => (prev + 1) % spinner.frames.length);
             }, spinner.interval);
-            return () => clearInterval(interval);
+            return () => {
+                console.log(`[Spinner] STOPPING animation (stage: "${stage}")`);
+                clearInterval(interval);
+            };
         }
     }, [streaming, responseStarted, stage, spinner.frames.length, spinner.interval]);
 
     useEffect(() => {
         if (!streaming) {
+            console.log(`[Spinner] Resetting frame to 0 (streaming stopped)`);
             requestAnimationFrame(() => setSpinnerFrame(0));
         }
     }, [streaming]);
+
+    // Track visibility of typing indicator
+    useEffect(() => {
+        const showTypingIndicator = streaming && !responseStarted;
+        console.log(`[Spinner] Typing indicator visible: ${showTypingIndicator} (streaming=${streaming}, responseStarted=${responseStarted})`);
+    }, [streaming, responseStarted]);
 
     async function submit() {
         if (!input.trim() || streaming) return;
@@ -768,7 +784,42 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
     // Clean up tool call artifacts from content
     function cleanToolCallArtifacts(text: string): string {
-        return text
+        // First, properly handle __STAGE_MARKER__ tokens before any other processing
+        // These need special handling because they contain JSON with nested braces
+        let cleaned = text;
+
+        // Remove __STAGE_MARKER__ tokens with their JSON payloads
+        // Use a more robust approach to handle nested braces
+        const markerPattern = /__STAGE_MARKER__/g;
+        let markerIndex = cleaned.search(markerPattern);
+
+        while (markerIndex !== -1) {
+            // Find the opening brace after __STAGE_MARKER__
+            const jsonStart = cleaned.indexOf('{', markerIndex);
+            if (jsonStart === -1) break;
+
+            // Find matching closing brace
+            let braceCount = 0;
+            let jsonEnd = jsonStart;
+            for (let i = jsonStart; i < cleaned.length; i++) {
+                if (cleaned[i] === '{') braceCount++;
+                if (cleaned[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                        jsonEnd = i + 1;
+                        break;
+                    }
+                }
+            }
+
+            // Remove the entire __STAGE_MARKER__{...} token
+            cleaned = cleaned.slice(0, markerIndex) + cleaned.slice(jsonEnd);
+
+            // Search for next marker
+            markerIndex = cleaned.search(markerPattern);
+        }
+
+        return cleaned
             // Remove <tool_call> XML tags and their content
             .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
             // Remove standalone JSON tool calls like {"name": "read_file", "arguments": {...}}
@@ -792,6 +843,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
             // During file edit streaming (content starts with "Expanding"), show stage indicator
             if (content.includes("Expanding") && stage) {
+                console.log(`[Spinner] RENDERING inline spinner: frame=${spinnerFrame}, stage="${stage}", label="${getStageLabel(stage)}"`);
                 return (
                     <div className="flex items-center gap-3 text-text-muted text-base">
                         <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
@@ -1085,10 +1137,13 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
 
                         {/* Typing Indicator */}
                         {streaming && !responseStarted && (
-                            <div className="flex items-center gap-3 text-text-muted text-base mt-4">
-                                <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
-                                <span className="font-medium">{getStageLabel(stage)}</span>
-                            </div>
+                            <>
+                                {console.log(`[Spinner] RENDERING typing indicator: frame=${spinnerFrame}, stage="${stage}", label="${getStageLabel(stage)}"`)}
+                                <div className="flex items-center gap-3 text-text-muted text-base mt-4">
+                                    <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
+                                    <span className="font-medium">{getStageLabel(stage)}</span>
+                                </div>
+                            </>
                         )}
 
                         <div ref={bottomRef} />
