@@ -171,15 +171,16 @@ class ToolExecutor:
         explanation: str
     ) -> str:
         """
-        Propose a file edit (accumulates for sentinel emission).
+        Propose a file edit or create a new file (accumulates for sentinel emission).
 
         Does NOT write the file directly - stores the edit for user review.
+        Works for both existing files (edit) and new files (create).
 
         Args:
             scope: Scope name
-            path: Relative path within scope
+            path: Relative path within scope (e.g., 'TODO.md' for root, 'docs/guide.md' for nested)
             new_content: New file content
-            explanation: Why this edit is being made
+            explanation: Why this edit/creation is being made
 
         Returns:
             Confirmation message
@@ -306,7 +307,7 @@ def build_tool_definitions() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "propose_file_edit",
-                "description": "Propose an edit to a file. The edit will be reviewed by the user before being applied. Always explain why you're making the edit.",
+                "description": "Propose an edit to an existing file OR create a new file. The change will be reviewed by the user before being applied. For new files, use a relative path within the scope (e.g., 'TODO.md' for root level, 'docs/guide.md' for nested). Always explain why you're making this change.",
                 "parameters": {
                     "type": "object",
                     "properties": {
