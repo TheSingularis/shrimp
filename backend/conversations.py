@@ -23,6 +23,7 @@ class Conversation:
         created_at: Optional[str] = None,
         updated_at: Optional[str] = None,
         active_scopes: Optional[list] = None,
+        project_id: Optional[str] = None,
     ):
         self.conversation_id = conversation_id or str(uuid.uuid4())
         self.title = title or "New Conversation"
@@ -30,6 +31,7 @@ class Conversation:
         self.created_at = created_at or datetime.utcnow().isoformat() + "Z"
         self.updated_at = updated_at or datetime.utcnow().isoformat() + "Z"
         self.active_scopes = active_scopes or []
+        self.project_id = project_id
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -40,6 +42,7 @@ class Conversation:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "active_scopes": self.active_scopes,
+            "project_id": self.project_id,
         }
 
     @classmethod
@@ -52,6 +55,7 @@ class Conversation:
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             active_scopes=data.get("active_scopes", []),
+            project_id=data.get("project_id"),
         )
 
     def save(self) -> None:
@@ -92,6 +96,7 @@ class Conversation:
                     "created_at": data["created_at"],
                     "updated_at": data["updated_at"],
                     "message_count": len(data.get("messages", [])),
+                    "project_id": data.get("project_id"),
                 })
             except Exception as e:
                 log.error("Failed to load conversation %s: %s", file_path, e)
