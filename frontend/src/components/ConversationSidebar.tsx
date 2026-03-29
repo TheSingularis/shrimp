@@ -1,6 +1,17 @@
-import { useState, useEffect } from "react";
-import { type ConversationMetadata, listConversations, deleteConversation, updateConversationTitle } from "../api";
-import { X, MessageSquarePlus } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import {
+    type ConversationMetadata,
+    type Project,
+    listConversations,
+    deleteConversation,
+    updateConversationTitle,
+    moveConversationToProject,
+    createProject,
+    updateProject,
+    deleteProject,
+    listProjects,
+} from "../api";
+import { X, ChevronRight, ChevronDown, FolderPlus, Folder } from "lucide-react";
 import "./ConversationSidebar.css";
 
 interface Props {
@@ -9,6 +20,8 @@ interface Props {
     currentConversationId: string | null;
     onSelectConversation: (id: string) => void;
     onNewConversation: () => void;
+    projects: Project[];
+    onProjectsChange: (projects: Project[]) => void;
 }
 
 export function ConversationSidebar({
@@ -17,9 +30,36 @@ export function ConversationSidebar({
     currentConversationId,
     onSelectConversation,
     onNewConversation,
+    projects,
+    onProjectsChange,
 }: Props) {
     const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
     const [loading, setLoading] = useState(false);
+    const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(["uncategorized"]));
+    const [contextMenu, setContextMenu] = useState<{
+        conversationId: string;
+        x: number;
+        y: number;
+    } | null>(null);
+    const [draggedConversationId, setDraggedConversationId] = useState<string | null>(null);
+    const [showProjectModal, setShowProjectModal] = useState(false);
+
+    // Load expanded state from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem("expandedProjects");
+        if (saved) {
+            try {
+                setExpandedProjects(new Set(JSON.parse(saved)));
+            } catch (e) {
+                console.error("Failed to load expanded projects:", e);
+            }
+        }
+    }, []);
+
+    // Save expanded state to localStorage
+    useEffect(() => {
+        localStorage.setItem("expandedProjects", JSON.stringify([...expandedProjects]));
+    }, [expandedProjects]);
 
     useEffect(() => {
         if (open) {
@@ -37,6 +77,49 @@ export function ConversationSidebar({
         } finally {
             setLoading(false);
         }
+    }
+
+    async function refreshProjects() {
+        try {
+            const data = await listProjects();
+            onProjectsChange(data.projects);
+        } catch (error) {
+            console.error("Failed to refresh projects:", error);
+        }
+    }
+
+    // Group conversations by project
+    const groupedConversations = useMemo(() => {
+        const groups: Record<string, ConversationMetadata[]> = {
+            uncategorized: [],
+        };
+
+        projects.forEach((p) => {
+            groups[p.project_id] = [];
+        });
+
+        conversations.forEach((conv) => {
+            const pid = conv.project_id;
+            if (pid && groups[pid]) {
+                groups[pid].push(conv);
+            } else {
+                groups.uncategorized.push(conv);
+            }
+        });
+
+        return groups;
+    }, [conversations, projects]);
+
+    function toggleProject(projectId: string) {
+        setExpandedProjects((prev) => {
+            const next = new Set(prev);
+            if (next.has(projectId)) {
+                next.delete(projectId);
+            } else {
+                next.add(projectId);
+            }
+            return next;
+        });
     }
 
     async function handleDelete(id: string, e: React.MouseEvent) {
@@ -66,12 +149,79 @@ export function ConversationSidebar({
 
         try {
             await updateConversationTitle(id, newTitle);
-            setConversations(conversations.map((c) =>
-                c.conversation_id === id ? { ...c, title: newTitle } : c
-            ));
+            setConversations(
+                conversations.map((c) =>
+                    c.conversation_id === id ? { ...c, title: newTitle } : c
+                )
+            );
         } catch (error) {
             console.error("Failed to rename conversation:", error);
             alert("Failed to rename conversation");
+        }
+    }
+
+    function handleContextMenu(conversationId: string, e: React.MouseEvent) {
+        e.preventDefault();
+        setContextMenu({
+            conversationId,
+            x: e.clientX,
+            y: e.clientY,
+        });
+    }
+
+    async function handleMoveToProject(conversationId: string, projectId: string | null) {
+        try {
+            await moveConversationToProject(conversationId, projectId);
+            setConversations(
+                conversations.map((c) =>
+                    c.conversation_id === conversationId ? { ...c, project_id: projectId } : c
+                )
+            );
+            setContextMenu(null);
+        } catch (error) {
+            console.error("Failed to move conversation:", error);
+            alert("Failed to move conversation");
+        }
+    }
+
+    function handleDragStart(conversationId: string) {
+        setDraggedConversationId(conversationId);
+    }
+
+    function handleDragEnd() {
+        setDraggedConversationId(null);
+    }
+
+    async function handleDrop(projectId: string | null) {
+        if (draggedConversationId) {
+            await handleMoveToProject(draggedConversationId, projectId);
+            setDraggedConversationId(null);
+        }
+    }
+
+    async function handleCreateProject(name: string, description: string, color: string) {
+        try {
+            await createProject(name, description, color);
+            await refreshProjects();
+            setShowProjectModal(false);
+        } catch (error) {
+            console.error("Failed to create project:", error);
+            alert("Failed to create project");
+        }
+    }
+
+    async function handleDeleteProject(projectId: string, e: React.MouseEvent) {
+        e.stopPropagation();
+
+        if (!confirm("Delete this project? Conversations will be moved to Uncategorized.")) return;
+
+        try {
+            await deleteProject(projectId);
+            await refreshProjects();
+            await loadConversations();
+        } catch (error) {
+            console.error("Failed to delete project:", error);
+            alert("Failed to delete project");
         }
     }
 
@@ -114,42 +264,479 @@ export function ConversationSidebar({
                 <div className="conversation-list">
                     {loading ? (
                         <div className="loading">Loading...</div>
-                    ) : conversations.length === 0 ? (
-                        <div className="empty-state">No conversations yet</div>
                     ) : (
-                        conversations.map((conv) => (
-                            <div
-                                key={conv.conversation_id}
-                                className={`conversation-item ${
-                                    conv.conversation_id === currentConversationId ? "active" : ""
-                                }`}
-                                onClick={() => onSelectConversation(conv.conversation_id)}
-                            >
-                                <div
-                                    className="conversation-title"
-                                    onDoubleClick={(e) => handleRename(conv.conversation_id, conv.title, e)}
-                                    title="Double-click to rename"
-                                >
-                                    {conv.title}
-                                </div>
-                                <div className="conversation-meta">
-                                    {formatDate(conv.updated_at)} · {conv.message_count} messages
-                                </div>
-                                <button
-                                    className="delete-conversation-btn"
-                                    onClick={(e) => handleDelete(conv.conversation_id, e)}
-                                    title="Delete conversation"
-                                >
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ))
+                        <>
+                            {/* Render projects */}
+                            {projects.map((project) => (
+                                <ProjectSection
+                                    key={project.project_id}
+                                    project={project}
+                                    conversations={groupedConversations[project.project_id] || []}
+                                    expanded={expandedProjects.has(project.project_id)}
+                                    onToggle={() => toggleProject(project.project_id)}
+                                    currentConversationId={currentConversationId}
+                                    onSelectConversation={onSelectConversation}
+                                    onDelete={handleDelete}
+                                    onRename={handleRename}
+                                    onContextMenu={handleContextMenu}
+                                    onDeleteProject={handleDeleteProject}
+                                    formatDate={formatDate}
+                                    onDragStart={handleDragStart}
+                                    onDragEnd={handleDragEnd}
+                                    onDrop={() => handleDrop(project.project_id)}
+                                    isDraggedOver={false}
+                                />
+                            ))}
+
+                            {/* Uncategorized section */}
+                            <UncategorizedSection
+                                conversations={groupedConversations.uncategorized}
+                                expanded={expandedProjects.has("uncategorized")}
+                                onToggle={() => toggleProject("uncategorized")}
+                                currentConversationId={currentConversationId}
+                                onSelectConversation={onSelectConversation}
+                                onDelete={handleDelete}
+                                onRename={handleRename}
+                                onContextMenu={handleContextMenu}
+                                formatDate={formatDate}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                                onDrop={() => handleDrop(null)}
+                            />
+
+                            <button className="new-project-btn" onClick={() => setShowProjectModal(true)}>
+                                <FolderPlus size={16} />
+                                <span>New Project</span>
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
 
+            {/* Context menu for moving conversations */}
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    conversationId={contextMenu.conversationId}
+                    projects={projects}
+                    onMove={handleMoveToProject}
+                    onClose={() => setContextMenu(null)}
+                />
+            )}
+
+            {/* Project creation modal */}
+            {showProjectModal && (
+                <ProjectModal
+                    onClose={() => setShowProjectModal(false)}
+                    onSave={handleCreateProject}
+                />
+            )}
+
             {/* Overlay for mobile */}
             {open && <div className="sidebar-overlay" onClick={onToggle} />}
         </>
+    );
+}
+
+interface ProjectSectionProps {
+    project: Project;
+    conversations: ConversationMetadata[];
+    expanded: boolean;
+    onToggle: () => void;
+    currentConversationId: string | null;
+    onSelectConversation: (id: string) => void;
+    onDelete: (id: string, e: React.MouseEvent) => void;
+    onRename: (id: string, title: string, e: React.MouseEvent) => void;
+    onContextMenu: (id: string, e: React.MouseEvent) => void;
+    onDeleteProject: (id: string, e: React.MouseEvent) => void;
+    formatDate: (date: string) => string;
+    onDragStart: (id: string) => void;
+    onDragEnd: () => void;
+    onDrop: () => void;
+    isDraggedOver: boolean;
+}
+
+function ProjectSection({
+    project,
+    conversations,
+    expanded,
+    onToggle,
+    currentConversationId,
+    onSelectConversation,
+    onDelete,
+    onRename,
+    onContextMenu,
+    onDeleteProject,
+    formatDate,
+    onDragStart,
+    onDragEnd,
+    onDrop,
+    isDraggedOver,
+}: ProjectSectionProps) {
+    const [dragOver, setDragOver] = useState(false);
+
+    function handleDragOver(e: React.DragEvent) {
+        e.preventDefault();
+        setDragOver(true);
+    }
+
+    function handleDragLeave() {
+        setDragOver(false);
+    }
+
+    function handleDrop(e: React.DragEvent) {
+        e.preventDefault();
+        setDragOver(false);
+        onDrop();
+    }
+
+    return (
+        <div
+            className={`project-section ${dragOver ? "drag-over" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            <div className="project-header">
+                <div className="project-header-content" onClick={onToggle}>
+                    {expanded ? (
+                        <ChevronDown size={16} className="project-expand-icon" />
+                    ) : (
+                        <ChevronRight size={16} className="project-expand-icon" />
+                    )}
+                    <div
+                        className="project-color-indicator"
+                        style={{ background: project.color }}
+                    />
+                    <span className="project-name">{project.name}</span>
+                    <span className="project-count">({conversations.length})</span>
+                </div>
+                <button
+                    className="delete-project-btn"
+                    onClick={(e) => onDeleteProject(project.project_id, e)}
+                    title="Delete project"
+                >
+                    <X size={14} />
+                </button>
+            </div>
+
+            {expanded && (
+                <div className="project-conversations">
+                    {conversations.length === 0 ? (
+                        <div className="empty-project">Drop conversations here</div>
+                    ) : (
+                        conversations.map((conv) => (
+                            <ConversationItem
+                                key={conv.conversation_id}
+                                conversation={conv}
+                                active={conv.conversation_id === currentConversationId}
+                                onSelect={onSelectConversation}
+                                onDelete={onDelete}
+                                onRename={onRename}
+                                onContextMenu={onContextMenu}
+                                formatDate={formatDate}
+                                onDragStart={onDragStart}
+                                onDragEnd={onDragEnd}
+                            />
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface ConversationItemProps {
+    conversation: ConversationMetadata;
+    active: boolean;
+    onSelect: (id: string) => void;
+    onDelete: (id: string, e: React.MouseEvent) => void;
+    onRename: (id: string, title: string, e: React.MouseEvent) => void;
+    onContextMenu: (id: string, e: React.MouseEvent) => void;
+    formatDate: (date: string) => string;
+    onDragStart: (id: string) => void;
+    onDragEnd: () => void;
+}
+
+function ConversationItem({
+    conversation,
+    active,
+    onSelect,
+    onDelete,
+    onRename,
+    onContextMenu,
+    formatDate,
+    onDragStart,
+    onDragEnd,
+}: ConversationItemProps) {
+    return (
+        <div
+            className={`conversation-item ${active ? "active" : ""}`}
+            draggable
+            onDragStart={() => onDragStart(conversation.conversation_id)}
+            onDragEnd={onDragEnd}
+            onClick={() => onSelect(conversation.conversation_id)}
+            onContextMenu={(e) => onContextMenu(conversation.conversation_id, e)}
+        >
+            <div
+                className="conversation-title"
+                onDoubleClick={(e) =>
+                    onRename(conversation.conversation_id, conversation.title, e)
+                }
+                title="Drag to move, double-click to rename, right-click for menu"
+            >
+                {conversation.title}
+            </div>
+            <div className="conversation-meta">
+                {formatDate(conversation.updated_at)} · {conversation.message_count} messages
+            </div>
+            <button
+                className="delete-conversation-btn"
+                onClick={(e) => onDelete(conversation.conversation_id, e)}
+                title="Delete conversation"
+            >
+                <X size={14} />
+            </button>
+        </div>
+    );
+}
+
+interface UncategorizedSectionProps {
+    conversations: ConversationMetadata[];
+    expanded: boolean;
+    onToggle: () => void;
+    currentConversationId: string | null;
+    onSelectConversation: (id: string) => void;
+    onDelete: (id: string, e: React.MouseEvent) => void;
+    onRename: (id: string, title: string, e: React.MouseEvent) => void;
+    onContextMenu: (id: string, e: React.MouseEvent) => void;
+    formatDate: (date: string) => string;
+    onDragStart: (id: string) => void;
+    onDragEnd: () => void;
+    onDrop: () => void;
+}
+
+function UncategorizedSection({
+    conversations,
+    expanded,
+    onToggle,
+    currentConversationId,
+    onSelectConversation,
+    onDelete,
+    onRename,
+    onContextMenu,
+    formatDate,
+    onDragStart,
+    onDragEnd,
+    onDrop,
+}: UncategorizedSectionProps) {
+    const [dragOver, setDragOver] = useState(false);
+
+    function handleDragOver(e: React.DragEvent) {
+        e.preventDefault();
+        setDragOver(true);
+    }
+
+    function handleDragLeave() {
+        setDragOver(false);
+    }
+
+    function handleDrop(e: React.DragEvent) {
+        e.preventDefault();
+        setDragOver(false);
+        onDrop();
+    }
+
+    return (
+        <div
+            className={`project-section ${dragOver ? "drag-over" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            <div className="project-header">
+                <div className="project-header-content" onClick={onToggle}>
+                    {expanded ? (
+                        <ChevronDown size={16} className="project-expand-icon" />
+                    ) : (
+                        <ChevronRight size={16} className="project-expand-icon" />
+                    )}
+                    <Folder size={16} className="project-folder-icon" />
+                    <span className="project-name">Uncategorized</span>
+                    <span className="project-count">({conversations.length})</span>
+                </div>
+            </div>
+
+            {expanded && (
+                <div className="project-conversations">
+                    {conversations.length === 0 ? (
+                        <div className="empty-project">Drop conversations here</div>
+                    ) : (
+                        conversations.map((conv) => (
+                            <ConversationItem
+                                key={conv.conversation_id}
+                                conversation={conv}
+                                active={conv.conversation_id === currentConversationId}
+                                onSelect={onSelectConversation}
+                                onDelete={onDelete}
+                                onRename={onRename}
+                                onContextMenu={onContextMenu}
+                                formatDate={formatDate}
+                                onDragStart={onDragStart}
+                                onDragEnd={onDragEnd}
+                            />
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface ProjectModalProps {
+    onClose: () => void;
+    onSave: (name: string, description: string, color: string) => void;
+}
+
+function ProjectModal({ onClose, onSave }: ProjectModalProps) {
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [color, setColor] = useState("#3b82f6");
+
+    const predefinedColors = [
+        "#3b82f6", // blue
+        "#8b5cf6", // purple
+        "#ec4899", // pink
+        "#f59e0b", // orange
+        "#10b981", // green
+        "#ef4444", // red
+        "#06b6d4", // cyan
+        "#f97316", // orange-red
+    ];
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (name.trim()) {
+            onSave(name.trim(), description.trim(), color);
+        }
+    }
+
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        document.addEventListener("keydown", handleEscape);
+        return () => document.removeEventListener("keydown", handleEscape);
+    }, [onClose]);
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3>New Project</h3>
+                    <button className="modal-close-btn" onClick={onClose}>
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                    <div className="modal-body">
+                        <label>
+                            <span className="label-text">Name</span>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="My Project"
+                                autoFocus
+                                required
+                            />
+                        </label>
+
+                        <label>
+                            <span className="label-text">Description (optional)</span>
+                            <textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="What's this project about?"
+                                rows={3}
+                            />
+                        </label>
+
+                        <div className="color-picker-group">
+                            <span className="label-text">Color</span>
+                            <div className="color-picker-grid">
+                                {predefinedColors.map((c) => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        className={`color-option ${color === c ? "selected" : ""}`}
+                                        style={{ background: c }}
+                                        onClick={() => setColor(c)}
+                                        title={c}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="modal-footer">
+                        <button type="button" onClick={onClose} className="btn-secondary">
+                            Cancel
+                        </button>
+                        <button type="submit" className="btn-primary" disabled={!name.trim()}>
+                            Create Project
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+interface ContextMenuProps {
+    x: number;
+    y: number;
+    conversationId: string;
+    projects: Project[];
+    onMove: (conversationId: string, projectId: string | null) => void;
+    onClose: () => void;
+}
+
+function ContextMenu({ x, y, conversationId, projects, onMove, onClose }: ContextMenuProps) {
+    useEffect(() => {
+        const handleClick = () => onClose();
+        document.addEventListener("click", handleClick);
+        return () => document.removeEventListener("click", handleClick);
+    }, [onClose]);
+
+    return (
+        <div
+            className="context-menu"
+            style={{ left: x, top: y }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="context-menu-label">Move to:</div>
+            {projects.map((p) => (
+                <button
+                    key={p.project_id}
+                    className="context-menu-item"
+                    onClick={() => onMove(conversationId, p.project_id)}
+                >
+                    <div
+                        className="project-color-dot"
+                        style={{ background: p.color }}
+                    />
+                    {p.name}
+                </button>
+            ))}
+            <button
+                className="context-menu-item"
+                onClick={() => onMove(conversationId, null)}
+            >
+                Uncategorized
+            </button>
+        </div>
     );
 }
