@@ -65,6 +65,13 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ## 💡 Nice to Have / Lower Priority
 
+- [ ] **Hardware-based performance estimation** — Detect user's system specs (CPU cores/speed, RAM, GPU VRAM) and provide personalized model recommendations based on actual hardware capabilities.
+  - Auto-detect hardware on backend startup (CPU info, available RAM, GPU detection via Ollama)
+  - Calculate estimated inference speed per model based on detected hardware
+  - Update model badges dynamically: same model might be green (CPU OK) on powerful CPU but yellow (GPU recommended) on weak CPU
+  - Show estimated tokens/second or response time in model selector
+  - **Builds on:** Current static model size badges (already implemented)
+  - **Value:** Personalized guidance instead of generic recommendations
 - [ ] **GPU utilization indicator** — Live GPU memory usage in header, polling `ollama ps`. Calculate predicted VRAM usage for context window.
 - [ ] **Per-scope prompt context** — Optional description per scope injected into system prompt when active.
 - [ ] **Index status indicator in header** — Small dot showing if active scopes are indexed.
