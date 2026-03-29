@@ -93,6 +93,44 @@
     background: var(--accent-dim);
 }
 
+.model-pill {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.model-name {
+    flex: 1;
+    text-align: left;
+}
+
+/* Hardware recommendation badges */
+.hw-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.hw-badge-green {
+    background: #10b981;
+    color: #fff;
+}
+
+.hw-badge-yellow {
+    background: #f59e0b;
+    color: #000;
+}
+
+.hw-badge-red {
+    background: #ef4444;
+    color: #fff;
+}
+
 /* scope list */
 .scope-list {
     display: flex;
