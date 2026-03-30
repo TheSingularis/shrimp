@@ -24,12 +24,12 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 - [x] **Conversation Projects** — Group related conversations into projects for better organization.
   - **COMPLETED:** Project creation/deletion, drag-and-drop to move conversations, collapsible folders, color-coded indicators
+  - **COMPLETED:** Project settings modal (edit name, description, color, default scopes, custom instructions)
+  - **COMPLETED:** Per-project default scopes (auto-select for new conversations)
+  - **COMPLETED:** Per-project custom instructions (appended to system prompt)
   - **Future enhancements:**
-    - [ ] Project settings modal (edit name, description, color)
-    - [ ] Per-project default scopes
-    - [ ] Per-project custom instructions
     - [ ] Project templates for quick setup
-    - [ ] Project statistics (conversation count, activity timeline)
+    - [ ] Project statistics (conversation count, last activity, total messages)
 
 ---
 
