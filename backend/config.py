@@ -1,5 +1,6 @@
-OLLAMA_HOST = "http://127.0.0.1:11434"
-OLLAMA_MODEL = "qwen2.5-coder:7b"
+# Ollama configuration
+OLLAMA_HOST = "http://127.0.0.1:11434"  # Default: managed locally with network access
+OLLAMA_MODEL = "qwen2.5:14b"
 EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
 NUM_CTX: int = 8192

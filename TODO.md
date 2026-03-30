@@ -82,7 +82,7 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ---
 
-## 🤔 Under Consideration
+## Under Consideration
 
 ### Project Templates
 
@@ -108,10 +108,10 @@ Pre-configured project setups for faster creation with sensible defaults.
 5. Edit if needed, create project
 
 **Benefits:**
-- ⚡ Faster project creation (one click vs filling 4+ fields)
-- 🎯 Consistency across similar projects
-- 📚 Onboarding (shows users what's possible)
-- 🔄 Reusable configurations
+- Faster project creation (one click vs filling 4+ fields)
+- Consistency across similar projects
+- Onboarding (shows users what's possible)
+- Reusable configurations
 
 **When This Makes Sense:**
 - Creating new projects frequently (weekly/monthly)

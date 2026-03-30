@@ -409,6 +409,91 @@
     font-weight: 500;
 }
 
+/* ── ollama host settings ──────────────────────────────────────────────────── */
+
+.section-description {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: -0.5rem;
+}
+
+.external-url-input {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.input-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.url-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.url-input {
+    flex: 1;
+    padding: 0.625rem 0.875rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+}
+
+.save-url-btn {
+    padding: 0.625rem 1.25rem;
+    background: var(--theme-primary);
+    border: none;
+    border-radius: 6px;
+    color: var(--bg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.save-url-btn:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
+.save-url-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.error-message {
+    font-size: 0.8rem;
+    color: #ef4444;
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 4px;
+}
+
+.success-message {
+    font-size: 0.8rem;
+    color: #10b981;
+    padding: 0.5rem;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 4px;
+}
+
+.help-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 /* ── mobile responsive ───────────────────────────────────────────────────── */
 
 /* Touch devices (tablets and phones) */
