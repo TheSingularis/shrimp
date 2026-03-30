@@ -42,6 +42,7 @@ class ChatRequest(BaseModel):
     message: str
     scopes: list[str] = []
     history: list[dict] = []
+    conversation_id: str | None = None
     # {"path": str, "content": str, "scope": str}
     pending_file: dict | None = None
 
@@ -321,9 +322,23 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
         "- When showing code, use fenced code blocks with language tags\n"
     )
 
-    # Inject custom instructions if configured
+    # Inject global custom instructions if configured
     if config.CUSTOM_INSTRUCTIONS.strip():
         system_prompt += f"\n\n## Custom Instructions\n{config.CUSTOM_INSTRUCTIONS}"
+
+    # Inject project-specific custom instructions if conversation has a project
+    if req.conversation_id:
+        try:
+            from backend.conversations import Conversation
+            from backend.projects import Project
+            conv = Conversation.load(req.conversation_id)
+            if conv.project_id:
+                project_data = Project.load_all()
+                project = next((p for p in project_data["projects"] if p["project_id"] == conv.project_id), None)
+                if project and project["settings"].get("custom_instructions", "").strip():
+                    system_prompt += f"\n\n## Project Instructions\n{project['settings']['custom_instructions']}"
+        except Exception as e:
+            log.warning("Failed to load project instructions: %s", e)
 
     # Build messages
     messages = [

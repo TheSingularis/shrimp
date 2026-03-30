@@ -12,6 +12,7 @@ interface Props {
     scopes: string[];
     messages: ChatMessage[];
     onMessagesChange: (messages: ChatMessage[]) => void;
+    conversationId: string | null;
 }
 
 // ── markdown components ────────────────────────────────────────────────────────
@@ -272,7 +273,7 @@ function completeIncompleteMarkdown(text: string): string {
     return completed;
 }
 
-export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
+export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }: Props) {
     const [input, setInput] = useState("");
     const [streaming, setStreaming] = useState(false);
     const [responseStarted, setResponseStarted] = useState(false);
@@ -451,7 +452,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 // No partial stage token, flush entire buffer
                 flushContent(buffer);
                 stageBufferRef.current = "";
-            }, pendingFile, controller.signal);
+            }, pendingFile, conversationId, controller.signal);
 
             // Flush any remaining buffer content after stream ends
             if (stageBufferRef.current) {
@@ -716,7 +717,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange }: Props) {
                 // No partial stage token, flush entire buffer
                 flushContent(buffer);
                 stageBufferRef.current = "";
-            }, pendingFile, controller.signal);
+            }, pendingFile, conversationId, controller.signal);
 
             // Flush any remaining buffer content after stream ends
             if (stageBufferRef.current) {
