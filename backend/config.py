@@ -12,4 +12,4 @@ USE_TOOL_CALLING: bool = True  # Feature flag - ENABLED for testing
 TOOL_CALLING_MAX_ITERATIONS: int = 10  # Prevent infinite loops
 TOOL_CALLING_TIMEOUT_SECONDS: int = 120  # Max time for entire agentic loop
 
-WATCHED_DIRS: list[dict] = [{'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': True, 'description': ''}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True, 'description': ''}, {'name': 'Ash', 'path': '~/Documents/Code Projects/Sluiter-Lefter', 'enabled': True}]
+WATCHED_DIRS: list[dict] = [{'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': True, 'description': ''}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True, 'description': ''}, {'name': 'Ash', 'path': '~/Documents/Code Projects/Sluiter-Lefter', 'enabled': True, 'description': ''}]

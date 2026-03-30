@@ -234,11 +234,26 @@ export default function App() {
     }
 
     function handleConversationMoved(conversationId: string, projectId: string | null) {
-        // Update the tab's projectId if this conversation is currently open
+        // Update the tab's projectId and scopes if this conversation is currently open
         const tabIndex = tabs.findIndex(t => t.conversationId === conversationId);
         if (tabIndex !== -1) {
             const updatedTabs = [...tabs];
-            updatedTabs[tabIndex] = { ...updatedTabs[tabIndex], projectId };
+            const currentTab = updatedTabs[tabIndex];
+
+            // Determine which scopes to use
+            let selectedScopes = currentTab.selectedScopes;
+            if (projectId) {
+                const project = projects.find(p => p.project_id === projectId);
+                if (project && project.settings.default_scopes.length > 0) {
+                    selectedScopes = project.settings.default_scopes;
+                }
+            }
+
+            updatedTabs[tabIndex] = {
+                ...currentTab,
+                projectId,
+                selectedScopes
+            };
             setTabs(updatedTabs);
         }
     }
@@ -256,6 +271,17 @@ export default function App() {
             // Load conversation data
             const conv = await getConversation(id);
 
+            // Determine which scopes to use
+            let selectedScopes = conv.active_scopes;
+
+            // If conversation belongs to a project with default scopes, use those instead
+            if (conv.project_id) {
+                const project = projects.find(p => p.project_id === conv.project_id);
+                if (project && project.settings.default_scopes.length > 0) {
+                    selectedScopes = project.settings.default_scopes;
+                }
+            }
+
             // Create new tab with loaded conversation
             const newTab: ConversationTab = {
                 id: generateTabId(),
@@ -263,7 +289,7 @@ export default function App() {
                 projectId: conv.project_id,
                 title: getDefaultTitle(conv.messages),
                 messages: conv.messages,
-                selectedScopes: conv.active_scopes,
+                selectedScopes: selectedScopes,
             };
 
             await saveCurrentTab();
