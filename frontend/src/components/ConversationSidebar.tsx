@@ -24,6 +24,7 @@ interface Props {
     projects: Project[];
     onProjectsChange: (projects: Project[]) => void;
     scopes: Scope[];
+    onConversationMoved?: (conversationId: string, projectId: string | null) => void;
 }
 
 export function ConversationSidebar({
@@ -35,6 +36,7 @@ export function ConversationSidebar({
     projects,
     onProjectsChange,
     scopes,
+    onConversationMoved,
 }: Props) {
     const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
     const [loading, setLoading] = useState(false);
@@ -182,6 +184,11 @@ export function ConversationSidebar({
                 )
             );
             setContextMenu(null);
+
+            // Notify parent if this is the current conversation
+            if (conversationId === currentConversationId && onConversationMoved) {
+                onConversationMoved(conversationId, projectId);
+            }
         } catch (error) {
             console.error("Failed to move conversation:", error);
             alert("Failed to move conversation");

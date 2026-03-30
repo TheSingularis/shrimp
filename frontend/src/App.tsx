@@ -233,6 +233,16 @@ export default function App() {
         updateActiveTab({ selectedScopes });
     }
 
+    function handleConversationMoved(conversationId: string, projectId: string | null) {
+        // Update the tab's projectId if this conversation is currently open
+        const tabIndex = tabs.findIndex(t => t.conversationId === conversationId);
+        if (tabIndex !== -1) {
+            const updatedTabs = [...tabs];
+            updatedTabs[tabIndex] = { ...updatedTabs[tabIndex], projectId };
+            setTabs(updatedTabs);
+        }
+    }
+
     async function handleLoadConversation(id: string) {
         try {
             // Check if conversation is already open in a tab
@@ -297,6 +307,7 @@ export default function App() {
                 projects={projects}
                 onProjectsChange={setProjects}
                 scopes={scopes}
+                onConversationMoved={handleConversationMoved}
             />
 
             {/* Header - Modern Design */}
