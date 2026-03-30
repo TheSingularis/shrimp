@@ -148,30 +148,16 @@ export default function App() {
 
     // Create new tab
     const createNewTab = () => {
-        // Check if current tab has a project, and inherit it
-        const currentTab = tabs.find(t => t.id === activeTabId);
-        const inheritedProjectId = currentTab?.projectId || null;
-
-        // If inheriting a project, use its default scopes, otherwise use all enabled scopes
-        let defaultScopes: string[];
-        if (inheritedProjectId) {
-            const project = projects.find(p => p.project_id === inheritedProjectId);
-            defaultScopes = project?.settings.default_scopes || [];
-            // Fallback to enabled scopes if project has no default scopes
-            if (defaultScopes.length === 0) {
-                defaultScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
-            }
-        } else {
-            defaultScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
-        }
+        // New conversations always start in Uncategorized with all enabled scopes
+        const enabledScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
 
         const newTab: ConversationTab = {
             id: generateTabId(),
             conversationId: null,
-            projectId: inheritedProjectId,
+            projectId: null,
             title: "New Conversation",
             messages: [],
-            selectedScopes: defaultScopes,
+            selectedScopes: enabledScopes,
         };
         setTabs(prev => [...prev, newTab]);
         setActiveTabId(newTab.id);
@@ -202,6 +188,7 @@ export default function App() {
             const newTab: ConversationTab = {
                 id: generateTabId(),
                 conversationId: null,
+                projectId: null,
                 title: "New Conversation",
                 messages: [],
                 selectedScopes: enabledScopes,
