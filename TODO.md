@@ -82,6 +82,51 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ---
 
+## 🤔 Under Consideration
+
+### Project Templates
+
+Pre-configured project setups for faster creation with sensible defaults.
+
+**Concept:** Instead of manually filling out project settings each time, select from pre-made templates that include scopes, custom instructions, and colors.
+
+**Example Templates:**
+- **Coding Project**: scopes=`["shrimp"]`, instructions="Focus on code quality and best practices", color=blue
+- **Personal Notes**: scopes=`["obsidian"]`, instructions="Be conversational, help organize thoughts", color=purple
+- **D&D Campaign**: scopes=`["obsidian"]`, instructions="D&D assistant for campaign planning and lore", color=red
+
+**Implementation Options:**
+- **Option A (Simple)**: 3-5 built-in templates shipped with SHRIMP. "New Project" button has dropdown for "Blank" or "From Template"
+- **Option B (Advanced)**: User-defined templates with save/edit/delete. Right-click project → "Save as Template"
+- **Option C (Hybrid)**: Start with built-in, add user templates later
+
+**UI Flow:**
+1. Click "+ New Project"
+2. Modal shows "Create from Template" section at top
+3. Template cards with name/icon/description
+4. Click template → pre-fills modal
+5. Edit if needed, create project
+
+**Benefits:**
+- ⚡ Faster project creation (one click vs filling 4+ fields)
+- 🎯 Consistency across similar projects
+- 📚 Onboarding (shows users what's possible)
+- 🔄 Reusable configurations
+
+**When This Makes Sense:**
+- Creating new projects frequently (weekly/monthly)
+- Multiple projects of same "type" (e.g., multiple coding projects)
+- Helping new users get started
+
+**When to Skip:**
+- Stable set of projects that rarely change
+- Only 2-3 total projects
+- Feels like over-engineering for workflow
+
+**Decision:** TBD - revisit when project usage patterns become clearer
+
+---
+
 ## ✅ Completed (archive)
 
 - [x] **Discard button** — Abandon pending file edit
