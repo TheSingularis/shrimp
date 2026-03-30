@@ -12,6 +12,7 @@ import "./index.css";
 interface ConversationTab {
     id: string;
     conversationId: string | null;
+    projectId: string | null;
     title: string;
     messages: Message[];
     selectedScopes: string[];
@@ -104,7 +105,9 @@ export default function App() {
                 const result = await saveConversation(
                     activeTab.messages,
                     activeTab.selectedScopes,
-                    activeTab.conversationId ?? undefined
+                    activeTab.conversationId ?? undefined,
+                    undefined,
+                    activeTab.projectId
                 );
                 // Update conversation ID and title if this was a new conversation
                 if (!activeTab.conversationId) {
@@ -128,7 +131,9 @@ export default function App() {
             const result = await saveConversation(
                 activeTab.messages,
                 activeTab.selectedScopes,
-                activeTab.conversationId ?? undefined
+                activeTab.conversationId ?? undefined,
+                undefined,
+                activeTab.projectId
             );
             if (!activeTab.conversationId) {
                 updateActiveTab({
@@ -143,13 +148,30 @@ export default function App() {
 
     // Create new tab
     const createNewTab = () => {
-        const enabledScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
+        // Check if current tab has a project, and inherit it
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        const inheritedProjectId = currentTab?.projectId || null;
+
+        // If inheriting a project, use its default scopes, otherwise use all enabled scopes
+        let defaultScopes: string[];
+        if (inheritedProjectId) {
+            const project = projects.find(p => p.project_id === inheritedProjectId);
+            defaultScopes = project?.settings.default_scopes || [];
+            // Fallback to enabled scopes if project has no default scopes
+            if (defaultScopes.length === 0) {
+                defaultScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
+            }
+        } else {
+            defaultScopes = scopes.filter((s) => s.enabled).map((s) => s.name);
+        }
+
         const newTab: ConversationTab = {
             id: generateTabId(),
             conversationId: null,
+            projectId: inheritedProjectId,
             title: "New Conversation",
             messages: [],
-            selectedScopes: enabledScopes,
+            selectedScopes: defaultScopes,
         };
         setTabs(prev => [...prev, newTab]);
         setActiveTabId(newTab.id);
@@ -228,6 +250,7 @@ export default function App() {
             const newTab: ConversationTab = {
                 id: generateTabId(),
                 conversationId: conv.conversation_id,
+                projectId: conv.project_id,
                 title: getDefaultTitle(conv.messages),
                 messages: conv.messages,
                 selectedScopes: conv.active_scopes,
@@ -273,6 +296,7 @@ export default function App() {
                 onNewConversation={handleNewConversation}
                 projects={projects}
                 onProjectsChange={setProjects}
+                scopes={scopes}
             />
 
             {/* Header - Modern Design */}
@@ -322,6 +346,7 @@ export default function App() {
                         scopes={activeTab.selectedScopes}
                         messages={activeTab.messages}
                         onMessagesChange={(msgs) => updateActiveTab({ messages: msgs })}
+                        conversationId={activeTab.conversationId}
                     />
                 )}
             </main>

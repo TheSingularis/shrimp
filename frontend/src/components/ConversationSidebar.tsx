@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
     type ConversationMetadata,
     type Project,
+    type Scope,
     listConversations,
     deleteConversation,
     updateConversationTitle,
@@ -11,7 +12,7 @@ import {
     deleteProject,
     listProjects,
 } from "../api";
-import { X, ChevronRight, ChevronDown, FolderPlus, Folder } from "lucide-react";
+import { X, ChevronRight, ChevronDown, FolderPlus, Folder, Settings } from "lucide-react";
 import "./ConversationSidebar.css";
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
     onNewConversation: () => void;
     projects: Project[];
     onProjectsChange: (projects: Project[]) => void;
+    scopes: Scope[];
 }
 
 export function ConversationSidebar({
@@ -32,6 +34,7 @@ export function ConversationSidebar({
     onNewConversation,
     projects,
     onProjectsChange,
+    scopes,
 }: Props) {
     const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
     const [loading, setLoading] = useState(false);
@@ -43,6 +46,7 @@ export function ConversationSidebar({
     } | null>(null);
     const [draggedConversationId, setDraggedConversationId] = useState<string | null>(null);
     const [showProjectModal, setShowProjectModal] = useState(false);
+    const [editingProject, setEditingProject] = useState<Project | null>(null);
 
     // Load expanded state from localStorage
     useEffect(() => {
@@ -199,15 +203,38 @@ export function ConversationSidebar({
         }
     }
 
-    async function handleCreateProject(name: string, description: string, color: string) {
+    async function handleSaveProject(
+        name: string,
+        description: string,
+        color: string,
+        settings: { default_scopes: string[]; custom_instructions: string }
+    ) {
         try {
-            await createProject(name, description, color);
+            if (editingProject) {
+                // Update existing project
+                await updateProject(editingProject.project_id, {
+                    name,
+                    description,
+                    color,
+                    settings,
+                });
+            } else {
+                // Create new project
+                await createProject(name, description, color, settings);
+            }
             await refreshProjects();
             setShowProjectModal(false);
+            setEditingProject(null);
         } catch (error) {
-            console.error("Failed to create project:", error);
-            alert("Failed to create project");
+            console.error("Failed to save project:", error);
+            alert(`Failed to ${editingProject ? "update" : "create"} project`);
         }
+    }
+
+    function handleEditProject(project: Project, e: React.MouseEvent) {
+        e.stopPropagation();
+        setEditingProject(project);
+        setShowProjectModal(true);
     }
 
     async function handleDeleteProject(projectId: string, e: React.MouseEvent) {
@@ -279,6 +306,7 @@ export function ConversationSidebar({
                                     onDelete={handleDelete}
                                     onRename={handleRename}
                                     onContextMenu={handleContextMenu}
+                                    onEditProject={handleEditProject}
                                     onDeleteProject={handleDeleteProject}
                                     formatDate={formatDate}
                                     onDragStart={handleDragStart}
@@ -325,11 +353,16 @@ export function ConversationSidebar({
                 />
             )}
 
-            {/* Project creation modal */}
+            {/* Project creation/edit modal */}
             {showProjectModal && (
                 <ProjectModal
-                    onClose={() => setShowProjectModal(false)}
-                    onSave={handleCreateProject}
+                    project={editingProject}
+                    scopes={scopes}
+                    onClose={() => {
+                        setShowProjectModal(false);
+                        setEditingProject(null);
+                    }}
+                    onSave={handleSaveProject}
                 />
             )}
 
@@ -349,6 +382,7 @@ interface ProjectSectionProps {
     onDelete: (id: string, e: React.MouseEvent) => void;
     onRename: (id: string, title: string, e: React.MouseEvent) => void;
     onContextMenu: (id: string, e: React.MouseEvent) => void;
+    onEditProject: (project: Project, e: React.MouseEvent) => void;
     onDeleteProject: (id: string, e: React.MouseEvent) => void;
     formatDate: (date: string) => string;
     onDragStart: (id: string) => void;
@@ -367,6 +401,7 @@ function ProjectSection({
     onDelete,
     onRename,
     onContextMenu,
+    onEditProject,
     onDeleteProject,
     formatDate,
     onDragStart,
@@ -412,13 +447,22 @@ function ProjectSection({
                     <span className="project-name">{project.name}</span>
                     <span className="project-count">({conversations.length})</span>
                 </div>
-                <button
-                    className="delete-project-btn"
-                    onClick={(e) => onDeleteProject(project.project_id, e)}
-                    title="Delete project"
-                >
-                    <X size={14} />
-                </button>
+                <div className="project-actions">
+                    <button
+                        className="edit-project-btn"
+                        onClick={(e) => onEditProject(project, e)}
+                        title="Edit project settings"
+                    >
+                        <Settings size={14} />
+                    </button>
+                    <button
+                        className="delete-project-btn"
+                        onClick={(e) => onDeleteProject(project.project_id, e)}
+                        title="Delete project"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
             </div>
 
             {expanded && (
@@ -595,14 +639,27 @@ function UncategorizedSection({
 }
 
 interface ProjectModalProps {
+    project: Project | null;
+    scopes: Scope[];
     onClose: () => void;
-    onSave: (name: string, description: string, color: string) => void;
+    onSave: (
+        name: string,
+        description: string,
+        color: string,
+        settings: { default_scopes: string[]; custom_instructions: string }
+    ) => void;
 }
 
-function ProjectModal({ onClose, onSave }: ProjectModalProps) {
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [color, setColor] = useState("#3b82f6");
+function ProjectModal({ project, scopes, onClose, onSave }: ProjectModalProps) {
+    const [name, setName] = useState(project?.name || "");
+    const [description, setDescription] = useState(project?.description || "");
+    const [color, setColor] = useState(project?.color || "#3b82f6");
+    const [defaultScopes, setDefaultScopes] = useState<string[]>(
+        project?.settings.default_scopes || []
+    );
+    const [customInstructions, setCustomInstructions] = useState(
+        project?.settings.custom_instructions || ""
+    );
 
     const predefinedColors = [
         "#3b82f6", // blue
@@ -618,8 +675,19 @@ function ProjectModal({ onClose, onSave }: ProjectModalProps) {
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (name.trim()) {
-            onSave(name.trim(), description.trim(), color);
+            onSave(name.trim(), description.trim(), color, {
+                default_scopes: defaultScopes,
+                custom_instructions: customInstructions.trim(),
+            });
         }
+    }
+
+    function toggleScope(scopeName: string) {
+        setDefaultScopes((prev) =>
+            prev.includes(scopeName)
+                ? prev.filter((s) => s !== scopeName)
+                : [...prev, scopeName]
+        );
     }
 
     useEffect(() => {
@@ -634,7 +702,7 @@ function ProjectModal({ onClose, onSave }: ProjectModalProps) {
         <div className="modal-backdrop" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>New Project</h3>
+                    <h3>{project ? "Edit Project" : "New Project"}</h3>
                     <button className="modal-close-btn" onClick={onClose}>
                         <X size={18} />
                     </button>
@@ -679,6 +747,36 @@ function ProjectModal({ onClose, onSave }: ProjectModalProps) {
                                 ))}
                             </div>
                         </div>
+
+                        <div className="scopes-group">
+                            <span className="label-text">Default Scopes</span>
+                            <div className="scopes-list">
+                                {scopes.length === 0 ? (
+                                    <div className="empty-scopes">No scopes configured yet</div>
+                                ) : (
+                                    scopes.map((scope) => (
+                                        <label key={scope.name} className="scope-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={defaultScopes.includes(scope.name)}
+                                                onChange={() => toggleScope(scope.name)}
+                                            />
+                                            <span>{scope.name}</span>
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        <label>
+                            <span className="label-text">Custom Instructions (optional)</span>
+                            <textarea
+                                value={customInstructions}
+                                onChange={(e) => setCustomInstructions(e.target.value)}
+                                placeholder="Additional instructions for conversations in this project..."
+                                rows={4}
+                            />
+                        </label>
                     </div>
 
                     <div className="modal-footer">
@@ -686,7 +784,7 @@ function ProjectModal({ onClose, onSave }: ProjectModalProps) {
                             Cancel
                         </button>
                         <button type="submit" className="btn-primary" disabled={!name.trim()}>
-                            Create Project
+                            {project ? "Save Changes" : "Create Project"}
                         </button>
                     </div>
                 </form>

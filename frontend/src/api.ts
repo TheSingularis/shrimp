@@ -70,6 +70,7 @@ export async function sendChat(
     history: Message[],
     onToken: (token: string) => void,
     pendingFile?: PendingFile,
+    conversationId?: string | null,
     signal?: AbortSignal,
 ): Promise<void> {
     const res = await fetch(`${BASE}/chat`, {
@@ -80,6 +81,7 @@ export async function sendChat(
             scopes,
             history: history.map((m) => ({ role: m.role, content: m.content })),
             pending_file: pendingFile ?? null,
+            conversation_id: conversationId,
         }),
         signal,
     });
@@ -299,7 +301,8 @@ export async function saveConversation(
     messages: Message[],
     activeScopes: string[],
     conversationId?: string,
-    title?: string
+    title?: string,
+    projectId?: string | null
 ): Promise<{ conversation_id: string; title: string }> {
     const res = await fetch(`${BASE}/conversations`, {
         method: "POST",
@@ -309,6 +312,7 @@ export async function saveConversation(
             title,
             messages: messages.map((m) => ({ role: m.role, content: m.content })),
             active_scopes: activeScopes,
+            project_id: projectId,
         }),
     });
     if (!res.ok) throw new Error(`saveConversation: ${res.status}`);
