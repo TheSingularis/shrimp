@@ -750,20 +750,24 @@ function ProjectModal({ project, scopes, onClose, onSave }: ProjectModalProps) {
 
                         <div className="scopes-group">
                             <span className="label-text">Default Scopes</span>
-                            <div className="scopes-list">
+                            <div className="scopes-pills">
                                 {scopes.length === 0 ? (
                                     <div className="empty-scopes">No scopes configured yet</div>
                                 ) : (
-                                    scopes.map((scope) => (
-                                        <label key={scope.name} className="scope-checkbox">
-                                            <input
-                                                type="checkbox"
-                                                checked={defaultScopes.includes(scope.name)}
-                                                onChange={() => toggleScope(scope.name)}
-                                            />
-                                            <span>{scope.name}</span>
-                                        </label>
-                                    ))
+                                    scopes
+                                        .filter((s) => s.enabled)
+                                        .map((scope) => (
+                                            <button
+                                                key={scope.name}
+                                                type="button"
+                                                className={`scope-pill-modal ${
+                                                    defaultScopes.includes(scope.name) ? "active" : ""
+                                                }`}
+                                                onClick={() => toggleScope(scope.name)}
+                                            >
+                                                {scope.name}
+                                            </button>
+                                        ))
                                 )}
                             </div>
                         </div>
