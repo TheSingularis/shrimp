@@ -11,14 +11,14 @@ All notable changes to SHRIMP* will be documented in this file.
 - **Project organization for conversations**: Group related conversations into projects with custom names, descriptions, and colors:
   - Create projects with modal UI featuring name, description, and 8 preset color options
   - **Edit project settings**: Gear icon on project headers opens settings modal to update all project properties
-  - **Per-project default scopes**: Select which scopes to auto-enable for new conversations in this project
+  - **Per-project default scopes**: Scopes automatically apply when opening conversations in the project (overrides saved conversation scopes)
   - **Per-project custom instructions**: Add project-specific instructions that append to the system prompt
   - Delete projects from the conversation sidebar (moves conversations to Uncategorized)
-  - Move conversations between projects via drag-and-drop or right-click context menu
+  - Move conversations between projects via drag-and-drop or right-click context menu (scopes update immediately)
   - Collapsible project folders with conversation counts
   - Visual feedback during drag operations (highlighted drop zones)
   - Projects persist to `projects.json` file with automatic migration
-  - Uncategorized section for conversations without a project
+  - Uncategorized section for conversations without a project (all new conversations start here)
   - Theme-aware left accent border on project headers (uses primary theme color)
   - Small colored dot indicators show each project's custom color
   - Expanded state persists to localStorage
