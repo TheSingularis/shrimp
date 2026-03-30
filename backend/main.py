@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import Literal
 from pathlib import Path
 from sse_starlette.sse import EventSourceResponse
 import httpx
@@ -115,6 +116,11 @@ class UpdateProjectRequest(BaseModel):
 
 class MoveConversationRequest(BaseModel):
     project_id: str | None  # null = move to uncategorized
+
+
+class OllamaHostSettingRequest(BaseModel):
+    mode: Literal["local", "external"]
+    external_url: str = ""
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
@@ -1979,3 +1985,103 @@ async def set_language(update: LanguageUpdate):
         config_path.write_text(current)
         log.info("settings: UI_LANGUAGE set to %s", update.language)
         return {"language": config.UI_LANGUAGE}
+
+
+@app.get("/settings/ollama-host")
+async def get_ollama_host_setting():
+    """Get current Ollama host configuration"""
+    # Read from config.py
+    config_path = Path(__file__).parent / "config.py"
+    config_text = config_path.read_text()
+
+    # Default to local if not explicitly set to external
+    mode = "local"
+    external_url = ""
+
+    # Check if OLLAMA_HOST is set to something other than localhost/127.0.0.1
+    import re as _re
+    match = _re.search(r'OLLAMA_HOST\s*=\s*["\']([^"\']+)["\']', config_text)
+    if match:
+        host = match.group(1)
+        # Parse host (handle both "host:port" and "http://host:port")
+        if host.startswith("http"):
+            url = host
+        else:
+            url = f"http://{host}"
+
+        # If it's not 0.0.0.0 (managed by SHRIMP), it's external
+        # Note: 127.0.0.1 counts as external since user explicitly set it
+        if "0.0.0.0" not in url:
+            mode = "external"
+            external_url = url
+
+    return {"mode": mode, "external_url": external_url}
+
+
+@app.post("/settings/ollama-host")
+async def set_ollama_host_setting(req: OllamaHostSettingRequest):
+    """Update Ollama host configuration"""
+    config_path = Path(__file__).parent / "config.py"
+    config_text = config_path.read_text()
+    import re as _re
+
+    if req.mode == "local":
+        # Set to 0.0.0.0:11434 for network access while managed locally
+        new_host = "http://0.0.0.0:11434"
+    else:
+        # Validate external URL
+        if not req.external_url:
+            raise HTTPException(400, "External URL required when mode is 'external'")
+
+        # Normalize URL - accept with or without http:// prefix
+        url = req.external_url.strip()
+
+        # If no protocol, add http://
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = f"http://{url}"
+
+        # Extract host:port for validation
+        url_without_protocol = url.replace("http://", "").replace("https://", "")
+
+        # Validate format: host:port
+        if not _re.match(r'^[a-zA-Z0-9.-]+:\d+$', url_without_protocol):
+            raise HTTPException(400, "Invalid URL format. Expected host:port (e.g., 192.168.1.100:11434)")
+
+        # Test connection before saving
+        test_url = f"{url}/api/tags"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(test_url)
+                if response.status_code != 200:
+                    raise HTTPException(400, f"Cannot connect to Ollama at {url}")
+        except httpx.TimeoutException:
+            raise HTTPException(400, f"Connection timeout to Ollama at {url}")
+        except httpx.ConnectError:
+            raise HTTPException(400, f"Cannot connect to Ollama at {url}")
+        except Exception as e:
+            raise HTTPException(400, f"Failed to connect to Ollama: {str(e)}")
+
+        new_host = url
+
+    # Update config.py using regex replacement pattern
+    pattern = r'(OLLAMA_HOST\s*=\s*["\'])([^"\']*?)(["\'])'
+
+    if _re.search(pattern, config_text):
+        # Replace existing
+        new_config = _re.sub(pattern, rf'\g<1>{new_host}\g<3>', config_text)
+    else:
+        # Add after imports (find first non-import line)
+        lines = config_text.split('\n')
+        insert_idx = 0
+        for i, line in enumerate(lines):
+            if not line.startswith('import') and not line.startswith('from') and line.strip():
+                insert_idx = i
+                break
+        lines.insert(insert_idx, f'OLLAMA_HOST = "{new_host}"')
+        new_config = '\n'.join(lines)
+
+    config_path.write_text(new_config)
+
+    log.info(f"Updated OLLAMA_HOST to: {new_host}")
+
+    return {"status": "updated", "mode": req.mode, "host": new_host}

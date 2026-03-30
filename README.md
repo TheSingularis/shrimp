@@ -280,6 +280,22 @@ SHRIMP can be accessed from other devices on your local network:
 
 **Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
 
+### External Ollama
+
+To connect SHRIMP to an Ollama instance running on a different machine:
+
+1. On the Ollama host, start Ollama with network binding:
+   ```sh
+   OLLAMA_HOST=0.0.0.0:11434 ollama serve
+   ```
+
+2. In SHRIMP Settings (⚙) → **OLLAMA HOST**:
+   - Select "External (Custom)"
+   - Enter the IP:port of the Ollama host (e.g., `192.168.1.100:11434`)
+   - Click **Save**
+
+SHRIMP will validate the connection before saving. This enables using SHRIMP with remote/networked Ollama servers (e.g., a GPU-enabled machine running Ollama while you use SHRIMP on a laptop).
+
 ### Mobile Usage
 
 - The UI is optimized for touch devices and small screens
@@ -288,6 +304,7 @@ SHRIMP can be accessed from other devices on your local network:
 - Settings drawer scales to screen width
 - All buttons meet the 44px touch target minimum for comfortable tapping
 - Both portrait and landscape orientations are supported
+- Tab bar and scope selector horizontally scrollable to prevent overflow
 - **iOS Safari keyboard**: The app properly handles the on-screen keyboard by shrinking the viewport (using the visualViewport API) so all UI elements remain visible when typing
 
 ---
@@ -523,6 +540,22 @@ SHRIMP can be accessed from other devices on your local network:
 
 **Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
 
+### External Ollama
+
+To connect SHRIMP to an Ollama instance running on a different machine:
+
+1. On the Ollama host, start Ollama with network binding:
+   ```sh
+   OLLAMA_HOST=0.0.0.0:11434 ollama serve
+   ```
+
+2. In SHRIMP Settings (⚙) → **OLLAMA HOST**:
+   - Select "External (Custom)"
+   - Enter the IP:port of the Ollama host (e.g., `192.168.1.100:11434`)
+   - Click **Save**
+
+SHRIMP will validate the connection before saving. This enables using SHRIMP with remote/networked Ollama servers (e.g., a GPU-enabled machine running Ollama while you use SHRIMP on a laptop).
+
 ### Mobile Usage
 
 - The UI is optimized for touch devices and small screens
@@ -531,6 +564,7 @@ SHRIMP can be accessed from other devices on your local network:
 - Settings drawer scales to screen width
 - All buttons meet the 44px touch target minimum for comfortable tapping
 - Both portrait and landscape orientations are supported
+- Tab bar and scope selector horizontally scrollable to prevent overflow
 - **iOS Safari keyboard**: The app properly handles the on-screen keyboard by shrinking the viewport (using the visualViewport API) so all UI elements remain visible when typing
 
 ---

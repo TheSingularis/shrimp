@@ -25,6 +25,11 @@ export interface PendingFile {
     scope: string;
 }
 
+export interface OllamaHostSetting {
+    mode: "local" | "external";
+    external_url: string;
+}
+
 export async function getScopes(): Promise<Scope[]> {
     const res = await fetch(`${BASE}/scopes`);
     return res.json();
@@ -254,6 +259,30 @@ export async function setLanguage(language: string): Promise<void> {
         body: JSON.stringify({ language }),
     });
     if (!res.ok) throw new Error(`setLanguage: ${res.status}`);
+}
+
+export async function getOllamaHostSetting(): Promise<OllamaHostSetting> {
+    const res = await fetch(`${BASE}/settings/ollama-host`);
+    if (!res.ok) throw new Error("Failed to get Ollama host setting");
+    return res.json();
+}
+
+export async function setOllamaHostSetting(
+    mode: "local" | "external",
+    externalUrl?: string
+): Promise<void> {
+    const res = await fetch(`${BASE}/settings/ollama-host`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            mode,
+            external_url: externalUrl || "",
+        }),
+    });
+    if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to update Ollama host setting");
+    }
 }
 
 export async function generateScopeDescription(name: string): Promise<string> {

@@ -48,6 +48,26 @@ All notable changes to SHRIMP* will be documented in this file.
   - Prepends "Respond in {language} only" to every user message for reliable language control
   - Solves Qwen model multilingual issues where system prompts are ignored
   - Backend config: `UI_LANGUAGE` setting with GET/POST endpoints at `/settings/language`
+- **Ollama host configuration**: Settings UI to switch between local (managed by SHRIMP) and external (custom URL) Ollama instances:
+  - Toggle between "Local (Managed)" mode (default, Ollama managed by SHRIMP at `http://0.0.0.0:11434`) and "External (Custom)" mode
+  - External mode accepts IP:port format with or without `http://` prefix (e.g., `192.168.1.100:11434` or `http://192.168.1.100:11434`)
+  - Connection validation before saving - tests `/api/tags` endpoint to ensure Ollama is reachable
+  - Success feedback - green "Connected successfully!" message appears for 3 seconds after successful save
+  - Frontend strips `http://` prefix for cleaner display in input field
+  - Backend automatically adds `http://` protocol if missing (required for API calls)
+  - GET endpoint distinguishes local (0.0.0.0) vs external (any other host including 127.0.0.1)
+  - Enables using SHRIMP with remote/networked Ollama instances (e.g., GPU-enabled machines)
+  - Backend endpoints: GET/POST `/settings/ollama-host` with Pydantic validation
+  - Updates `backend/config.py` OLLAMA_HOST setting via regex replacement
+- **Mobile responsiveness polish**: Production-ready mobile experience with comprehensive touch and layout optimizations:
+  - **Touch targets**: All interactive elements meet 44px×44px minimum (iOS/Android guidelines) - buttons, tabs, pills, conversation items, project controls
+  - **Landscape mode**: Explicit support for phone landscape orientation (height < 500px) with reduced vertical padding on header, tabs, input area, and messages
+  - **Narrow screen handling**: Ultra-compact mode for screens < 360px with stacked buttons, reduced font sizes, and optimized spacing
+  - **Tab bar scrolling**: Horizontal overflow scrolling for many tabs with touch-optimized behavior (hides scrollbars, prevents text overflow)
+  - **Scope selector overflow**: Horizontally scrollable with touch optimization when many scopes are active
+  - **Modal constraints**: Project settings and other modals fit on very narrow screens (< 360px) with reduced padding and stacked buttons
+  - **Touch action optimization**: `touch-action: manipulation` prevents double-tap zoom on interactive elements
+  - All mobile CSS uses media queries in `index.css` and `ConversationSidebar.css` with breakpoints at 768px, 500px (landscape), and 360px (narrow)
 - **Tool call artifact cleanup**: Removes raw tool call JSON, XML tags, and corrupted text from chat output:
   - Strips `<tool_call>...</tool_call>` XML tags
   - Removes standalone JSON like `{"name": "read_file", "arguments": {...}}`
@@ -130,6 +150,7 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Fixed
 
+- **Ollama host configuration protocol handling**: Fixed critical bug where `OLLAMA_HOST` was stored without `http://` protocol prefix, breaking all Ollama API communication (models list, chat, index status). Backend now correctly maintains `http://` prefix in config.py and accepts URLs with or without protocol in external mode.
 - **Pull model error handling**: Pulling non-existent or invalid models now properly displays error messages from Ollama instead of silently failing
 - **Model selection validation**: Selecting a model now validates that it exists in Ollama before applying the change, preventing "model not found" errors during chat
 - Stage indicators now properly transition in question mode (no longer stuck on "Processing…")

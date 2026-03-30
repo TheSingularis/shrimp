@@ -355,3 +355,170 @@ button:disabled {
     padding: 0.5rem 1rem;
     user-select: none;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   MOBILE RESPONSIVE
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Touch target minimums for mobile (44px standard) */
+@media (max-width: 768px) {
+    /* Header buttons (settings, etc.) */
+    header button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.75rem;
+    }
+
+    /* Tab close buttons */
+    .tab-close-btn {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.75rem;
+    }
+
+    /* Scope pills - acceptable at 32px if spaced */
+    .scope-pill {
+        min-height: 32px;
+        padding: 0.5rem 1rem;
+        touch-action: manipulation; /* Prevents double-tap zoom */
+    }
+
+    /* Conversation items - full width tappable */
+    .conversation-item {
+        min-height: 44px;
+        padding: 0.75rem;
+        touch-action: manipulation;
+    }
+
+    /* Project controls */
+    .project-header {
+        min-height: 44px;
+        padding: 0.75rem;
+        touch-action: manipulation;
+    }
+
+    /* Modal close button */
+    .modal-close-btn {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.75rem;
+    }
+
+    /* Diff panel buttons */
+    .diff-toolbar button {
+        min-height: 44px;
+        padding: 0.75rem 1.25rem;
+        touch-action: manipulation;
+    }
+
+    /* Send button and other primary actions */
+    .send-button,
+    .primary-action-btn {
+        min-height: 44px;
+        min-width: 44px;
+        touch-action: manipulation;
+    }
+
+    /* Tab bar scrolling */
+    .tabs-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+    }
+
+    .tabs-container::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+
+    .tabs-list {
+        display: flex;
+        flex-wrap: nowrap; /* Force single row */
+        min-width: min-content;
+    }
+
+    .tab {
+        flex-shrink: 0;
+        max-width: 200px; /* Prevent extremely wide tabs */
+    }
+
+    .tab-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Scope selector overflow handling */
+    .scope-selector {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .scope-selector::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* Landscape mode on phones (height < 500px) */
+@media (max-width: 768px) and (max-height: 500px) {
+    /* Reduce header padding */
+    header {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    /* Reduce tab bar height */
+    .tabs-container {
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Reduce input area padding */
+    .chat-input-container {
+        padding: 0.75rem 1rem;
+    }
+
+    /* Reduce message spacing */
+    .message-group {
+        margin-bottom: 1.5rem;
+    }
+
+    /* Make modals scrollable with reduced height */
+    .modal-content {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    /* Reduce vertical spacing in settings */
+    .drawer-section {
+        padding: 1rem;
+    }
+}
+
+/* Very narrow screens (< 360px) - ultra-compact mode */
+@media (max-width: 360px) {
+    /* Stack buttons vertically when needed */
+    .button-group {
+        flex-direction: column;
+    }
+
+    .button-group button {
+        width: 100%;
+    }
+
+    /* Reduce font sizes slightly */
+    body {
+        font-size: 16px;
+    }
+
+    /* Compact tabs */
+    .tab {
+        max-width: 150px;
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Compact scope pills */
+    .scope-pill {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+}
