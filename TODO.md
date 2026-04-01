@@ -28,25 +28,31 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
   - **COMPLETED:** Per-project default scopes (override conversation scopes when opening)
   - **COMPLETED:** Per-project custom instructions (appended to system prompt)
   - **COMPLETED:** Pill-style scope selector matching header design
+  - **COMPLETED:** Project statistics (conversation count, last activity, total messages) - shows in header and settings modal
   - **Future enhancements:**
     - [ ] Project templates for quick setup
-    - [ ] Project statistics (conversation count, last activity, total messages)
 
 ---
 
 ## 🎨 Tier 3: Polish & Accessibility
+
+- [ ] **Investigate page freezing during file edit loading/applying** — UI freezes when loading multi-file diffs or applying edits, likely due to Monaco editor initialization or synchronous rendering. Consider:
+  - Web Workers for diff computation
+  - Virtual scrolling for large diffs
+  - Lazy loading Monaco instances
+  - Async rendering with loading indicators
+  - Debouncing/throttling during edit application
 
 - [ ] **Update Branding** — Update styling to use shrimp icons (`frontend/public/icons`) and cohesive color scheme. Maybe add theme options in settings. Update ALL Icons to use a cohesive design.
   - Rework settings page to utilize more screen space (possibly full window instead of drawer)
   - Create a cohesive Styling Guide document defining colors, spacing, typography, component patterns
   - **Why now:** Visual polish improves perceived quality. Quick win.
 
-- [ ] **Mobile-responsive CSS** — Make layout work on small screens for phone/tablet access.
-  - **Pairs with:** Ollama host settings (network access)
+- [x] **Mobile-responsive CSS** — Make layout work on small screens for phone/tablet access.
+  - **COMPLETED:** 44px touch targets, landscape mode, horizontal scrolling, ultra-compact mode for <360px screens
 
-- [ ] **Ollama host settings** — Radio toggle between local (managed by SHRIMP) and external (user-supplied URL). Persist to `config.py`.
-  - **Enables:** Network access from other devices
-  - **Related:** Fix loopback binding (`0.0.0.0` instead of `127.0.0.1`)
+- [x] **Ollama host settings** — Radio toggle between local (managed by SHRIMP) and external (user-supplied URL). Persist to `config.py`.
+  - **COMPLETED:** Settings UI with connection validation, success feedback, http:// protocol handling
 
 ---
 
@@ -55,8 +61,30 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [ ] **Fork conversations** — Branch a conversation from any point in history into a new tab. Requires tree structure instead of flat array.
   - **Prerequisite:** Multiple conversation tabs
 
-- [ ] **Electron app** — Package as desktop app with bundled Python backend and optional bundled Ollama.
-  - **Why later:** Significant packaging effort. Current web app works well.
+- [ ] **Standalone Electron app** — Package as distributable desktop application for easy installation without technical setup.
+  - **What it includes:**
+    - Electron wrapper for the React frontend
+    - Bundled Python backend (FastAPI/uvicorn) as subprocess
+    - Optional: Bundled Ollama binary (or auto-download on first run)
+    - System tray icon with quick access
+    - Auto-start backend on app launch
+    - Proper shutdown handling (cleanup Python/Ollama processes)
+    - Native file picker dialogs for scope selection
+    - OS-specific installers (`.dmg` for macOS, `.exe` for Windows, `.AppImage`/`.deb` for Linux)
+  - **Benefits:**
+    - One-click install for non-technical users
+    - No need to run `nix-shell` or manage terminals
+    - Better OS integration (menubar, notifications, file associations)
+    - Can ship pre-configured with good default models
+  - **Challenges:**
+    - Large bundle size (especially if including Ollama)
+    - Platform-specific packaging and signing
+    - Keeping Python/Node dependencies aligned
+    - Auto-update mechanism for backend code
+  - **Alternatives to consider:**
+    - Tauri (Rust-based, smaller than Electron)
+    - Native Python GUI (PyQt/PySide) instead of web stack
+  - **Why later:** Significant packaging effort. Current web app with nix-shell works well for technical users.
 
 - [ ] **Tool calling phase 2** — Once tool calling refactor is stable, add:
   - Web search tool

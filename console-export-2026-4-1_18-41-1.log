@@ -1,0 +1,672 @@
+[Spinner] RENDERING typing indicator: frame=0, stage="", label="Processing…" 2 ChatPanel.tsx:1294:127
+[Spinner] State check: streaming=true, responseStarted=false, stage="", shouldSpin=true ChatPanel.tsx:281:11
+[Spinner] STARTING animation (stage: "") ChatPanel.tsx:283:12
+[Spinner] Typing indicator visible: true (streaming=true, responseStarted=false, stage="") ChatPanel.tsx:308:11
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: __STAGE__thinking ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Stream Debug] Buffer after Step 1: <empty string> ChatPanel.tsx:727:15
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: <empty string> ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: <empty string> <empty string> ChatPanel.tsx:822:13
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] STOPPING animation (stage: "") ChatPanel.tsx:288:13
+[Spinner] State check: streaming=true, responseStarted=false, stage="thinking", shouldSpin=true ChatPanel.tsx:281:11
+[Spinner] STARTING animation (stage: "thinking") ChatPanel.tsx:283:12
+[Spinner] Typing indicator visible: true (streaming=true, responseStarted=false, stage="thinking") ChatPanel.tsx:308:11
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__finding captured: finding ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: I will first check if `backend/main.py` and `frontend/src/App.tsx` exist using `list_scope('shrimp') ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "finding" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: I will first check if `backend/main.py` and `frontend/src/App.tsx` exist using `list_scope('shrimp') ... (154 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: __STAGE_MARKER__{"type": "tools", "stage": "list_scope", "count": 1, "tools": ["list_scope"], "detai ChatPanel.tsx:727:15
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): true buffer start: __STAGE_MARKER__{"type": "tools", "stage": "list_s ChatPanel.tsx:732:14
+[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__ ChatPanel.tsx:734:15
+[Stream Debug] Found __STAGE_MARKER__ at position 0 ChatPanel.tsx:738:15
+[Stream Debug] Buffer around marker: __STAGE_MARKER__{"type": "tools", "stage": "list_s ChatPanel.tsx:739:15
+[Stream Debug] jsonStart: 16 looking for closing brace... ChatPanel.tsx:740:15
+[Stream Debug] Found complete marker, jsonEnd: 122 ChatPanel.tsx:789:15
+[Stream Debug] Marker JSON: {"type": "tools", "stage": "list_scope", "count": 1, "tools": ["list_scope"], "details": ["shrimp scope"]} ChatPanel.tsx:791:15
+[Flush Debug] Flushing to UI: 
+[list scope: shrimp scope]
+ <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): true buffer start: __STAGE_MARKER__{"type": "tools", "stage": "propos ChatPanel.tsx:732:14
+[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__ ChatPanel.tsx:734:15
+[Stream Debug] Found __STAGE_MARKER__ at position 0 ChatPanel.tsx:738:15
+[Stream Debug] Buffer around marker: __STAGE_MARKER__{"type": "tools", "stage": "propos ChatPanel.tsx:739:15
+[Stream Debug] jsonStart: 16 looking for closing brace... ChatPanel.tsx:740:15
+[Stream Debug] Found complete marker, jsonEnd: 139 ChatPanel.tsx:789:15
+[Stream Debug] Marker JSON: {"type": "tools", "stage": "propose_file_edit", "count": 1, "tools": ["propose_file_edit"], "details": ["backend/main.py"]} ChatPanel.tsx:791:15
+[Flush Debug] Flushing to UI: 
+[propose file edit: backend/main.py]
+ <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): true buffer start: __STAGE_MARKER__{"type": "tools", "stage": "propos ChatPanel.tsx:732:14
+[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__ ChatPanel.tsx:734:15
+[Stream Debug] Found __STAGE_MARKER__ at position 0 ChatPanel.tsx:738:15
+[Stream Debug] Buffer around marker: __STAGE_MARKER__{"type": "tools", "stage": "propos ChatPanel.tsx:739:15
+[Stream Debug] jsonStart: 16 looking for closing brace... ChatPanel.tsx:740:15
+[Stream Debug] Found complete marker, jsonEnd: 144 ChatPanel.tsx:789:15
+[Stream Debug] Marker JSON: {"type": "tools", "stage": "propose_file_edit", "count": 1, "tools": ["propose_file_edit"], "details": ["frontend/src/App.tsx"]} ChatPanel.tsx:791:15
+[Flush Debug] Flushing to UI: 
+[propose file edit: frontend/src/App.tsx]
+ <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: <empty string> ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: <empty string> <empty string> ChatPanel.tsx:822:13
+[Spinner] RENDERING typing indicator: frame=2, stage="finding", label="Finding file…" 2 ChatPanel.tsx:1294:127
+[Spinner] STOPPING animation (stage: "thinking") ChatPanel.tsx:288:13
+[Spinner] State check: streaming=true, responseStarted=true, stage="finding", shouldSpin=true ChatPanel.tsx:281:11
+[Spinner] STARTING animation (stage: "finding") ChatPanel.tsx:283:12
+[Spinner] Typing indicator visible: true (streaming=true, responseStarted=true, stage="finding") ChatPanel.tsx:308:11
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: __STAGE__thinking ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Stream Debug] Buffer after Step 1: <empty string> ChatPanel.tsx:727:15
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: <empty string> ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: <empty string> <empty string> ChatPanel.tsx:822:13
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] STOPPING animation (stage: "finding") ChatPanel.tsx:288:13
+[Spinner] State check: streaming=true, responseStarted=true, stage="thinking", shouldSpin=true ChatPanel.tsx:281:11
+[Spinner] STARTING animation (stage: "thinking") ChatPanel.tsx:283:12
+[Spinner] Typing indicator visible: true (streaming=true, responseStarted=true, stage="thinking") ChatPanel.tsx:308:11
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=1, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=2, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=3, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=4, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=5, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=6, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=7, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=8, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=9, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=10, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=11, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=12, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=13, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=14, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=15, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: 
+
+I have proposed edits to both `backend/main.py` ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: 
+
+I have proposed edits to both `backend/main.py`  ... (358 chars) ChatPanel.tsx:822:13
+[Flush Debug] Flushing to UI: 
+
+I have proposed edits to both `backend/main.py` and `frontend/src/App.tsx` by adding comments indi ... (358 chars) ChatPanel.tsx:678:13
+[Spinner] RENDERING typing indicator: frame=0, stage="thinking", label="Thinking…" 2 ChatPanel.tsx:1294:127
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: 
+
+__SHRIMP_MULTI_EDIT__{"type": "multi_file_edit", "files": [{"scope": "shrimp", "path": "backend/ma ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: 
+
+__SHRIMP_MULTI_EDIT__{"type": "multi_file_edit", "files": [{"scope": "shrimp", "path": "backend/ma ... (17383 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n            # Check timeout\n            elapsed = asyncio.get_event_loop().time() - start_tim ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__reading captured: reading ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n\n            # Check timeout\n            elapsed = asyncio.get_event_loop().time() - start_tim ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "reading" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n\n            # Check timeout\n            elapsed = asyncio.get_event_loop().time() - start_tim ... (5244 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n                    elif first_tool == \"search_files\":\n                        yield \"__STAG ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__searching captured: searching ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n                    elif first_tool == \"search_files\":\n                        yield \"__STAG ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "searching" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n                    elif first_tool == \"search_files\":\n                        yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n                    elif first_tool == \"list_scope\":\n                        yield \"__STAGE_ ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__finding captured: finding ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n                    elif first_tool == \"list_scope\":\n                        yield \"__STAGE_ ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "finding" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n                    elif first_tool == \"list_scope\":\n                        yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n                    elif first_tool == \"propose_file_edit\":\n                        yield \"_ ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__planning captured: planning ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n                    elif first_tool == \"propose_file_edit\":\n                        yield \"_ ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "planning" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n                    elif first_tool == \"propose_file_edit\":\n                        yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n                    else:\n                        yield \"__STAGE__thinking\"\n\n              ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n                    else:\n                        yield \"__STAGE__thinking\"\n\n              ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n                    else:\n                        yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n                    # Execute tools and emit incremental stage markers\n                    fo ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n\n                    # Execute tools and emit incremental stage markers\n                    fo ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n\n                    # Execute tools and emit incremental stage markers\n                    fo ... (5227 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n        log.info(f\"chat_with_tools: completed in {iteration} iterations\")\n\n    return Stream ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n        log.info(f\"chat_with_tools: completed in {iteration} iterations\")\n\n    return Stream ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n        log.info(f\"chat_with_tools: completed in {iteration} iterations\")\n\n    return Stream ... (10679 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n            buffer = \"\"\n            async with httpx.AsyncClient(timeout=None) as client:\n  ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n            buffer = \"\"\n            async with httpx.AsyncClient(timeout=None) as client:\n  ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n            buffer = \"\"\n            async with httpx.AsyncClient(timeout=None) as client:\n   ... (1072 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n            log.info(\"chat: general question answered \u2014 %d chars\", len(buffer))\n\n      ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n            log.info(\"chat: general question answered \u2014 %d chars\", len(buffer))\n\n      ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n            log.info(\"chat: general question answered \u2014 %d chars\", len(buffer))\n\n       ... (11818 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n            new_content_parts = []\n            async with httpx.AsyncClient(timeout=None) as cl ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n            new_content_parts = []\n            async with httpx.AsyncClient(timeout=None) as cl ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n            new_content_parts = []\n            async with httpx.AsyncClient(timeout=None) as cl ... (2006 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n            filename = file_path.split(\"/\")[-1]\n            yield f\"Expanding **{filename} ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__finding captured: finding ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n\n            filename = file_path.split(\"/\")[-1]\n            yield f\"Expanding **{filename} ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "finding" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n\n            filename = file_path.split(\"/\")[-1]\n            yield f\"Expanding **{filename} ... (567 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n            yield \"__STAGE__reading\"\n            async for chunk in stream_file_edit_inner(): ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__reading captured: reading ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n            yield \"__STAGE__reading\"\n            async for chunk in stream_file_edit_inner(): ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "reading" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n            yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n            async for chunk in stream_file_edit_inner():\n                yield chunk\n\n       ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__planning captured: planning ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n            async for chunk in stream_file_edit_inner():\n                yield chunk\n\n       ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "planning" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n            async for chunk in stream_file_edit_inner():\n                yield chunk\n\n        ... (3105 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n            file_diffs = []\n            total_files = len(file_list)\n\n            for idx, ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__editing_ captured: editing_ ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n\n            file_diffs = []\n            total_files = len(file_list)\n\n            for idx, ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "editing_" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n\n            file_diffs = []\n            total_files = len(file_list)\n\n            for idx,  ... (560 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: {idx}_of_{total_files}\"\n                log.info(\"chat: generating initial edit for %s (%d/%d)\", ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__reviewing_ captured: reviewing_ ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: {idx}_of_{total_files}\"\n                log.info(\"chat: generating initial edit for %s (%d/%d)\", ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "reviewing_" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: {idx}_of_{total_files}\"\n                log.info(\"chat: generating initial edit for %s (%d/%d)\", ... (2385 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: {idx}_of_{total_files}\"\n                log.info(\"chat: critiquing edit for %s\", file_path)\n\n ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__refining_ captured: refining_ ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: {idx}_of_{total_files}\"\n                log.info(\"chat: critiquing edit for %s\", file_path)\n\n ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "refining_" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: {idx}_of_{total_files}\"\n                log.info(\"chat: critiquing edit for %s\", file_path)\n\n  ... (3846 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: {idx}_of_{total_files}\"\n                    log.info(\"chat: refining edit for %s based on critiqu ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: {idx}_of_{total_files}\"\n                    log.info(\"chat: refining edit for %s based on critiqu ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: {idx}_of_{total_files}\"\n                    log.info(\"chat: refining edit for %s based on critiqu ... (2833 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n            # Emit multi-file sentinel\n            sentinel = json.dumps({\n                \ ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__searching captured: searching ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n\n            # Emit multi-file sentinel\n            sentinel = json.dumps({\n                \ ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "searching" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n\n            # Emit multi-file sentinel\n            sentinel = json.dumps({\n                \ ... (6538 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n        # Stage token before Ollama call\n        yield \"__STAGE__thinking\"\n        async for ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__thinking captured: thinking ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n        # Stage token before Ollama call\n        yield \"__STAGE__thinking\"\n        async for ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "thinking" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n        # Stage token before Ollama call\n        yield \" <empty string> ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n        async for chunk in stream_inner():\n            yield chunk\n        # Signal completion ChatPanel.tsx:727:15
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: \"\n        async for chunk in stream_inner():\n            yield chunk\n        # Signal completion ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Flush Debug] Flushing to UI: \"\n        async for chunk in stream_inner():\n            yield chunk\n        # Signal completion ... (118 chars) ChatPanel.tsx:678:13
+[Stream Debug] Buffer after Step 1: \"\n\n    return StreamingResponse(stream(), media_type=\"text/plain\")\n\n\n# \u2500\u2500 routes: ChatPanel.tsx:727:15
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: \"\n\n    return StreamingResponse(stream(), media ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: \"\n\n    return StreamingResponse(stream(), media ... (42047 chars) ChatPanel.tsx:822:13
+[Flush Debug] Flushing to UI: \"\n\n    return StreamingResponse(stream(), media_type=\"text/plain\")\n\n\n# \u2500\u2500 routes:  ... (42047 chars) ChatPanel.tsx:678:13
+[Stream Debug] Step 1 matched __STAGE__ token: __STAGE__done captured: done ChatPanel.tsx:720:15
+[Stream Debug] Buffer before Step 1: __STAGE__done ChatPanel.tsx:721:15
+[Spinner] Stage changed: "" → "done" ChatPanel.tsx:272:11
+[Stream Debug] Buffer after Step 1: <empty string> ChatPanel.tsx:727:15
+[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'): false buffer start: <empty string> ChatPanel.tsx:732:14
+[Stream Debug] Step 4: Flushing remaining buffer: <empty string> <empty string> ChatPanel.tsx:822:13
+[Spinner] STOPPING animation (stage: "thinking") ChatPanel.tsx:288:13
+[Spinner] State check: streaming=true, responseStarted=true, stage="done", shouldSpin=false ChatPanel.tsx:281:11
+[Spinner] Typing indicator visible: false (streaming=true, responseStarted=true, stage="done") ChatPanel.tsx:308:11
+[Spinner] State check: streaming=false, responseStarted=true, stage="", shouldSpin=false ChatPanel.tsx:281:11
+[Spinner] Resetting frame to 0 (streaming stopped) ChatPanel.tsx:301:12
+[Spinner] Typing indicator visible: false (streaming=false, responseStarted=true, stage="") ChatPanel.tsx:308:11
+Uncaught Error: TextModel got disposed before DiffEditorWidget model got reset
+
+Ce@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:5:1351
+Bl/</<@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:390:50593
+_deliver@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:2719
+_deliverQueue@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:2810
+fire@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:3146
+dispose@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:244:68898
+I@http://localhost:5173/node_modules/.vite/deps/@monaco-editor_react.js?v=801bdab2:611:28
+Oe/</<@http://localhost:5173/node_modules/.vite/deps/@monaco-editor_react.js?v=801bdab2:542:162
+react_stack_bottom_frame@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:12908:5
+runWithFiberInDEV@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:851:123
+commitHookEffectListUnmount@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:6642:149
+commitHookPassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:6655:55
+commitPassiveUnmountEffectsInsideOfDeletedTree_begin@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7864:38
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7783:58
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7797:46
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7797:46
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7802:46
+flushPassiveEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8804:32
+flushPendingEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8769:11
+flushSpawnedWork@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8747:40
+commitRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8585:5
+commitRootWhenReady@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8079:14
+performWorkOnRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8051:27
+performSyncWorkOnRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9067:21
+flushSyncWorkAcrossRoots_impl@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8984:302
+processRootScheduleInMicrotask@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9005:101
+require_react_dom_client_development</scheduleImmediateRootScheduleTask/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9078:150
+VoidFunction*scheduleImmediateRootScheduleTask@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9077:21
+ensureRootIsScheduled@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8966:196
+scheduleUpdateOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7938:398
+dispatchSetStateInternal@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:5161:54
+dispatchSetState@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:5133:28
+onClose@http://localhost:5173/src/components/ChatPanel.tsx?t=1775085632633:1393:35
+executeDispatch@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9141:13
+runWithFiberInDEV@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:851:123
+processDispatchQueue@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9167:27
+require_react_dom_client_development</dispatchEventForPluginEventSystem/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9454:25
+batchedUpdates$1@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:2044:12
+dispatchEventForPluginEventSystem@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9240:20
+dispatchEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:11319:62
+dispatchDiscreteEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:11301:56
+EventListener.handleEvent*addTrappedEventListener@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9212:222
+listenToNativeEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9184:27
+require_react_dom_client_development</listenToAllSupportedEvents/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9190:85
+listenToAllSupportedEvents@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9189:21
+require_react_dom_client_development</exports.createRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:14347:30
+@http://localhost:5173/src/main.tsx?t=1775085632633:7:11
+    unexpectedErrorHandler editor.api-CalNCsUg.js:3
+    setTimeout handler*wie/this.unexpectedErrorHandler editor.api-CalNCsUg.js:1
+    onUnexpectedError editor.api-CalNCsUg.js:5
+    De editor.api-CalNCsUg.js:5
+    Bl editor.api-CalNCsUg.js:390
+    _deliver editor.api-CalNCsUg.js:7
+    _deliverQueue editor.api-CalNCsUg.js:7
+    fire editor.api-CalNCsUg.js:7
+    dispose editor.api-CalNCsUg.js:244
+    I index.mjs:1
+    Oe index.mjs:1
+    React 34
+    onClose ChatPanel.tsx:1332
+    React 13
+    <anonymous> main.tsx:6
+editor.api-CalNCsUg.js:3:12
+Uncaught Error: TextModel got disposed before DiffEditorWidget model got reset
+
+Ce@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:5:1351
+Bl/</<@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:390:50593
+_deliver@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:2719
+_deliverQueue@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:2810
+fire@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:3146
+dispose@https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:244:68898
+I@http://localhost:5173/node_modules/.vite/deps/@monaco-editor_react.js?v=801bdab2:611:28
+Oe/</<@http://localhost:5173/node_modules/.vite/deps/@monaco-editor_react.js?v=801bdab2:542:162
+react_stack_bottom_frame@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:12908:5
+runWithFiberInDEV@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:851:123
+commitHookEffectListUnmount@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:6642:149
+commitHookPassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:6655:55
+commitPassiveUnmountEffectsInsideOfDeletedTree_begin@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7864:38
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7783:58
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7797:46
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7797:46
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7814:54
+recursivelyTraversePassiveUnmountEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7789:130
+commitPassiveUnmountOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7802:46
+flushPassiveEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8804:32
+flushPendingEffects@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8769:11
+flushSpawnedWork@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8747:40
+commitRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8585:5
+commitRootWhenReady@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8079:14
+performWorkOnRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8051:27
+performSyncWorkOnRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9067:21
+flushSyncWorkAcrossRoots_impl@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8984:302
+processRootScheduleInMicrotask@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9005:101
+require_react_dom_client_development</scheduleImmediateRootScheduleTask/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9078:150
+VoidFunction*scheduleImmediateRootScheduleTask@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9077:21
+ensureRootIsScheduled@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:8966:196
+scheduleUpdateOnFiber@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:7938:398
+dispatchSetStateInternal@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:5161:54
+dispatchSetState@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:5133:28
+onClose@http://localhost:5173/src/components/ChatPanel.tsx?t=1775085632633:1393:35
+executeDispatch@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9141:13
+runWithFiberInDEV@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:851:123
+processDispatchQueue@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9167:27
+require_react_dom_client_development</dispatchEventForPluginEventSystem/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9454:25
+batchedUpdates$1@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:2044:12
+dispatchEventForPluginEventSystem@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9240:20
+dispatchEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:11319:62
+dispatchDiscreteEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:11301:56
+EventListener.handleEvent*addTrappedEventListener@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9212:222
+listenToNativeEvent@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9184:27
+require_react_dom_client_development</listenToAllSupportedEvents/<@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9190:85
+listenToAllSupportedEvents@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:9189:21
+require_react_dom_client_development</exports.createRoot@http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=17a6460c:14347:30
+@http://localhost:5173/src/main.tsx?t=1775085632633:7:11
+    unexpectedErrorHandler editor.api-CalNCsUg.js:3
+    setTimeout handler*wie/this.unexpectedErrorHandler editor.api-CalNCsUg.js:1
+    onUnexpectedError editor.api-CalNCsUg.js:5
+    De editor.api-CalNCsUg.js:5
+    Bl editor.api-CalNCsUg.js:390
+    _deliver editor.api-CalNCsUg.js:7
+    _deliverQueue editor.api-CalNCsUg.js:7
+    fire editor.api-CalNCsUg.js:7
+    dispose editor.api-CalNCsUg.js:244
+    I index.mjs:1
+    Oe index.mjs:1
+    React 34
+    onClose ChatPanel.tsx:1332
+    React 13
+    <anonymous> main.tsx:6
+editor.api-CalNCsUg.js:3:12

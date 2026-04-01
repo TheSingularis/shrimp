@@ -301,19 +301,40 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
     system_prompt = (
         "You are SHRIMP*, a local AI assistant with access to the user's files via tools.\n\n"
         f"## Available Scopes\n"
-        f"You have access to these file scopes: {scope_names_str}\n"
-        f"Use the tools provided to:\n"
-        "- `list_scope(scope)` - See what files are in a scope\n"
-        "- `read_file(scope, path)` - Read a specific file\n"
-        "- `search_files(query, scopes)` - Semantic search across files\n"
-        "- `propose_file_edit(scope, path, new_content, explanation)` - Propose edits to existing files OR create new files\n\n"
+        f"You have access to these file scopes: {scope_names_str}\n\n"
+        "## Tool Usage — CRITICAL PATH RULES\n"
+        "**ALWAYS use `list_scope(scope)` FIRST before reading files you haven't seen!**\n"
+        "- Shows EXACT file paths that exist\n"
+        "- Paths must match EXACTLY — no guessing!\n"
+        "- Example: If list shows 'frontend/src/App.tsx', use that EXACT path\n"
+        "- NEVER invent paths like 'client/' when the actual path is 'frontend/'\n"
+        "- NEVER add subdirectories that don't exist\n"
+        "- If a path fails, use list_scope or search_files to find the correct path\n\n"
+        "## Available Tools\n"
+        "- `list_scope(scope)` — See EXACT file paths (use this first!)\n"
+        "- `read_file(scope, path, start_line?, end_line?)` — Read a file or specific line range\n"
+        "- `search_files(query, scopes)` — Semantic search when you don't know the path\n"
+        "- `propose_file_edit(scope, path, new_content, explanation)` — Propose changes\n\n"
+        "## Reading Specific Line Ranges — CRITICAL\n"
+        "**When user mentions a line number (e.g., 'around line 698'), use start_line and end_line parameters!**\n"
+        "- Example: User says 'look at line 698' → call `read_file('shrimp', 'file.tsx', start_line=668, end_line=728)`\n"
+        "- This reads 60 lines centered on the requested line (30 before, 30 after)\n"
+        "- Output will include line numbers (e.g., '698: code here') so you can verify you read the right section\n"
+        "- For large files, ALWAYS use line ranges to reduce context usage\n"
+        "- If user says 'around line X', calculate: start_line=X-30, end_line=X+30\n\n"
+        "## Workflow for File Operations\n"
+        "1. User mentions a file → call `list_scope(scope)` to see all files\n"
+        "2. Find the file you need in the list\n"
+        "3. Use the EXACT path from list_scope in your read_file call\n"
+        "4. If user mentions a line number, add start_line and end_line parameters\n"
+        "5. Never guess or invent paths — always verify first!\n\n"
         "## Creating & Editing Files — CRITICAL RULES\n"
         "**NEVER claim to have created or edited a file without calling `propose_file_edit`!**\n"
         "- Files are ONLY created/edited when you call the tool and the user approves it\n"
         "- The user will see a diff editor ONLY if you call the tool\n"
         "- If you don't call the tool, NOTHING happens — no file is created or modified\n"
         "- To create a new file: call `propose_file_edit(scope, 'filename.md', content, explanation)`\n"
-        "- To edit existing file: call `propose_file_edit(scope, 'path/to/file', new_content, explanation)`\n"
+        "- To edit existing file: Read the file first, then propose changes with explanation\n"
         "- After calling the tool, wait for user approval — don't say \"file created\" until they approve\n\n"
         "## Behavior\n"
         "- **IMPORTANT: Always respond in English only.** Never use other languages in your responses.\n"
@@ -477,36 +498,33 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     else:
                         yield "__STAGE__thinking"
 
-                    # Track tool execution in stage history with details
-                    tool_summary = {
-                        "type": "tools",
-                        "stage": first_tool,
-                        "count": len(tool_calls),
-                        "tools": [t.get("function", {}).get("name") for t in tool_calls],
-                        "details": []
-                    }
-
-                    # Execute tools and collect details
-                    for tool_call in tool_calls:
+                    # Execute tools and emit incremental stage markers
+                    for idx, tool_call in enumerate(tool_calls):
                         func = tool_call.get("function", {})
                         tool_name = func.get("name")
                         arguments = func.get("arguments", {})
 
-                        log.info(f"chat_with_tools: executing {tool_name}")
+                        log.info(f"chat_with_tools: executing {tool_name} ({idx+1}/{len(tool_calls)})")
 
-                        # Extract details for display
+                        # Extract detail for this specific tool call
+                        detail = ""
                         if tool_name == "read_file":
                             path = arguments.get("path", "unknown")
-                            tool_summary["details"].append(path)
+                            start = arguments.get("start_line")
+                            end = arguments.get("end_line")
+                            if start is not None or end is not None:
+                                detail = f"{path} (lines {start or 1}-{end or 'end'})"
+                            else:
+                                detail = path
                         elif tool_name == "search_files":
                             query = arguments.get("query", "")
-                            tool_summary["details"].append(f'"{query}"')
+                            detail = f'"{query}"'
                         elif tool_name == "list_scope":
                             scope = arguments.get("scope", "")
-                            tool_summary["details"].append(f"{scope} scope")
+                            detail = f"{scope} scope"
                         elif tool_name == "propose_file_edit":
                             path = arguments.get("path", "unknown")
-                            tool_summary["details"].append(path)
+                            detail = path
 
                         # Execute tool
                         try:
@@ -521,11 +539,18 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                             "content": result
                         })
 
-                    # Emit incremental stage marker after tools complete
-                    stage_history.append(tool_summary)
-                    marker_sentinel = json.dumps(tool_summary)
-                    yield f"\n\n__STAGE_MARKER__{marker_sentinel}"
-                    log.info(f"chat_with_tools: emitted stage marker for {first_tool} with {len(tool_summary['details'])} details")
+                        # Emit stage marker immediately after each tool completes
+                        tool_marker = {
+                            "type": "tools",
+                            "stage": tool_name,
+                            "count": 1,
+                            "tools": [tool_name],
+                            "details": [detail] if detail else []
+                        }
+                        stage_history.append(tool_marker)
+                        marker_sentinel = json.dumps(tool_marker)
+                        yield f"__STAGE_MARKER__{marker_sentinel}"
+                        log.info(f"chat_with_tools: emitted incremental marker for {tool_name}: {detail}")
 
             except Exception as e:
                 log.exception("chat_with_tools: iteration failed")

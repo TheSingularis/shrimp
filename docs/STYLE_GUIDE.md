@@ -53,6 +53,18 @@ SHRIMP supports 3 switchable color themes. All themes share the same neutral bas
 
 **Usage**: Refined professional theme. Classic blue tones, brighter and more vibrant. Distinct from the purple theme.
 
+### Status Colors
+
+Universal semantic colors (theme-independent):
+```css
+--color-success: #10b981           /* Success states, confirmations */
+--color-success-bg: rgba(16, 185, 129, 0.1)  /* Success backgrounds */
+--color-error: #ef4444             /* Errors, destructive actions */
+--color-error-bg: rgba(239, 68, 68, 0.1)     /* Error backgrounds */
+--color-warning: #f59e0b           /* Warnings, cautions */
+--color-warning-bg: rgba(245, 158, 11, 0.1)  /* Warning backgrounds */
+```
+
 ### Color Usage Guidelines
 
 - **Primary actions**: Use `var(--theme-primary)` for buttons, links, active states
@@ -61,6 +73,7 @@ SHRIMP supports 3 switchable color themes. All themes share the same neutral bas
 - **Backgrounds**: Use `var(--theme-accent-dim)` for subtle tinted backgrounds
 - **Borders**: Use `var(--color-border)` for dividers and element borders
 - **Text hierarchy**: `var(--color-text)` for primary, `var(--color-text-muted)` for secondary
+- **Status messages**: Use `var(--color-success/error/warning)` for semantic feedback
 
 ### Accessibility
 
@@ -220,47 +233,155 @@ padding: 1rem 1.5rem;
 
 ### Modals/Drawers
 
-#### Settings Drawer
-- Width: `480px` (desktop)
-- Width: `60%` (tablet, max-width: 768px)
-- Width: `100%` (mobile, max-width: 480px)
-- Background: `var(--color-bg-elevated)`
-- Border: `1px solid var(--color-border)`
-- Transform: `translateX(100%)` (closed) → `translateX(0)` (open)
-- Transition: `0.2s ease`
+#### Settings Modal (Tabbed Full-Window Modal)
+
+Full-window modal with tabbed navigation for complex settings interfaces.
+
+**Structure:**
+- Container: Centered, `max-width: 900px`, `max-height: 85vh`
+- Header: Title + close button (X icon, 18px)
+- Tab navigation: Horizontal tabs at top
+- Content area: Scrollable sections
+- Animation: Fade + scale (0.2s ease)
+
+**Dimensions:**
+- Desktop: `width: 90%`, `max-width: 900px`
+- Tablet (≤768px): `width: 90%`
+- Mobile (≤480px): `width: 95%`
+
+**Example Structure:**
+```tsx
+<div className="modal-backdrop" onClick={onClose} />
+<div className="settings-modal">
+    <div className="modal-header">
+        <h2>Settings</h2>
+        <button className="close-btn" onClick={onClose}>
+            <X size={18} />
+        </button>
+    </div>
+
+    <div className="modal-tabs">
+        <button className={`tab ${activeTab === "tab1" ? "active" : ""}`}>
+            Tab 1
+        </button>
+        {/* More tabs */}
+    </div>
+
+    <div className="modal-content">
+        {/* Scrollable content sections */}
+    </div>
+</div>
+```
+
+**CSS:**
+```css
+.settings-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 900px;
+    width: 90%;
+    max-height: 85vh;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 101;
+}
+
+.modal-tabs .tab {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.modal-tabs .tab.active {
+    color: var(--theme-primary);
+    border-bottom-color: var(--theme-primary);
+}
+
+.modal-content {
+    overflow-y: auto;
+    flex: 1;
+}
+```
 
 #### Backdrop
 ```css
-background: rgba(0, 0, 0, 0.4);
-backdrop-filter: blur(2px);
+background: rgba(0, 0, 0, 0.5);
+z-index: 100;
+animation: fadeIn 0.2s ease;
 ```
 
 ## Icons
 
 ### Icon Library
-**Lucide React** v1.7.0 - MIT licensed, minimal SVG icons
+**Lucide React** v1.7.0 - MIT licensed, minimal SVG icons. All UI icons use Lucide for consistency and professional appearance.
 
-### Icon Sizes
-- **14px**: Small inline icons (checkmarks, close buttons in compact spaces)
-- **16px**: Standard inline icons (edit, settings in tight UI)
-- **18px**: Default UI icons (close buttons, navigation)
-- **20px**: Larger UI icons (settings button, primary actions)
+### Icon Size Standards
+- **14px**: Compact inline actions (close buttons in tabs, tight rows, small indicators)
+- **16px**: Standard UI elements (most buttons, icons, default size)
+- **18px**: Modal close buttons, larger interactive elements
+- **20px**: Large touch targets (header buttons, primary actions)
 - **32px**: Logo (header)
 - **128px**: Hero icon (welcome screen)
 
-### Common Icons
-- **Settings**: `<Settings size={20} />`
-- **Close**: `<X size={18} />`
-- **Check/Approve**: `<Check size={14} />`
-- **Edit**: `<Edit3 size={16} />`
-- **Add/New**: `<Plus size={16} />`
-- **Delete**: `<X size={14} />` (with danger color)
-- **Refresh**: `<RefreshCw size={16} />`
+**Sizing principle**: Use smaller sizes (14-16px) in dense layouts, larger sizes (18-20px) for prominent actions.
+
+### Common Icons Reference
+
+| Purpose | Icon Component | Import | Typical Size | Usage |
+|---------|---------------|--------|--------------|-------|
+| Settings | `<Settings />` | `lucide-react` | 16-20px | Header settings button, configuration |
+| Close/Cancel | `<X />` | `lucide-react` | 14-18px | Modal close, remove items, cancel |
+| Check/Approve | `<Check />` | `lucide-react` | 16px | Success states, approvals |
+| Edit | `<Edit3 />` | `lucide-react` | 16px | Edit actions |
+| Refresh | `<RefreshCw />` | `lucide-react` | 14-16px | Reload, index, sync |
+| Loading | `<Loader2 className="spin" />` | `lucide-react` | 16px | Loading states (requires spin animation) |
+| Generate | `<Sparkles />` | `lucide-react` | 16px | AI generation, magic actions |
+| Chevron Left | `<ChevronLeft />` | `lucide-react` | 16px | Navigation, sidebar collapse |
+| Chevron Right | `<ChevronRight />` | `lucide-react` | 16px | Navigation, sidebar expand |
+
+### Icon Implementation
+
+```tsx
+// Standard icon button
+<button onClick={handleAction}>
+    <Settings size={20} />
+</button>
+
+// Icon with text
+<button onClick={handleRefresh}>
+    <RefreshCw size={16} /> Refresh
+</button>
+
+// Loading state with spin animation
+<button disabled={loading}>
+    {loading ? (
+        <><Loader2 size={16} className="spin" /> Loading...</>
+    ) : (
+        <><Sparkles size={16} /> Generate</>
+    )}
+</button>
+```
 
 ### Icon Colors
-Icons inherit `currentColor` by default. Apply color via className:
+Icons inherit `currentColor` by default. Apply color via inline styles or CSS variables:
 ```tsx
-<Settings size={20} className="text-text-muted" />
+<Settings size={20} style={{ color: 'var(--text-muted)' }} />
+```
+
+### Spin Animation
+For loading spinners, use the `.spin` class:
+```css
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spin {
+    animation: spin 1s linear infinite;
+}
 ```
 
 ## Animations
@@ -359,6 +480,38 @@ gap: 1rem;
 1. Use spacing scale multiples (0.25rem increments)
 2. Prefer Tailwind utility classes (`gap-4`, `p-6`) for consistency
 3. Add `shrink-0` to fixed-height elements in flex containers
+
+### Border Radius with Accent Lines
+**Critical Rule**: When using accent border lines (colored borders for active/selected states), do NOT round the corners on the side with the accent line.
+
+**Why**: Rounded corners on the same side as an accent border create visual artifacts and weaken the accent line's impact.
+
+**Examples**:
+```css
+/* ✅ CORRECT - Active tab with bottom accent border */
+.tab.active {
+    border-bottom: 2px solid var(--theme-primary);
+    border-radius: 0; /* No rounding - accent line is on bottom */
+}
+
+/* ✅ CORRECT - Modal with bottom rounded corners only */
+.modal {
+    border-radius: 0 0 8px 8px; /* Top corners square, bottom rounded */
+    /* Top has border from tabs, so no rounding there */
+}
+
+/* ✅ CORRECT - Card with left accent border */
+.card-with-left-accent {
+    border-left: 3px solid var(--theme-primary);
+    border-radius: 0 8px 8px 0; /* Left side square, right side rounded */
+}
+
+/* ❌ WRONG - Rounded corners conflict with accent border */
+.tab.active {
+    border-bottom: 2px solid var(--theme-primary);
+    border-radius: 6px; /* Creates visual artifacts at bottom corners */
+}
+```
 
 ### Icons
 1. Import only icons you use (tree-shaking)

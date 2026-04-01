@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ScopeSelector } from "./components/ScopeSelector";
-import { SettingsDrawer } from "./components/SettingsDrawer";
+import { SettingsModal } from "./components/SettingsModal";
 import { ConversationSidebar } from "./components/ConversationSidebar";
 import { ConversationTabs } from "./components/ConversationTabs";
 import { useVisualViewport } from "./hooks/useVisualViewport";
@@ -49,12 +49,12 @@ export default function App() {
     useVisualViewport(appContainerRef);
 
     useEffect(() => {
-        // Load theme
+        // Load theme (preloaded in index.html, this ensures it's up-to-date)
         getTheme().then((theme) => {
             document.documentElement.className = `theme-${theme}`;
         }).catch(() => {
-            // Default to blue-purple if theme loading fails
-            document.documentElement.className = "theme-blue-purple";
+            // Fallback to shrimp theme (matches backend config default)
+            document.documentElement.className = "theme-shrimp";
         });
 
         // Load projects
@@ -344,11 +344,11 @@ export default function App() {
                 </div>
                 <button
                     onClick={() => setSettingsOpen(true)}
-                    className="w-9 h-9 rounded-lg hover:bg-shrimp-surface transition-colors flex items-center justify-center shrink-0 text-2xl font-semibold"
+                    className="w-9 h-9 rounded-lg hover:bg-shrimp-surface transition-colors flex items-center justify-center shrink-0"
                     title="Settings"
                     style={{ color: 'var(--color-text-muted)' }}
                 >
-                    ⚙
+                    <Settings size={20} style={{ display: 'block', width: '20px', height: '20px', minWidth: '20px', color: 'var(--accent)' }} />
                 </button>
             </header>
 
@@ -375,7 +375,7 @@ export default function App() {
                 )}
             </main>
 
-            <SettingsDrawer
+            <SettingsModal
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 onScopesChanged={handleScopesChanged}

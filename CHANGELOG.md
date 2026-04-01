@@ -4,9 +4,93 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
-## [Unreleased] — 2026-03-29
+## [Unreleased] — 2026-03-30
+
+### Fixed
+
+- **Eliminated duplicate spinner during streaming**: Removed redundant inline spinner that appeared alongside the typing indicator, causing "Thinking… Thinking…" duplicates. The typing indicator now handles all spinner display during streaming.
+- **Fixed JSON artifacts in chat output**: Stage marker tokens (`__STAGE_MARKER__`) are now robustly stripped during streaming with improved edge case handling:
+  - Complete markers are extracted and stripped in real-time to prevent visible JSON artifacts
+  - Incomplete markers are held in buffer across chunks until complete
+  - Safety mechanism skips malformed markers after 20 chunks to prevent infinite buffering
+  - Fallback cleanup after streaming completes catches any stragglers
+- **Improved stage label responsiveness**: Stage labels (e.g., "Reading file…", "Searching…") now update immediately when stage tokens arrive, eliminating stale stage text caused by minimum duration logic.
 
 ### Added
+
+- **Stage marker visibility improvements**: Stage markers (tool execution indicators) now appear reliably during streaming and in final renders:
+  - Replaced regex-based parsing with proper JSON extraction using brace counting
+  - Handles nested JSON objects and arrays correctly (e.g., `{"details":["file.ts"]}`)
+  - Fixed streaming buffer to hold incomplete marker JSON until complete (prevents raw JSON artifacts in output)
+  - Markers like `[Read files: config.py]` now visible in real-time during streaming
+  - Eliminates silent parsing failures and JSON artifacts that appeared as visible text
+
+- **Path validation with helpful suggestions**: File read operations now validate paths early and provide helpful error messages:
+  - Checks if requested path exists in scope's structural map before attempting read
+  - Suggests similar paths using fuzzy matching (e.g., "Did you mean: frontend/src/App.tsx?")
+  - Shows files in same directory when no close matches found
+  - Includes tip to use `list_scope()` to see all available files
+  - Reduces model hallucination by catching invalid paths immediately
+
+- **Line-specific file reading**: `read_file` tool now supports optional `start_line` and `end_line` parameters:
+  - Read specific sections of files instead of entire content (e.g., "look at line 698")
+  - Output includes line numbers for verification (e.g., "698: code here")
+  - Reduces context usage for large files
+  - System prompt guides model to use line ranges when user mentions line numbers
+  - Example: User says "around line 698" → reads lines 668-728 (60 lines centered)
+
+- **Incremental stage marker emission**: Stage markers now appear immediately as each tool completes:
+  - Previous behavior: Markers only shown after ALL tools in batch complete
+  - New behavior: Each tool emits marker immediately upon completion
+  - Provides real-time feedback during multi-tool operations
+  - Example: Reading 3 files shows 3 separate markers as they complete, not one marker at the end
+
+- **Settings modal with tabbed navigation**: Replaced side drawer with full-window modal for better organization:
+  - Centered modal (max 900px width, 85vh height) with fade + scale animation
+  - 4 tabs: Appearance (Theme + Language), Models (Ollama + Model + Context), Scopes, Advanced (Custom Instructions)
+  - More space for settings content, especially useful for model lists and scope management
+  - Better mobile responsiveness with stacked tabs on small screens
+  - Keyboard support: Escape key closes modal
+
+- **Icon standardization**: Replaced all emoji/text symbols with Lucide React icons:
+  - Settings button: ⚙ → `<Settings size={20} />`
+  - Sidebar toggle: ◀▶ → `<ChevronLeft/Right size={16} />`
+  - Refresh buttons: ↻ → `<RefreshCw size={14-16} />`
+  - Generate button: ✨ → `<Sparkles size={16} />`
+  - Loading spinner: ⏳ → `<Loader2 size={16} className="spin" />`
+  - Consistent sizing: 14px (compact), 16px (standard), 18px (modals), 20px (headers)
+
+- **Status color variables**: Added semantic color system for consistent feedback:
+  - `--color-success` / `--color-success-bg`: Success states, confirmations
+  - `--color-error` / `--color-error-bg`: Errors, destructive actions
+  - `--color-warning` / `--color-warning-bg`: Warnings, cautions
+  - Used in settings modal error/success messages
+
+- **Enhanced documentation**:
+  - **QUICK_REFERENCE.md**: Developer cheat sheet with color tables, icon reference, component patterns, and code snippets
+  - **STYLE_GUIDE.md updates**: Comprehensive icon standardization guide, Settings Modal pattern, status colors section
+
+### Changed
+
+- **Improved system prompt for file operations**: Updated AI assistant instructions to emphasize exact path matching and line-range usage:
+  - Instructs model to always call `list_scope()` first before reading files
+  - Emphasizes using EXACT paths from list output, no guessing
+  - Provides clear workflow: list → find → read with exact path
+  - New section: "Reading Specific Line Ranges — CRITICAL" with examples
+  - Guides model to calculate line ranges when user mentions line numbers (e.g., "around line 698" → start_line=668, end_line=728)
+  - Reduces path hallucination errors (e.g., inventing "client/" instead of "frontend/")
+
+- **Directory-grouped file tree presentation**: File listings now show hierarchical structure instead of flat paths:
+  - Groups files by top-level directory (backend/, frontend/, docs/)
+  - Indented paths show directory organization clearly
+  - Helps model understand project structure better
+  - Example output: `frontend/` header followed by indented `  frontend/src/App.tsx`
+
+- **Project statistics display**: Project headers and settings modal now show conversation count, total messages, and last activity:
+  - Header shows compact stats: "N · X msgs" format
+  - Settings modal shows detailed statistics section with conversations count, total messages, and relative last activity time ("5m ago", "2h ago", etc.)
+  - Stats calculate in real-time from conversation data, no backend changes needed
+  - Empty projects show "0 · 0 msgs" and "Never" for last activity
 
 - **Project organization for conversations**: Group related conversations into projects with custom names, descriptions, and colors:
   - Create projects with modal UI featuring name, description, and 8 preset color options
@@ -150,6 +234,13 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Fixed
 
+- **Theme loading now uses config default**: Frontend theme initialization now correctly uses the backend config default ("shrimp") instead of hard-coded "blue-purple" fallback. Theme is preloaded in index.html before React starts to prevent flash of wrong theme.
+- **Stage markers and spinner display**: Fixed broken stage marker rendering and spinner visibility:
+  - Removed complex `__INLINE_MARKER__` conversion logic that was causing raw JSON to appear in chat
+  - Stage markers (`__STAGE_MARKER__` tokens) are now cleanly stripped during streaming instead of being converted
+  - Spinner now shows during any tool execution (not just file edits) whenever `stage` is set
+  - Simplified streaming callback by removing failed marker conversion and inline rendering logic
+  - No more JSON artifacts like `{"type":"tools",...}` appearing in conversation
 - **Ollama host configuration protocol handling**: Fixed critical bug where `OLLAMA_HOST` was stored without `http://` protocol prefix, breaking all Ollama API communication (models list, chat, index status). Backend now correctly maintains `http://` prefix in config.py and accepts URLs with or without protocol in external mode.
 - **Pull model error handling**: Pulling non-existent or invalid models now properly displays error messages from Ollama instead of silently failing
 - **Model selection validation**: Selecting a model now validates that it exists in Ollama before applying the change, preventing "model not found" errors during chat

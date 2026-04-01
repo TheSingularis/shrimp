@@ -109,6 +109,52 @@ interface PendingEdit {
     current: string;    // accumulated edits — updated on each follow-up
 }
 
+// ── stage marker cleanup ───────────────────────────────────────────────────────
+
+/**
+ * Strip all __STAGE_MARKER__ tokens from text.
+ * Uses brace counting to handle nested JSON properly.
+ */
+function stripStageMarkers(text: string): string {
+    let cleaned = text;
+    while (cleaned.includes("__STAGE_MARKER__")) {
+        const idx = cleaned.indexOf("__STAGE_MARKER__");
+        const jsonStart = idx + "__STAGE_MARKER__".length;
+
+        // Find matching closing brace
+        let braceCount = 0;
+        let inString = false;
+        let escaped = false;
+        let jsonEnd = -1;
+
+        for (let i = jsonStart; i < cleaned.length; i++) {
+            const char = cleaned[i];
+            if (escaped) { escaped = false; continue; }
+            if (char === '\\') { escaped = true; continue; }
+            if (char === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (char === '{') braceCount++;
+            else if (char === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                    jsonEnd = i + 1;
+                    break;
+                }
+            }
+        }
+
+        // Remove the marker (or remove up to end if malformed)
+        if (jsonEnd !== -1) {
+            cleaned = cleaned.slice(0, idx) + cleaned.slice(jsonEnd);
+        } else {
+            // Malformed - just remove the prefix and everything after
+            console.warn("[Stage Marker] Malformed marker, truncating:", cleaned.slice(idx, idx + 100));
+            cleaned = cleaned.slice(0, idx);
+        }
+    }
+    return cleaned;
+}
+
 // ── sentinel parsing ───────────────────────────────────────────────────────────
 
 const SENTINEL_PREFIX = "__SHRIMP_EDIT__";
@@ -294,30 +340,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
     const stageBufferRef = useRef<string>("");
-    const lastStageChangeRef = useRef<{ stage: string; timestamp: number }>({ stage: "", timestamp: 0 });
+    const markerHoldCountRef = useRef<number>(0); // Track how long we've held a partial marker
     const spinner = cliSpinners.bouncingBar;
     const [spinnerFrame, setSpinnerFrame] = useState(0);
 
-    // Helper to update stage with minimum duration for important stages
-    const updateStageWithMinDuration = (newStage: string) => {
-        const now = Date.now();
-        const { stage: currentStage, timestamp: lastChange } = lastStageChangeRef.current;
-        const timeSinceChange = now - lastChange;
-        const minDuration = 500; // 500ms
-
-        // Important stages that should be visible for at least minDuration
-        const stickyStages = ["reading", "searching", "finding", "planning"];
-
-        // If current stage is sticky and hasn't been shown for min duration, ignore the change
-        if (stickyStages.includes(currentStage) && timeSinceChange < minDuration) {
-            console.log(`[Spinner] Stage change BLOCKED: "${currentStage}" → "${newStage}" (only ${timeSinceChange}ms elapsed, need ${minDuration}ms)`);
-            return; // Ignore this stage change
-        }
-
-        // Apply the new stage
-        console.log(`[Spinner] Stage changed: "${currentStage}" → "${newStage}" (after ${timeSinceChange}ms)`);
+    // Update stage immediately when tokens arrive
+    const updateStage = (newStage: string) => {
+        console.log(`[Spinner] Stage changed: "${stage}" → "${newStage}"`);
         setStage(newStage);
-        lastStageChangeRef.current = { stage: newStage, timestamp: now };
     };
 
     useEffect(() => {
@@ -351,9 +381,9 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
     // Track visibility of typing indicator
     useEffect(() => {
-        const showTypingIndicator = streaming && !responseStarted;
-        console.log(`[Spinner] Typing indicator visible: ${showTypingIndicator} (streaming=${streaming}, responseStarted=${responseStarted})`);
-    }, [streaming, responseStarted]);
+        const showTypingIndicator = streaming && (!responseStarted || (stage && stage !== "done"));
+        console.log(`[Spinner] Typing indicator visible: ${showTypingIndicator} (streaming=${streaming}, responseStarted=${responseStarted}, stage="${stage}")`);
+    }, [streaming, responseStarted, stage]);
 
     async function submit() {
         if (!input.trim() || streaming) return;
@@ -366,6 +396,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         setInput("");
         setStreaming(true);
         setResponseStarted(false);
+        markerHoldCountRef.current = 0; // Reset marker hold counter
 
         let fullResponse = "";
 
@@ -381,6 +412,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         // Helper to flush displayable content
         const flushContent = (content: string) => {
             if (content) {
+                console.log("[Flush Debug] Flushing to UI:", content.slice(0, 100), content.length > 100 ? `... (${content.length} chars)` : "");
                 if (!responseStarted) setResponseStarted(true);
                 fullResponse += content;
                 onMessagesChange([
@@ -392,6 +424,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
         // Possible partial prefixes of "__STAGE__" and "__STAGE_MARKER__" (in order of length, longest first)
         const STAGE_PREFIXES = [
+            "__STAGE_MARKER__",
             "__STAGE_MARKER_",
             "__STAGE_MARKER",
             "__STAGE_MARKE",
@@ -411,47 +444,133 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
         try {
             await sendChat(augmentedInput, scopes, messages, (token) => {
+                // Debug: Log every token received
+                console.log("[Stream Debug] === NEW TOKEN ===");
+                console.log("[Stream Debug] Token:", token.slice(0, 100), token.length > 100 ? `... (${token.length} chars)` : "");
+                console.log("[Stream Debug] Buffer before:", stageBufferRef.current.slice(-100));
+
                 // Buffer tokens to handle partial __STAGE__ and __STAGE_MARKER__ tokens
                 stageBufferRef.current += token;
-
-                // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting __STAGE__ tokens (strip these for live indicators)
-                let processed = true;
-                while (processed) {
-                    processed = false;
+                // Steps 1-2: Loop until all __STAGE__ and __STAGE_MARKER__ tokens are processed
+                let keepProcessing = true;
+                while (keepProcessing) {
+                    keepProcessing = false;
 
-                    // Check for __STAGE__ tokens (strip these - they're for live indicators only)
-                    const stageMatch = buffer.match(/__STAGE__(\w+)/);
+                    // Step 1: Extract and strip __STAGE__ tokens (for live spinner updates)
+                    const stageMatch = buffer.match(/__STAGE__(?!MARKER)([a-z]+(?:_(?!_))?)/);
                     if (stageMatch) {
-                        processed = true;
+                        console.log("[Stream Debug] Step 1 matched __STAGE__ token:", stageMatch[0], "captured:", stageMatch[1]);
+                        console.log("[Stream Debug] Buffer before Step 1:", buffer.slice(0, 100));
+                        keepProcessing = true;
                         const key = stageMatch[1];
-                        updateStageWithMinDuration(key);
-                        // Flush content before the stage token
-                        const beforeStage = buffer.slice(0, stageMatch.index);
-                        flushContent(beforeStage);
-                        // Continue with content after the stage token (skip the token itself)
+                        updateStage(key);
+                        flushContent(buffer.slice(0, stageMatch.index));
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                        console.log("[Stream Debug] Buffer after Step 1:", buffer.slice(0, 100));
+                        markerHoldCountRef.current = 0; // Reset hold counter
                         continue;
+                    }
+
+                    // Step 2: Extract and strip __STAGE_MARKER__ tokens (to prevent JSON artifacts)
+                    console.log("[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'):", buffer.includes("__STAGE_MARKER__"), "buffer start:", buffer.slice(0, 50));
+                    if (buffer.includes("__STAGE_MARKER__")) {
+                        console.log("[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__");
+                        keepProcessing = true;
+                        const markerIdx = buffer.indexOf("__STAGE_MARKER__");
+                        const jsonStart = markerIdx + "__STAGE_MARKER__".length;
+
+                        console.log("[Stream Debug] Found __STAGE_MARKER__ at position", markerIdx);
+                        console.log("[Stream Debug] Buffer around marker:", buffer.slice(Math.max(0, markerIdx - 10), Math.min(buffer.length, markerIdx + 50)));
+                        console.log("[Stream Debug] jsonStart:", jsonStart, "looking for closing brace...");
+
+                        // Find complete JSON by counting braces
+                        let braceCount = 0;
+                        let inString = false;
+                        let escaped = false;
+                        let jsonEnd = -1;
+
+                        for (let i = jsonStart; i < buffer.length; i++) {
+                            const char = buffer[i];
+                            if (escaped) { escaped = false; continue; }
+                            if (char === '\\') { escaped = true; continue; }
+                            if (char === '"') { inString = !inString; continue; }
+                            if (inString) continue;
+                            if (char === '{') braceCount++;
+                            else if (char === '}') {
+                                braceCount--;
+                                if (braceCount === 0) {
+                                    jsonEnd = i + 1;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If JSON incomplete, hold in buffer for next chunk
+                        if (jsonEnd === -1) {
+                            console.log("[Stream Debug] Incomplete JSON, jsonEnd = -1, holding buffer from", markerIdx);
+                            markerHoldCountRef.current++;
+
+                            // Safety: if we've held this partial marker for too long, it's probably malformed
+                            // Skip past the marker prefix and continue
+                            if (markerHoldCountRef.current > 20) {
+                                console.warn("[Stage Marker] Held partial marker for 20+ chunks, skipping:", buffer.slice(markerIdx, markerIdx + 50));
+                                flushContent(buffer.slice(0, markerIdx));
+                                buffer = buffer.slice(markerIdx + "__STAGE_MARKER__".length);
+                                markerHoldCountRef.current = 0;
+                                continue;
+                            }
+
+                            // Hold everything from the marker onward for next chunk
+                            flushContent(buffer.slice(0, markerIdx));
+                            stageBufferRef.current = buffer.slice(markerIdx);
+                            return;
+                        }
+
+                        // Complete marker found - parse it and render as inline text
+                        console.log("[Stream Debug] Found complete marker, jsonEnd:", jsonEnd);
+                        const markerJson = buffer.slice(jsonStart, jsonEnd);
+                        console.log("[Stream Debug] Marker JSON:", markerJson);
+
+                        markerHoldCountRef.current = 0;
+                        flushContent(buffer.slice(0, markerIdx));
+
+                        // Parse and render the marker as inline text
+                        try {
+                            const marker = JSON.parse(markerJson);
+                            let markerText = "";
+                            if (marker.type === "tools") {
+                                const details = marker.details?.join(", ") || "";
+                                markerText = `\n[${marker.stage.replace(/_/g, " ")}: ${details}]\n`;
+                            }
+                            flushContent(markerText);
+                        } catch (e) {
+                            console.warn("[Stream Debug] Failed to parse marker JSON:", e);
+                        }
+
+                        buffer = buffer.slice(jsonEnd);
+                        continue;  // Loop back to check for more __STAGE__ or __STAGE_MARKER__ tokens
                     }
                 }
 
-                // Keep __STAGE_MARKER__ tokens in the content - they'll be rendered inline
-
-                // Check if buffer ends with a potential partial stage token
+                // Step 3: Check if buffer ends with partial token prefix
                 for (const prefix of STAGE_PREFIXES) {
                     if (buffer.endsWith(prefix)) {
-                        // Hold the potential partial in buffer, flush the rest
+                        console.log("[Stream Debug] Buffer ends with partial prefix:", prefix);
+                        console.log("[Stream Debug] Flushing:", buffer.slice(0, -prefix.length).slice(-30));
+                        console.log("[Stream Debug] Holding:", prefix);
                         flushContent(buffer.slice(0, -prefix.length));
                         stageBufferRef.current = prefix;
                         return;
                     }
                 }
 
-                // No partial stage token, flush entire buffer
+                // Step 4: Flush remaining buffer
+                console.log("[Stream Debug] Step 4: Flushing remaining buffer:", buffer.slice(0, 50), buffer.length > 50 ? `... (${buffer.length} chars)` : "");
                 flushContent(buffer);
                 stageBufferRef.current = "";
+                markerHoldCountRef.current = 0;
             }, pendingFile, conversationId, controller.signal);
 
             // Flush any remaining buffer content after stream ends
@@ -468,6 +587,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             setStreaming(false);
             setStage("");
             stageBufferRef.current = "";
+            markerHoldCountRef.current = 0;
         }
 
         // if cancelled mid-stream, keep whatever was received as plain text
@@ -478,6 +598,9 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             ]);
             return;
         }
+
+        // Clean up any remaining __STAGE_MARKER__ tokens
+        fullResponse = stripStageMarkers(fullResponse);
 
         const { display, sentinel } = parseSentinel(fullResponse);
 
@@ -629,6 +752,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         onMessagesChange([...historyWithoutLastAssistant, { role: "assistant", content: "" }]);
         setStreaming(true);
         setResponseStarted(false);
+        markerHoldCountRef.current = 0; // Reset marker hold counter
 
         let fullResponse = "";
         const stageMarkers: StageMarker[] = []; // Track markers as they arrive
@@ -645,6 +769,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         // Helper to flush displayable content
         const flushContent = (content: string) => {
             if (content) {
+                console.log("[Flush Debug] Flushing to UI:", content.slice(0, 100), content.length > 100 ? `... (${content.length} chars)` : "");
                 if (!responseStarted) setResponseStarted(true);
                 fullResponse += content;
                 onMessagesChange([
@@ -656,6 +781,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
         // Possible partial prefixes of "__STAGE__" and "__STAGE_MARKER__" (in order of length, longest first)
         const STAGE_PREFIXES = [
+            "__STAGE_MARKER__",
             "__STAGE_MARKER_",
             "__STAGE_MARKER",
             "__STAGE_MARKE",
@@ -678,45 +804,126 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             await sendChat(userInput, scopes, historyWithoutLastAssistant.slice(0, -1), (token) => {
                 // Buffer tokens to handle partial __STAGE__ and __STAGE_MARKER__ tokens
                 stageBufferRef.current += token;
-
-                // Process buffer - may contain multiple stage tokens and markers
                 let buffer = stageBufferRef.current;
 
-                // Keep extracting __STAGE__ tokens (strip these for live indicators)
-                let processed = true;
-                while (processed) {
-                    processed = false;
+                // Steps 1-2: Loop until all __STAGE__ and __STAGE_MARKER__ tokens are processed
+                let keepProcessing = true;
+                while (keepProcessing) {
+                    keepProcessing = false;
 
-                    // Check for __STAGE__ tokens (strip these - they're for live indicators only)
-                    const stageMatch = buffer.match(/__STAGE__(\w+)/);
+                    // Step 1: Extract and strip __STAGE__ tokens (for live spinner updates)
+                    const stageMatch = buffer.match(/__STAGE__(?!MARKER)([a-z]+(?:_(?!_))?)/);
                     if (stageMatch) {
-                        processed = true;
+                        console.log("[Stream Debug] Step 1 matched __STAGE__ token:", stageMatch[0], "captured:", stageMatch[1]);
+                        console.log("[Stream Debug] Buffer before Step 1:", buffer.slice(0, 100));
+                        keepProcessing = true;
                         const key = stageMatch[1];
-                        updateStageWithMinDuration(key);
-                        // Flush content before the stage token
-                        const beforeStage = buffer.slice(0, stageMatch.index);
-                        flushContent(beforeStage);
-                        // Continue with content after the stage token (skip the token itself)
+                        updateStage(key);
+                        flushContent(buffer.slice(0, stageMatch.index));
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
+                        console.log("[Stream Debug] Buffer after Step 1:", buffer.slice(0, 100));
+                        markerHoldCountRef.current = 0; // Reset hold counter
                         continue;
+                    }
+
+                    // Step 2: Extract and strip __STAGE_MARKER__ tokens (to prevent JSON artifacts)
+                    console.log("[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'):", buffer.includes("__STAGE_MARKER__"), "buffer start:", buffer.slice(0, 50));
+                    if (buffer.includes("__STAGE_MARKER__")) {
+                        console.log("[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__");
+                        keepProcessing = true;
+                        const markerIdx = buffer.indexOf("__STAGE_MARKER__");
+                        const jsonStart = markerIdx + "__STAGE_MARKER__".length;
+
+                        console.log("[Stream Debug] Found __STAGE_MARKER__ at position", markerIdx);
+                        console.log("[Stream Debug] Buffer around marker:", buffer.slice(Math.max(0, markerIdx - 10), Math.min(buffer.length, markerIdx + 50)));
+                        console.log("[Stream Debug] jsonStart:", jsonStart, "looking for closing brace...");
+
+                        // Find complete JSON by counting braces
+                        let braceCount = 0;
+                        let inString = false;
+                        let escaped = false;
+                        let jsonEnd = -1;
+
+                        for (let i = jsonStart; i < buffer.length; i++) {
+                            const char = buffer[i];
+                            if (escaped) { escaped = false; continue; }
+                            if (char === '\\') { escaped = true; continue; }
+                            if (char === '"') { inString = !inString; continue; }
+                            if (inString) continue;
+                            if (char === '{') braceCount++;
+                            else if (char === '}') {
+                                braceCount--;
+                                if (braceCount === 0) {
+                                    jsonEnd = i + 1;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If JSON incomplete, hold in buffer for next chunk
+                        if (jsonEnd === -1) {
+                            console.log("[Stream Debug] Incomplete JSON, jsonEnd = -1, holding buffer from", markerIdx);
+                            markerHoldCountRef.current++;
+
+                            // Safety: if we've held this partial marker for too long, it's probably malformed
+                            // Skip past the marker prefix and continue
+                            if (markerHoldCountRef.current > 20) {
+                                console.warn("[Stage Marker] Held partial marker for 20+ chunks, skipping:", buffer.slice(markerIdx, markerIdx + 50));
+                                flushContent(buffer.slice(0, markerIdx));
+                                buffer = buffer.slice(markerIdx + "__STAGE_MARKER__".length);
+                                markerHoldCountRef.current = 0;
+                                continue;
+                            }
+
+                            // Hold everything from the marker onward for next chunk
+                            flushContent(buffer.slice(0, markerIdx));
+                            stageBufferRef.current = buffer.slice(markerIdx);
+                            return;
+                        }
+
+                        // Complete marker found - parse it and render as inline text
+                        console.log("[Stream Debug] Found complete marker, jsonEnd:", jsonEnd);
+                        const markerJson = buffer.slice(jsonStart, jsonEnd);
+                        console.log("[Stream Debug] Marker JSON:", markerJson);
+
+                        markerHoldCountRef.current = 0;
+                        flushContent(buffer.slice(0, markerIdx));
+
+                        // Parse and render the marker as inline text
+                        try {
+                            const marker = JSON.parse(markerJson);
+                            let markerText = "";
+                            if (marker.type === "tools") {
+                                const details = marker.details?.join(", ") || "";
+                                markerText = `\n[${marker.stage.replace(/_/g, " ")}: ${details}]\n`;
+                            }
+                            flushContent(markerText);
+                        } catch (e) {
+                            console.warn("[Stream Debug] Failed to parse marker JSON:", e);
+                        }
+
+                        buffer = buffer.slice(jsonEnd);
+                        continue;  // Loop back to check for more __STAGE__ or __STAGE_MARKER__ tokens
                     }
                 }
 
-                // Keep __STAGE_MARKER__ tokens in the content - they'll be rendered inline
-
-                // Check if buffer ends with a potential partial stage token
+                // Step 3: Check if buffer ends with partial token prefix
                 for (const prefix of STAGE_PREFIXES) {
                     if (buffer.endsWith(prefix)) {
-                        // Hold the potential partial in buffer, flush the rest
+                        console.log("[Stream Debug] Buffer ends with partial prefix:", prefix);
+                        console.log("[Stream Debug] Flushing:", buffer.slice(0, -prefix.length).slice(-30));
+                        console.log("[Stream Debug] Holding:", prefix);
                         flushContent(buffer.slice(0, -prefix.length));
                         stageBufferRef.current = prefix;
                         return;
                     }
                 }
 
-                // No partial stage token, flush entire buffer
+                // Step 4: Flush remaining buffer
+                console.log("[Stream Debug] Step 4: Flushing remaining buffer:", buffer.slice(0, 50), buffer.length > 50 ? `... (${buffer.length} chars)` : "");
                 flushContent(buffer);
                 stageBufferRef.current = "";
+                markerHoldCountRef.current = 0;
             }, pendingFile, conversationId, controller.signal);
 
             // Flush any remaining buffer content after stream ends
@@ -733,6 +940,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             setStreaming(false);
             setStage("");
             stageBufferRef.current = "";
+            markerHoldCountRef.current = 0;
         }
 
         // if cancelled mid-stream, keep whatever was received as plain text
@@ -743,6 +951,9 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             ]);
             return;
         }
+
+        // Clean up any remaining __STAGE_MARKER__ tokens
+        fullResponse = stripStageMarkers(fullResponse);
 
         const { display, sentinel } = parseSentinel(fullResponse);
 
@@ -783,28 +994,52 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         }
     }
 
-    // Clean up tool call artifacts from content
-    function cleanToolCallArtifacts(text: string): string {
-        // First, properly handle __STAGE_MARKER__ tokens before any other processing
-        // These need special handling because they contain JSON with nested braces
+    /**
+     * Extract stage markers from content using proper JSON parsing.
+     * Handles nested arrays and objects correctly by counting braces.
+     * Returns cleaned content and array of parsed markers.
+     */
+    function extractStageMarkers(text: string): { content: string; markers: StageMarker[] } {
+        const markers: StageMarker[] = [];
         let cleaned = text;
+        const markerPrefix = "__STAGE_MARKER__";
 
-        // Remove __STAGE_MARKER__ tokens with their JSON payloads
-        // Use a more robust approach to handle nested braces
-        const markerPattern = /__STAGE_MARKER__/g;
-        let markerIndex = cleaned.search(markerPattern);
+        let searchIndex = 0;
+        while (true) {
+            const markerIndex = cleaned.indexOf(markerPrefix, searchIndex);
+            if (markerIndex === -1) break;
 
-        while (markerIndex !== -1) {
-            // Find the opening brace after __STAGE_MARKER__
-            const jsonStart = cleaned.indexOf('{', markerIndex);
-            if (jsonStart === -1) break;
+            const jsonStart = markerIndex + markerPrefix.length;
 
-            // Find matching closing brace
+            // Find complete JSON by counting braces
             let braceCount = 0;
-            let jsonEnd = jsonStart;
+            let inString = false;
+            let escaped = false;
+            let jsonEnd = -1;
+
             for (let i = jsonStart; i < cleaned.length; i++) {
-                if (cleaned[i] === '{') braceCount++;
-                if (cleaned[i] === '}') {
+                const char = cleaned[i];
+
+                if (escaped) {
+                    escaped = false;
+                    continue;
+                }
+
+                if (char === '\\') {
+                    escaped = true;
+                    continue;
+                }
+
+                if (char === '"') {
+                    inString = !inString;
+                    continue;
+                }
+
+                if (inString) continue;
+
+                if (char === '{') {
+                    braceCount++;
+                } else if (char === '}') {
                     braceCount--;
                     if (braceCount === 0) {
                         jsonEnd = i + 1;
@@ -813,14 +1048,33 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 }
             }
 
-            // Remove the entire __STAGE_MARKER__{...} token
-            cleaned = cleaned.slice(0, markerIndex) + cleaned.slice(jsonEnd);
+            if (jsonEnd === -1) {
+                // Incomplete JSON during streaming - keep remainder
+                searchIndex = markerIndex + 1;
+                continue;
+            }
 
-            // Search for next marker
-            markerIndex = cleaned.search(markerPattern);
+            // Extract and parse JSON
+            const jsonStr = cleaned.slice(jsonStart, jsonEnd);
+            try {
+                const marker = JSON.parse(jsonStr) as StageMarker;
+                markers.push(marker);
+
+                // Remove marker from content
+                cleaned = cleaned.slice(0, markerIndex) + cleaned.slice(jsonEnd);
+                searchIndex = markerIndex;
+            } catch (e) {
+                console.error("[Stage Marker] Parse failed:", e, jsonStr);
+                searchIndex = markerIndex + 1;
+            }
         }
 
-        return cleaned
+        return { content: cleaned, markers };
+    }
+
+    // Clean up tool call artifacts from content (but keep stage markers for rendering)
+    function cleanToolCallArtifacts(text: string): string {
+        return text
             // Remove <tool_call> XML tags and their content
             .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
             // Remove standalone JSON tool calls like {"name": "read_file", "arguments": {...}}
@@ -830,6 +1084,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             // Clean up extra whitespace left behind
             .replace(/\n\s*\n\s*\n/g, '\n\n')
             .trim();
+        // NOTE: __STAGE_MARKER__ tokens are NOT removed here - they're parsed during rendering
     }
 
     function renderAssistantContent(msg: ChatMessage, isStreaming: boolean) {
@@ -842,79 +1097,16 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 ? content.slice(0, editMarkerIdx).trim()
                 : content;
 
-            // During file edit streaming (content starts with "Expanding"), show stage indicator
-            if (content.includes("Expanding") && stage) {
-                console.log(`[Spinner] RENDERING inline spinner: frame=${spinnerFrame}, stage="${stage}", label="${getStageLabel(stage)}"`);
-                return (
-                    <div className="flex items-center gap-3 text-text-muted text-base">
-                        <span className="animate-pulse" style={{ fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace', whiteSpace: 'pre', color: 'var(--theme-primary)' }}>{spinner.frames[spinnerFrame]}</span>
-                        <span className="font-medium">{getStageLabel(stage)}</span>
-                    </div>
-                );
-            }
-
-            // Parse inline markers even during streaming
-            const markerRegex = /__STAGE_MARKER__(\{[^}]*\})/g;
-            const parts: JSX.Element[] = [];
-            let lastIndex = 0;
-            let match;
-            let markerIndex = 0;
-
-            while ((match = markerRegex.exec(visible)) !== null) {
-                // Add content before this marker
-                if (match.index > lastIndex) {
-                    const textBefore = visible.slice(lastIndex, match.index);
-                    const completedMarkdown = completeIncompleteMarkdown(textBefore);
-                    parts.push(
-                        <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {completedMarkdown}
-                        </ReactMarkdown>
-                    );
-                }
-
-                // Parse and add the marker
-                try {
-                    const marker = JSON.parse(match[1]) as StageMarker;
-                    const label = formatStageMarker(marker);
-                    if (label) {
-                        parts.push(
-                            <div key={`marker-${markerIndex}`} className="stage-marker">
-                                [{label}]
-                            </div>
-                        );
-                    }
-                } catch (e) {
-                    // Ignore incomplete markers during streaming
-                }
-
-                lastIndex = match.index + match[0].length;
-                markerIndex++;
-            }
-
-            // Add remaining content after last marker
-            if (lastIndex < visible.length) {
-                const textAfter = visible.slice(lastIndex);
-                const completedMarkdown = completeIncompleteMarkdown(textAfter);
-                parts.push(
-                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+            // Render streaming content without inline markers
+            // The typing indicator at the bottom handles the spinner display
+            const completedMarkdown = completeIncompleteMarkdown(visible);
+            return (
+                <div className="content streaming">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                         {completedMarkdown}
                     </ReactMarkdown>
-                );
-            }
-
-            // If no markers were found, render normally
-            if (parts.length === 0) {
-                const completedMarkdown = completeIncompleteMarkdown(visible);
-                return (
-                    <div className="content streaming">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {completedMarkdown}
-                        </ReactMarkdown>
-                    </div>
-                );
-            }
-
-            return <div className="content streaming">{parts}</div>;
+                </div>
+            );
         }
 
         if (sentinel?.type === "multi_file_edit") {
@@ -994,74 +1186,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             );
         }
 
-        // Parse and render inline stage markers
-        // Updated regex to handle JSON with nested objects (non-greedy)
-        const markerRegex = /__STAGE_MARKER__(\{.*?\}(?=\s|$|__STAGE_MARKER__|[^\{]))/g;
-        const parts: JSX.Element[] = [];
-        let lastIndex = 0;
-        let match;
-        let markerIndex = 0;
-
-        while ((match = markerRegex.exec(content)) !== null) {
-            // Add content before this marker
-            if (match.index > lastIndex) {
-                let textBefore = content.slice(lastIndex, match.index);
-                // Clean up any trailing artifacts like ", {" or "]}]}" from split JSON
-                textBefore = textBefore.replace(/,\s*\{\s*$/, '').replace(/\]\}\]\}\s*$/, '').trim();
-                if (textBefore) {
-                    parts.push(
-                        <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {textBefore}
-                        </ReactMarkdown>
-                    );
-                }
-            }
-
-            // Parse and add the marker
-            try {
-                const marker = JSON.parse(match[1]) as StageMarker;
-                const label = formatStageMarker(marker);
-                if (label) {
-                    parts.push(
-                        <div key={`marker-${markerIndex}`} className="stage-marker">
-                            [{label}]
-                        </div>
-                    );
-                }
-            } catch (e) {
-                console.error("Failed to parse stage marker:", e);
-            }
-
-            lastIndex = match.index + match[0].length;
-            markerIndex++;
-        }
-
-        // Add remaining content after last marker
-        if (lastIndex < content.length) {
-            let textAfter = content.slice(lastIndex);
-            // Clean up any leading artifacts like "]}" or ", {" from split JSON
-            textAfter = textAfter.replace(/^\s*,\s*\{/, '').replace(/^\s*\]\}/, '').trim();
-            if (textAfter) {
-                parts.push(
-                    <ReactMarkdown key={`content-${markerIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
-                        {textAfter}
-                    </ReactMarkdown>
-                );
-            }
-        }
-
-        // If no markers were found, just render the content normally
-        if (parts.length === 0) {
-            return (
-                <div className="content">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                        {content}
-                    </ReactMarkdown>
-                </div>
-            );
-        }
-
-        return <div className="content">{parts}</div>;
+        // Render final content without inline markers
+        return (
+            <div className="content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {content}
+                </ReactMarkdown>
+            </div>
+        );
     }
 
     return (
@@ -1127,7 +1259,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                                                     className="retry-button !px-3 !py-0 mt-3 ml-8 h-8 w-8 min-h-8 min-w-8 flex items-center justify-center transition-colors rounded hover:bg-bg-elevated/50"
                                                     style={{ color: 'var(--color-text-muted)' }}
                                                 >
-                                                    <RefreshCw size={16} strokeWidth={2} className="shrink-0" />
+                                                    <RefreshCw size={16} strokeWidth={2} className="shrink-0" style={{ color: 'var(--accent)' }} />
                                                 </button>
                                             )}
                                         </>
@@ -1137,7 +1269,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                         })}
 
                         {/* Typing Indicator */}
-                        {streaming && !responseStarted && (
+                        {streaming && (!responseStarted || (stage && stage !== "done")) && (
                             <>
                                 {console.log(`[Spinner] RENDERING typing indicator: frame=${spinnerFrame}, stage="${stage}", label="${getStageLabel(stage)}"`)}
                                 <div className="flex items-center gap-3 text-text-muted text-base mt-4">
@@ -1160,7 +1292,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="Ask anything..."
-                                rows={1}
+                                rows={2}
                                 disabled={streaming}
                                 className="chat-input flex-1 resize-none rounded-2xl bg-bg-elevated border border-border px-6 py-3.5 text-base
                                            focus:outline-none focus:ring-2 focus:shadow-md

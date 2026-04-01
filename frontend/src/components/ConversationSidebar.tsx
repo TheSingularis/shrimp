@@ -12,8 +12,26 @@ import {
     deleteProject,
     listProjects,
 } from "../api";
-import { X, ChevronRight, ChevronDown, FolderPlus, Folder, Settings } from "lucide-react";
+import { X, ChevronRight, ChevronDown, ChevronLeft, FolderPlus, Folder, Settings } from "lucide-react";
 import "./ConversationSidebar.css";
+
+function calculateProjectStats(conversations: ConversationMetadata[], projectId: string) {
+    const projectConvs = conversations.filter(c => c.project_id === projectId);
+
+    if (projectConvs.length === 0) {
+        return {
+            count: 0,
+            lastActivity: null,
+            totalMessages: 0
+        };
+    }
+
+    return {
+        count: projectConvs.length,
+        lastActivity: Math.max(...projectConvs.map(c => new Date(c.updated_at).getTime())),
+        totalMessages: projectConvs.reduce((sum, c) => sum + c.message_count, 0)
+    };
+}
 
 interface Props {
     open: boolean;
@@ -283,7 +301,7 @@ export function ConversationSidebar({
                 className="sidebar-toggle"
                 title={open ? "Close sidebar" : "Open sidebar"}
             >
-                {open ? "◀" : "▶"}
+                {open ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
             </button>
 
             {/* Sidebar */}
@@ -306,6 +324,7 @@ export function ConversationSidebar({
                                     key={project.project_id}
                                     project={project}
                                     conversations={groupedConversations[project.project_id] || []}
+                                    allConversations={conversations}
                                     expanded={expandedProjects.has(project.project_id)}
                                     onToggle={() => toggleProject(project.project_id)}
                                     currentConversationId={currentConversationId}
@@ -365,6 +384,7 @@ export function ConversationSidebar({
                 <ProjectModal
                     project={editingProject}
                     scopes={scopes}
+                    allConversations={conversations}
                     onClose={() => {
                         setShowProjectModal(false);
                         setEditingProject(null);
@@ -382,6 +402,7 @@ export function ConversationSidebar({
 interface ProjectSectionProps {
     project: Project;
     conversations: ConversationMetadata[];
+    allConversations: ConversationMetadata[];
     expanded: boolean;
     onToggle: () => void;
     currentConversationId: string | null;
@@ -401,6 +422,7 @@ interface ProjectSectionProps {
 function ProjectSection({
     project,
     conversations,
+    allConversations,
     expanded,
     onToggle,
     currentConversationId,
@@ -417,6 +439,7 @@ function ProjectSection({
     isDraggedOver,
 }: ProjectSectionProps) {
     const [dragOver, setDragOver] = useState(false);
+    const stats = useMemo(() => calculateProjectStats(allConversations, project.project_id), [allConversations, project.project_id]);
 
     function handleDragOver(e: React.DragEvent) {
         e.preventDefault();
@@ -452,7 +475,9 @@ function ProjectSection({
                         style={{ background: project.color }}
                     />
                     <span className="project-name">{project.name}</span>
-                    <span className="project-count">({conversations.length})</span>
+                    <span className="project-stats">
+                        {stats.count} · {stats.totalMessages} msgs
+                    </span>
                 </div>
                 <div className="project-actions">
                     <button
@@ -648,6 +673,7 @@ function UncategorizedSection({
 interface ProjectModalProps {
     project: Project | null;
     scopes: Scope[];
+    allConversations: ConversationMetadata[];
     onClose: () => void;
     onSave: (
         name: string,
@@ -657,7 +683,7 @@ interface ProjectModalProps {
     ) => void;
 }
 
-function ProjectModal({ project, scopes, onClose, onSave }: ProjectModalProps) {
+function ProjectModal({ project, scopes, allConversations, onClose, onSave }: ProjectModalProps) {
     const [name, setName] = useState(project?.name || "");
     const [description, setDescription] = useState(project?.description || "");
     const [color, setColor] = useState(project?.color || "#3b82f6");
@@ -754,6 +780,53 @@ function ProjectModal({ project, scopes, onClose, onSave }: ProjectModalProps) {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Statistics Section (read-only) */}
+                        {project && (
+                            <div className="modal-field">
+                                <label className="label-text">Statistics</label>
+                                <div className="project-statistics">
+                                    {(() => {
+                                        const stats = calculateProjectStats(allConversations, project.project_id);
+
+                                        const formatLastActivity = (timestamp: number | null) => {
+                                            if (!timestamp) return 'Never';
+                                            const date = new Date(timestamp);
+                                            const now = new Date();
+                                            const diffMs = now.getTime() - date.getTime();
+                                            const diffMins = Math.floor(diffMs / 60000);
+                                            const diffHours = Math.floor(diffMs / 3600000);
+                                            const diffDays = Math.floor(diffMs / 86400000);
+
+                                            if (diffMins < 1) return 'Just now';
+                                            if (diffMins < 60) return `${diffMins}m ago`;
+                                            if (diffHours < 24) return `${diffHours}h ago`;
+                                            if (diffDays < 7) return `${diffDays}d ago`;
+                                            return date.toLocaleDateString();
+                                        };
+
+                                        return (
+                                            <>
+                                                <div className="stat-row">
+                                                    <span className="stat-label">Conversations:</span>
+                                                    <span className="stat-value">{stats.count}</span>
+                                                </div>
+                                                <div className="stat-row">
+                                                    <span className="stat-label">Total Messages:</span>
+                                                    <span className="stat-value">{stats.totalMessages}</span>
+                                                </div>
+                                                <div className="stat-row">
+                                                    <span className="stat-label">Last Activity:</span>
+                                                    <span className="stat-value">
+                                                        {formatLastActivity(stats.lastActivity)}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="scopes-group">
                             <span className="label-text">Default Scopes</span>

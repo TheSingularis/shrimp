@@ -48,6 +48,14 @@ body {
     --text: #E8EAF0;
     --text-muted: #8891A8;
 
+    /* Status colors */
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.1);
+    --color-error: #ef4444;
+    --color-error-bg: rgba(239, 68, 68, 0.1);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.1);
+
     /* Theme variables (default to purple) */
     --theme-primary: #8B5CF6;
     --theme-primary-hover: #7C3AED;
@@ -521,4 +529,18 @@ button:disabled {
         padding: 0.4rem 0.8rem;
         font-size: 0.85rem;
     }
+}
+
+/* ── Utility Animations ──────────────────────────────────────────────────── */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
 }

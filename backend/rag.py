@@ -147,7 +147,8 @@ def build_all_structural_maps() -> None:
 
 def get_structural_summary(scope_names: list[str], max_files: int = 150) -> str:
     """
-    Render a compact file tree string for injection into the chat system prompt.
+    Render file tree grouped by directory for better context.
+    Shows directory hierarchy to help LLM understand structure.
     Truncates to max_files to avoid blowing the context window.
     """
     lines = []
@@ -157,12 +158,30 @@ def get_structural_summary(scope_names: list[str], max_files: int = 150) -> str:
             lines.append(
                 f"[scope '{name}': no structural map yet — run index first]")
             continue
-        lines.append(f"--- scope: {name} ({len(files)} files total) ---")
+
+        lines.append(f"=== Scope: {name} ({len(files)} files) ===")
+
+        # Group files by top-level directory
+        by_dir: dict[str, list[str]] = {}
         for f in files[:max_files]:
-            lines.append(f["path"])
+            parts = f["path"].split("/", 1)
+            top_dir = parts[0] if len(parts) > 1 else "(root)"
+            if top_dir not in by_dir:
+                by_dir[top_dir] = []
+            by_dir[top_dir].append(f["path"])
+
+        # Render grouped by directory
+        for dir_name in sorted(by_dir.keys()):
+            paths = by_dir[dir_name]
+            lines.append(f"\n{dir_name}/")
+            for path in sorted(paths):
+                lines.append(f"  {path}")
+
         if len(files) > max_files:
             lines.append(
-                f"... and {len(files) - max_files} more files not shown")
+                f"\n... and {len(files) - max_files} more files not shown")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -379,11 +398,26 @@ def get_status() -> list[dict]:
 
 # ── file reading ───────────────────────────────────────────────────────────────
 
-def read_file_from_scope(scope_name: str, relative_path: str) -> str:
+def read_file_from_scope(
+    scope_name: str,
+    relative_path: str,
+    start_line: int | None = None,
+    end_line: int | None = None
+) -> str:
     """
     Read a file from a scope by its relative path and return its raw text.
     Used by the diff endpoint to supply the 'before' side of a diff view.
-    Raises FileNotFoundError if the scope of file does't exist.
+    Raises FileNotFoundError if the scope of file doesn't exist.
+
+    Args:
+        scope_name: Name of the scope
+        relative_path: Path relative to scope root
+        start_line: Optional starting line number (1-indexed, inclusive)
+        end_line: Optional ending line number (1-indexed, inclusive)
+
+    Returns:
+        File content as string. If line range specified, returns only those lines
+        with line numbers prepended (e.g., "42: code here")
     """
     scope = next(
         (s for s in config.WATCHED_DIRS if s["name"] == scope_name), None
@@ -404,8 +438,35 @@ def read_file_from_scope(scope_name: str, relative_path: str) -> str:
     if target.stat().st_size > MAX_FILE_BYTES:
         raise ValueError(f"File too large to read: {relative_path}")
 
-    log.info("[%s] read_file_from_scope: %s", scope_name, relative_path)
-    return target.read_text(errors="ignore")
+    content = target.read_text(errors="ignore")
+
+    # Return full file if no line range specified
+    if start_line is None and end_line is None:
+        log.info("[%s] read_file_from_scope: %s (full file)", scope_name, relative_path)
+        return content
+
+    # Parse line range
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    # Convert to 0-indexed and validate
+    start_idx = max(0, (start_line or 1) - 1)
+    end_idx = min(total_lines, end_line or total_lines)
+
+    if start_idx >= total_lines:
+        raise ValueError(f"start_line {start_line} exceeds file length ({total_lines} lines)")
+
+    # Extract requested lines with line numbers
+    result_lines = []
+    for i in range(start_idx, end_idx):
+        line_num = i + 1
+        result_lines.append(f"{line_num}: {lines[i]}")
+
+    log.info(
+        "[%s] read_file_from_scope: %s (lines %d-%d of %d)",
+        scope_name, relative_path, start_idx + 1, end_idx, total_lines
+    )
+    return "\n".join(result_lines)
 
 # ── fuzzy file resolution ──────────────────────────────────────────────────────────
 
