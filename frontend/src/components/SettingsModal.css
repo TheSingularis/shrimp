@@ -1,0 +1,695 @@
+/* ── Modal Structure ─────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1100;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.settings-modal {
+    position: fixed;
+    /* Center using inset and margin auto to avoid transform conflict */
+    inset: 0;
+    margin: auto;
+    max-width: 900px;
+    width: 90%;
+    max-height: 85vh;
+    height: fit-content;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 1101;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.2s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ── Modal Header ────────────────────────────────────────────────────────── */
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.modal-header h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    color: var(--text);
+}
+
+/* ── Tab Navigation ──────────────────────────────────────────────────────── */
+
+.modal-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 1.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.modal-tabs .tab {
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    border-radius: 0; /* No rounding on tabs - they have bottom border */
+    transition: all 0.2s;
+    position: relative;
+}
+
+.modal-tabs .tab:hover {
+    color: var(--text);
+    background: transparent; /* Ensure no background on hover */
+}
+
+.modal-tabs .tab.active {
+    color: var(--theme-primary);
+    border-bottom-color: var(--theme-primary);
+    background: transparent; /* Ensure no background on active */
+}
+
+.modal-tabs .tab.active:hover {
+    color: var(--theme-primary); /* Keep accent color on active tab hover */
+    background: transparent;
+}
+
+/* ── Modal Content ───────────────────────────────────────────────────────── */
+
+.modal-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0; /* No padding - sections handle their own padding */
+    border-radius: 0 0 8px 8px;
+    min-height: 0;
+    width: 100%; /* Full width */
+}
+
+/* ── Sections (reused from drawer) ───────────────────────────────────────── */
+
+.drawer-section {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.drawer-section:last-child {
+    border-bottom: none;
+}
+
+.drawer-section h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.saving {
+    color: var(--accent);
+    font-size: 0.7rem;
+}
+
+/* ── Model List ──────────────────────────────────────────────────────────── */
+
+.model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.model-pill {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.model-pill:hover {
+    border-color: var(--theme-primary);
+    color: var(--text);
+}
+
+.model-pill.active {
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+    background: var(--theme-accent-dim);
+}
+
+.model-name {
+    flex: 1;
+    text-align: left;
+}
+
+/* Hardware recommendation badges */
+.hw-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    font-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    cursor: help;
+}
+
+.hw-badge:hover {
+    width: auto;
+    height: auto;
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.hw-badge-green {
+    background: var(--color-success, #10b981);
+}
+
+.hw-badge-green:hover {
+    background: var(--color-success, #10b981);
+    color: #fff;
+}
+
+.hw-badge-yellow {
+    background: var(--color-warning, #f59e0b);
+}
+
+.hw-badge-yellow:hover {
+    background: var(--color-warning, #f59e0b);
+    color: #000;
+}
+
+.hw-badge-red {
+    background: var(--color-error, #ef4444);
+}
+
+.hw-badge-red:hover {
+    background: var(--color-error, #ef4444);
+    color: #fff;
+}
+
+/* ── Scope List ──────────────────────────────────────────────────────────── */
+
+.index-all {
+    width: 9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.scope-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.scope-row {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.scope-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+}
+
+/* Header row with name/path + action buttons */
+.scope-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.scope-main-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.scope-name {
+    font-size: 0.85rem;
+}
+
+.scope-path {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scope-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.toggle-btn {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.toggle-btn.on {
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.delete-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    color: var(--color-error, #ef4444);
+    border-color: var(--color-error, #ef4444);
+}
+
+/* ── Add Scope Form ──────────────────────────────────────────────────────── */
+
+.add-scope {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.add-scope input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.add-scope input:focus {
+    border-color: var(--theme-primary);
+}
+
+.add-scope button {
+    align-self: flex-end;
+    padding: 0.4rem 1rem;
+    background: var(--theme-primary);
+    border: 1px solid var(--theme-primary);
+    border-radius: 6px;
+    color: var(--bg);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.add-scope button:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
+.add-scope button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.scope-status {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.scope-status.unindexed {
+    color: var(--color-error, #ef4444);
+}
+
+.index-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    /* Match default button styles from index.css */
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+}
+
+.index-btn:hover {
+    opacity: 0.8;
+}
+
+.model-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pull-progress {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 0.4rem;
+    overflow: hidden;
+}
+
+.pull-progress-bar {
+    height: 100%;
+    background: var(--theme-primary);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+}
+
+/* ── Context Slider ──────────────────────────────────────────────────────── */
+
+.ctx-slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.ctx-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.ctx-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--theme-primary);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--theme-primary);
+}
+
+.ctx-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--theme-primary);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--theme-primary);
+}
+
+.ctx-slider-labels {
+    display: flex;
+    justify-content: space-between;
+}
+
+.ctx-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s;
+    font-family: monospace;
+}
+
+.ctx-label.active {
+    color: var(--theme-primary);
+}
+
+.ctx-label:hover {
+    color: var(--text);
+}
+
+.ctx-slider-value {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+/* ── Theme Selector ──────────────────────────────────────────────────────── */
+
+.theme-pills {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.theme-pill {
+    flex: 1;
+    min-width: 120px;
+    padding: 0.6rem 1rem;
+    background: var(--theme-accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.theme-pill:hover {
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.theme-pill.active {
+    background: color-mix(in srgb, var(--theme-primary) 20%, transparent);
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+    font-weight: 500;
+}
+
+/* ── Ollama Host Settings ────────────────────────────────────────────────── */
+
+.section-description {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: -0.5rem;
+}
+
+.external-url-input {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.input-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.url-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.url-input {
+    flex: 1;
+    padding: 0.625rem 0.875rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+}
+
+.save-url-btn {
+    padding: 0.625rem 1.25rem;
+    background: var(--theme-primary);
+    border: none;
+    border-radius: 6px;
+    color: var(--bg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.save-url-btn:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
+.save-url-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.error-message {
+    font-size: 0.8rem;
+    color: var(--color-error, #ef4444);
+    padding: 0.5rem;
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+    border-radius: 4px;
+}
+
+.success-message {
+    font-size: 0.8rem;
+    color: var(--color-success, #10b981);
+    padding: 0.5rem;
+    background: var(--color-success-bg, rgba(16, 185, 129, 0.1));
+    border-radius: 4px;
+}
+
+.help-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+/* Tablets */
+@media (max-width: 768px) {
+    .settings-modal {
+        width: 90%;
+        max-height: 90vh;
+    }
+
+    .modal-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-tabs .tab {
+        padding: 0.65rem 1rem;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+}
+
+/* Mobile phones */
+@media (max-width: 480px) {
+    .settings-modal {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .modal-header {
+        padding: 1rem;
+    }
+
+    .modal-tabs {
+        padding: 0 1rem;
+    }
+
+    .modal-tabs .tab {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.8rem;
+    }
+
+    .drawer-section {
+        padding: 1rem;
+    }
+
+    .theme-pills {
+        flex-direction: column;
+    }
+
+    .theme-pill {
+        min-width: 100%;
+    }
+}

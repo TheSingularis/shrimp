@@ -75,27 +75,95 @@ class ToolExecutor:
             case _:
                 raise ValueError(f"Unknown tool: {tool_name}")
 
-    def _read_file(self, scope: str, path: str) -> str:
+    def _read_file(
+        self,
+        scope: str,
+        path: str,
+        start_line: int | None = None,
+        end_line: int | None = None
+    ) -> str:
         """
-        Read full file content from a scope.
+        Read file content from a scope, optionally limiting to a line range.
+        Validates path exists and provides suggestions on error.
 
         Args:
             scope: Scope name (e.g., "shrimp", "obsidian")
             path: Relative path within scope
+            start_line: Optional starting line number (1-indexed, inclusive)
+            end_line: Optional ending line number (1-indexed, inclusive)
 
         Returns:
-            File content as string
+            File content as string or helpful error with suggestions
         """
+        # Validate scope
+        scope_obj = next((s for s in config.WATCHED_DIRS if s["name"] == scope), None)
+        if not scope_obj:
+            valid_scopes = [s["name"] for s in config.WATCHED_DIRS]
+            return f"Error: Scope '{scope}' does not exist. Valid scopes: {valid_scopes}"
+
+        # Check if path exists in structural map
+        files = rag.structural_maps.get(scope, [])
+        file_paths = [f["path"] for f in files]
+
+        if path not in file_paths:
+            # Provide helpful suggestions
+            from difflib import get_close_matches
+            suggestions = get_close_matches(path, file_paths, n=3, cutoff=0.6)
+
+            error_msg = f"Error: File not found in scope '{scope}': {path}"
+
+            if suggestions:
+                error_msg += f"\n\nDid you mean one of these?\n"
+                for s in suggestions:
+                    error_msg += f"  • {s}\n"
+            else:
+                # Show files in same directory
+                dir_name = "/".join(path.split("/")[:-1])
+                if dir_name:
+                    similar = [p for p in file_paths if p.startswith(dir_name + "/")][:5]
+                    if similar:
+                        error_msg += f"\n\nFiles in {dir_name}/:\n"
+                        for s in similar:
+                            error_msg += f"  • {s}\n"
+
+            error_msg += f"\n💡 Tip: Use list_scope('{scope}') to see all available files."
+            log.warning(f"read_file path validation failed: {scope}/{path}")
+            return error_msg
+
+        # Read file with optional line range
         try:
-            content = rag.read_file_from_scope(scope, path)
-            log.info(f"read_file: {scope}/{path} ({len(content)} chars)")
-            return f"File: {scope}/{path}\n\n{content}"
+            content = rag.read_file_from_scope(scope, path, start_line, end_line)
+
+            # Format response based on whether line range was used
+            if start_line is not None or end_line is not None:
+                # Line-numbered output - wrap in code fence for better display
+                range_str = f"lines {start_line or 1}-{end_line or '(end)'}"
+                # Detect language from file extension
+                ext = path.split('.')[-1] if '.' in path else ''
+                lang_map = {
+                    'py': 'python', 'js': 'javascript', 'ts': 'typescript',
+                    'tsx': 'typescript', 'jsx': 'javascript', 'java': 'java',
+                    'cpp': 'cpp', 'c': 'c', 'go': 'go', 'rs': 'rust',
+                    'rb': 'ruby', 'php': 'php', 'css': 'css', 'html': 'html',
+                    'md': 'markdown', 'json': 'json', 'yaml': 'yaml', 'yml': 'yaml',
+                    'sh': 'bash', 'bash': 'bash', 'sql': 'sql'
+                }
+                lang = lang_map.get(ext, '')
+                log.info(f"read_file: {scope}/{path} ({range_str})")
+                return f"File: {scope}/{path} ({range_str})\n\n```{lang}\n{content}\n```"
+            else:
+                log.info(f"read_file: {scope}/{path} ({len(content)} chars)")
+                return f"File: {scope}/{path}\n\n{content}"
+        except ValueError as e:
+            # Line range validation error
+            log.warning(f"read_file line range error: {e}")
+            return f"Error: {str(e)}"
         except FileNotFoundError as e:
             log.warning(f"read_file failed: {e}")
-            return f"Error: File not found - {scope}/{path}"
+            return f"Error: File not found on disk: {scope}/{path}"
         except PermissionError as e:
             log.warning(f"read_file permission denied: {e}")
-            return f"Error: Permission denied - {scope}/{path}"
+            return f"Error: Permission denied: {scope}/{path}"
         except Exception as e:
             log.exception(f"read_file unexpected error: {e}")
             return f"Error: Failed to read file - {str(e)}"
@@ -237,7 +305,7 @@ def build_tool_definitions() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Read the full content of a file from a scope. Use this when you need to see the complete file contents before making edits or answering questions about specific code.",
+                "description": "Read file content from a scope. Optionally specify line range to read only specific lines. When user mentions a line number (e.g., 'around line 698'), use start_line and end_line to read that section (e.g., start_line=668, end_line=728 to read 60 lines centered on 698).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -248,6 +316,14 @@ def build_tool_definitions() -> list[dict]:
                         "path": {
                             "type": "string",
                             "description": "Relative path to the file within the scope"
+                        },
+                        "start_line": {
+                            "type": "integer",
+                            "description": "Optional starting line number (1-indexed, inclusive). Use this when you only need to read a specific section of the file."
+                        },
+                        "end_line": {
+                            "type": "integer",
+                            "description": "Optional ending line number (1-indexed, inclusive). Use this when you only need to read a specific section of the file."
                         }
                     },
                     "required": ["scope", "path"]

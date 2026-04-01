@@ -18,6 +18,9 @@ interface Props {
     applied: Record<string, boolean>;
 }
 
+// TODO: Investigate page freezing when loading/applying multi-file diffs
+// Likely caused by Monaco editor initialization or synchronous diff computation
+// Consider: Web Workers, virtual scrolling, lazy loading, async rendering
 export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, applied }: Props) {
     const [activeTab, setActiveTab] = useState(0);
     const [fileStates, setFileStates] = useState<Record<string, {

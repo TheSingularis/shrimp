@@ -1,5 +1,5 @@
 # Ollama configuration
-OLLAMA_HOST = "http://127.0.0.1:11434"  # Default: managed locally with network access
+OLLAMA_HOST = "http://0.0.0.0:11434"  # Default: managed locally with network access
 OLLAMA_MODEL = "qwen2.5:14b"
 EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
@@ -13,4 +13,4 @@ USE_TOOL_CALLING: bool = True  # Feature flag - ENABLED for testing
 TOOL_CALLING_MAX_ITERATIONS: int = 10  # Prevent infinite loops
 TOOL_CALLING_TIMEOUT_SECONDS: int = 120  # Max time for entire agentic loop
 
-WATCHED_DIRS: list[dict] = [{'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': True, 'description': ''}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True, 'description': ''}, {'name': 'Ash', 'path': '~/Documents/Code Projects/Sluiter-Lefter', 'enabled': True, 'description': ''}]
+WATCHED_DIRS: list[dict] = [{'name': 'obsidian', 'path': '~/Documents/Personal/LLM Test', 'enabled': True, 'description': ''}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True, 'description': 'This codebase contains a Python backend with RESTful APIs and a React/TypeScript frontend for conversational interfaces and multi-file editing functionalities, along with extensive documentation and settings configurations.'}, {'name': 'Ash', 'path': '~/Documents/Code Projects/Sluiter-Lefter', 'enabled': True, 'description': ''}]
