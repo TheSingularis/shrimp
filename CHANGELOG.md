@@ -17,6 +17,7 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Fixed
 
+- **Auto-splicing now preserves content after edited section**: Fixed critical bug where auto-splicing was deleting lines after the edited range. Previously used naive length-based splicing (`new_content + original[len(new_content):]`), which failed when insertions changed line count. Now finds the last line of new content in the original file and splices at that position, correctly preserving all content after the edited section. Example: adding a comment to lines 1-5 now correctly preserves lines 6+ instead of deleting them.
 - **Tool markers now styled in all rendering contexts**: Fixed critical bypass where multi-file edit and ambiguous file edit sentinels were rendering content directly with ReactMarkdown instead of through `renderContentWithMarkers`. All assistant message rendering now goes through the unified marker styling path, ensuring consistent styling regardless of context (streaming, final, with/without sentinels).
 - **Tool markers styled correctly at paragraph start**: Fixed regex to match tool markers like `[propose file edit: file.py]` at the beginning of paragraphs, not just after newlines. Markers now receive proper `.stage-marker` styling regardless of position.
 - **Force re-render when streaming stops**: Added `renderKey` state that increments when streaming finishes, triggering React to re-render content with proper marker styling. Fixes issue where markers appeared as plain text until page reload.
