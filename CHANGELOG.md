@@ -6,8 +6,21 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ## [Unreleased] — 2026-03-30
 
+### Changed
+
+- **Async file I/O for diff generation**: Backend now uses thread pool for file reads and JSON serialization when generating edit sentinels, preventing event loop blocking during multi-file edits. File operations run in `run_in_executor` instead of synchronously.
+- **Two-stage deferred diff rendering**: Multi-file diff panel now uses `requestIdleCallback` at two levels to eliminate UI freezes:
+  - Stage 1: Defer tab initialization (which tabs to render)
+  - Stage 2: Defer diff computation (when file content is loaded into Monaco)
+  - UI remains responsive even with large files; loading indicators shown during computation
+- **Tool call deduplication**: Backend now skips redundant tool calls with identical arguments within the same iteration, reducing unnecessary operations when the LLM requests duplicate actions.
+
 ### Fixed
 
+- **Tool markers now styled in all rendering contexts**: Fixed critical bypass where multi-file edit and ambiguous file edit sentinels were rendering content directly with ReactMarkdown instead of through `renderContentWithMarkers`. All assistant message rendering now goes through the unified marker styling path, ensuring consistent styling regardless of context (streaming, final, with/without sentinels).
+- **Tool markers styled correctly at paragraph start**: Fixed regex to match tool markers like `[propose file edit: file.py]` at the beginning of paragraphs, not just after newlines. Markers now receive proper `.stage-marker` styling regardless of position.
+- **Force re-render when streaming stops**: Added `renderKey` state that increments when streaming finishes, triggering React to re-render content with proper marker styling. Fixes issue where markers appeared as plain text until page reload.
+- **LLM now uses line ranges for targeted edits**: Updated system prompt to strongly encourage reading only relevant file sections instead of entire files. Prevents context overflow that caused LLM to read files but fail to propose edits. Example: "add comment to top" now reads lines 1-20 instead of the whole file.
 - **Eliminated duplicate spinner during streaming**: Removed redundant inline spinner that appeared alongside the typing indicator, causing "Thinking… Thinking…" duplicates. The typing indicator now handles all spinner display during streaming.
 - **Fixed JSON artifacts in chat output**: Stage marker tokens (`__STAGE_MARKER__`) are now robustly stripped during streaming with improved edge case handling:
   - Complete markers are extracted and stripped in real-time to prevent visible JSON artifacts
@@ -18,6 +31,7 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ### Added
 
+- **Line-based file editing with smart auto-splicing**: `propose_file_edit` now supports editing specific line ranges instead of requiring full file content. Specify `start_line` and `end_line` parameters to edit just a section. Safety mechanism: if model provides truncated content, backend scans the original file to find where the content matches, then automatically splices it in (preserving before and after sections). Works for edits at the start, middle, or end of files. Enables editing large files without hitting context limits or risking data loss.
 - **Stage marker visibility improvements**: Stage markers (tool execution indicators) now appear reliably during streaming and in final renders:
   - Replaced regex-based parsing with proper JSON extraction using brace counting
   - Handles nested JSON objects and arrays correctly (e.g., `{"details":["file.ts"]}`)
