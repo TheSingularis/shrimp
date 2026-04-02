@@ -189,6 +189,24 @@ button:disabled {
     opacity: 0.6;
 }
 
+/* debug raw content - hidden element for debugging
+   Access in DevTools or saved HTML to see original unprocessed content
+   To view: inspect element, find .debug-raw-content, change display to block */
+.debug-raw-content {
+    display: none;
+    background: var(--color-bg-elevated);
+    border: 2px solid var(--theme-primary);
+    padding: 1rem;
+    margin: 1rem 0;
+    font-family: monospace;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--color-text-muted);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
 .content p {
     margin: 0 0 0.75rem;
 }
