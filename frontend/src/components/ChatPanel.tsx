@@ -399,6 +399,13 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
     async function submit() {
         if (!input.trim() || streaming) return;
 
+        // Clear diff editor and edit states from previous response
+        setMultiFileEdit(null);
+        setPendingEdits({});
+        setApplying({});
+        setApplied({});
+        setDiscarded({});
+
         const augmentedInput = input;
         const userMessage: Message = { role: "user", content: input };
         const newHistory = [...messages, userMessage];
@@ -736,6 +743,13 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
     async function handleRetry() {
         if (streaming) return;
+
+        // Clear diff editor and edit states from previous response
+        setMultiFileEdit(null);
+        setPendingEdits({});
+        setApplying({});
+        setApplied({});
+        setDiscarded({});
 
         // Find the last user message
         const lastUserIndex = messages.findLastIndex(m => m.role === "user");
