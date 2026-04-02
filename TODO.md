@@ -36,12 +36,17 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ## 🎨 Tier 3: Polish & Accessibility
 
-- [ ] **Investigate page freezing during file edit loading/applying** — UI freezes when loading multi-file diffs or applying edits, likely due to Monaco editor initialization or synchronous rendering. Consider:
-  - Web Workers for diff computation
-  - Virtual scrolling for large diffs
-  - Lazy loading Monaco instances
-  - Async rendering with loading indicators
-  - Debouncing/throttling during edit application
+- [ ] **Investigate page freezing during file edit loading/applying** — UI freezes when loading multi-file diffs or applying edits, likely due to Monaco editor initialization or synchronous rendering.
+  - ✅ **Implemented:** Lazy loading Monaco with React.lazy + Suspense (reduces bundle size, defers initialization)
+  - ✅ **Implemented:** Two-stage deferred rendering with requestIdleCallback:
+    - Stage 1: Defer tab initialization (which tabs to render)
+    - Stage 2: Defer diff computation (DeferredDiffEditor waits for idle before loading content)
+  - ✅ **Implemented:** Loading indicators at each stage ("Loading diff editor..." → "Preparing diff..." → "Computing diff...")
+  - ✅ **Implemented:** Per-tab initialization (only active tab renders immediately, others defer until switched or browser idle)
+  - **Future optimizations if needed:**
+    - Web Workers for diff computation (offload to background thread)
+    - Monaco async diff API usage
+    - Progressive rendering for large files
 
 - [ ] **Update Branding** — Update styling to use shrimp icons (`frontend/public/icons`) and cohesive color scheme. Maybe add theme options in settings. Update ALL Icons to use a cohesive design.
   - Rework settings page to utilize more screen space (possibly full window instead of drawer)
