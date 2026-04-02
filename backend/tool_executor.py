@@ -342,23 +342,65 @@ class ToolExecutor:
                         looks_like_start = (similar_count >= check_lines * 0.5)
 
                         if looks_like_start:
-                            # Auto-preserve: new content + original content after line N
-                            # where N = len(new_content_lines) - 1 (accounting for insertions like header comments)
+                            # Auto-preserve: find where new content ends in the original file
+                            # by matching the last few lines of new content to original lines
 
-                            # Count how many original lines the new content is replacing
-                            # If new[1:] matches orig[0:], then we added 1 line at the top
-                            # More generally: find how many trailing lines of new match leading lines of original
+                            # Strategy: scan through original file to find where the new content's
+                            # last line appears. This tells us how many original lines were edited.
 
-                            # Simple heuristic: just preserve everything after len(new_content_lines)
-                            final_lines = new_content_lines + original_lines[len(new_content_lines):]
-                            final_content = ''.join(final_lines)
+                            # Find the last non-empty line in new content to use as anchor
+                            last_new_line = None
+                            last_new_idx = -1
+                            for i in range(len(new_content_lines) - 1, -1, -1):
+                                if new_content_lines[i].strip():
+                                    last_new_line = new_content_lines[i].strip()
+                                    last_new_idx = i
+                                    break
 
-                            log.warning(
-                                f"propose_file_edit: AUTO-PRESERVED rest of file for {scope}/{path} "
-                                f"(new: {len(new_content_lines)} lines, original: {len(original_lines)} lines). "
-                                f"Assumed edit of first {len(new_content_lines)} lines. "
-                                f"Model should use start_line=1/end_line={len(new_content_lines)} parameters!"
-                            )
+                            if last_new_line:
+                                # Find this line in the original file
+                                original_match_idx = -1
+                                for i, orig_line in enumerate(original_lines):
+                                    if orig_line.strip() == last_new_line:
+                                        # Verify this is the right match by checking a few lines around it
+                                        # Look backward from this line in both new and original
+                                        is_match = True
+                                        check_back = min(2, last_new_idx, i)
+                                        for j in range(1, check_back + 1):
+                                            if (new_content_lines[last_new_idx - j].strip() !=
+                                                original_lines[i - j].strip()):
+                                                is_match = False
+                                                break
+
+                                        if is_match:
+                                            original_match_idx = i
+                                            break
+
+                                if original_match_idx >= 0:
+                                    # Found where the new content corresponds to in original
+                                    # Replace original lines [0:original_match_idx+1] with new content
+                                    # Preserve everything after original_match_idx+1
+                                    splice_point = original_match_idx + 1
+                                    final_lines = new_content_lines + original_lines[splice_point:]
+                                    final_content = ''.join(final_lines)
+
+                                    log.warning(
+                                        f"propose_file_edit: AUTO-PRESERVED rest of file for {scope}/{path} "
+                                        f"(new: {len(new_content_lines)} lines, original: {len(original_lines)} lines). "
+                                        f"Detected edit of first {splice_point} lines by matching content. "
+                                        f"Model should use start_line=1/end_line={splice_point} parameters!"
+                                    )
+                                else:
+                                    # Couldn't find match - fall back to length-based
+                                    final_lines = new_content_lines + original_lines[len(new_content_lines):]
+                                    final_content = ''.join(final_lines)
+                                    log.warning(
+                                        f"propose_file_edit: AUTO-PRESERVED (fallback) for {scope}/{path} "
+                                        f"using length-based splice at line {len(new_content_lines)}"
+                                    )
+                            else:
+                                # All new lines are empty? Just use as-is
+                                log.warning(f"propose_file_edit: No anchor line found in new content for {scope}/{path}")
                         else:
                             # Doesn't look like editing from the start - use new_content as-is
                             log.info(f"propose_file_edit: full file replacement {scope}/{path} (doesn't look like partial edit from start)")
