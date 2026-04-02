@@ -236,7 +236,9 @@ class ToolExecutor:
         scope: str,
         path: str,
         new_content: str,
-        explanation: str
+        explanation: str,
+        start_line: int | None = None,
+        end_line: int | None = None
     ) -> str:
         """
         Propose a file edit or create a new file (accumulates for sentinel emission).
@@ -244,11 +246,16 @@ class ToolExecutor:
         Does NOT write the file directly - stores the edit for user review.
         Works for both existing files (edit) and new files (create).
 
+        Supports line-based editing: if start_line/end_line are provided, only replaces
+        that section of the file, preserving the rest.
+
         Args:
             scope: Scope name
             path: Relative path within scope (e.g., 'TODO.md' for root, 'docs/guide.md' for nested)
-            new_content: New file content
+            new_content: New content (full file OR just the lines being replaced if start_line/end_line provided)
             explanation: Why this edit/creation is being made
+            start_line: Optional starting line for partial edit (1-indexed, inclusive)
+            end_line: Optional ending line for partial edit (1-indexed, inclusive)
 
         Returns:
             Confirmation message
@@ -269,17 +276,113 @@ class ToolExecutor:
                 log.warning(f"propose_file_edit: path escape attempt - {scope}/{path}")
                 return f"Error: Path '{path}' escapes scope root"
 
+            # Handle line-based editing
+            final_content = new_content
+            if start_line is not None and end_line is not None:
+                # Explicit line-based edit with start/end parameters
+                try:
+                    original = rag.read_file_from_scope(scope, path)
+                    original_lines = original.splitlines(keepends=True)
+
+                    # Convert to 0-indexed
+                    start_idx = start_line - 1
+                    end_idx = end_line  # end_line is inclusive, so this is correct for slicing
+
+                    # Ensure new_content ends with newline if original did
+                    new_content_lines = new_content.splitlines(keepends=True)
+                    if not new_content_lines:
+                        new_content_lines = ['']
+                    elif original_lines and not new_content.endswith('\n') and original_lines[-1].endswith('\n'):
+                        new_content_lines[-1] += '\n'
+
+                    # Splice: before + new + after
+                    final_lines = (
+                        original_lines[:start_idx] +
+                        new_content_lines +
+                        original_lines[end_idx:]
+                    )
+                    final_content = ''.join(final_lines)
+
+                    log.info(f"propose_file_edit: line-based edit {scope}/{path} lines {start_line}-{end_line}")
+                except FileNotFoundError:
+                    # File doesn't exist - treat as full file creation
+                    final_content = new_content
+                    log.info(f"propose_file_edit: new file {scope}/{path} (original not found for line-based edit)")
+            else:
+                # No explicit line range - check if this looks like a partial edit
+                # Simple heuristic: if new_content is much shorter, assume it's editing the first N lines
+                try:
+                    original = rag.read_file_from_scope(scope, path)
+                    original_lines = original.splitlines(keepends=True)
+                    new_content_lines = new_content.splitlines(keepends=True)
+
+                    # Detect if new_content is suspiciously short (likely partial edit)
+                    if len(new_content_lines) < len(original_lines) * 0.5:  # New content is less than 50% of original
+                        # Simple assumption: model is editing the first N lines
+                        # Replace first N lines with new content, preserve the rest
+                        # where N is the number of lines in new content (accounting for added lines like comments)
+
+                        # Heuristic: if new content starts with similar imports/structure as original,
+                        # it's likely editing from the beginning
+                        looks_like_start = False
+
+                        # Check if first few lines of new content match structure of original start
+                        check_lines = min(3, len(new_content_lines), len(original_lines))
+                        similar_count = 0
+                        for i in range(check_lines):
+                            new_stripped = new_content_lines[i].strip()
+                            orig_stripped = original_lines[i].strip() if i < len(original_lines) else ""
+
+                            # Comment/import structure match
+                            if ((new_stripped.startswith(('from ', 'import ', '//', '#', '/*')) and
+                                 orig_stripped.startswith(('from ', 'import ', '//', '#', '/*'))) or
+                                new_stripped == orig_stripped):
+                                similar_count += 1
+
+                        looks_like_start = (similar_count >= check_lines * 0.5)
+
+                        if looks_like_start:
+                            # Auto-preserve: new content + original content after line N
+                            # where N = len(new_content_lines) - 1 (accounting for insertions like header comments)
+
+                            # Count how many original lines the new content is replacing
+                            # If new[1:] matches orig[0:], then we added 1 line at the top
+                            # More generally: find how many trailing lines of new match leading lines of original
+
+                            # Simple heuristic: just preserve everything after len(new_content_lines)
+                            final_lines = new_content_lines + original_lines[len(new_content_lines):]
+                            final_content = ''.join(final_lines)
+
+                            log.warning(
+                                f"propose_file_edit: AUTO-PRESERVED rest of file for {scope}/{path} "
+                                f"(new: {len(new_content_lines)} lines, original: {len(original_lines)} lines). "
+                                f"Assumed edit of first {len(new_content_lines)} lines. "
+                                f"Model should use start_line=1/end_line={len(new_content_lines)} parameters!"
+                            )
+                        else:
+                            # Doesn't look like editing from the start - use new_content as-is
+                            log.info(f"propose_file_edit: full file replacement {scope}/{path} (doesn't look like partial edit from start)")
+                    else:
+                        # New content is similar length to original - likely intentional full replacement
+                        log.info(f"propose_file_edit: full file replacement {scope}/{path}")
+                except FileNotFoundError:
+                    # File doesn't exist - this is file creation
+                    log.info(f"propose_file_edit: new file creation {scope}/{path}")
+
             # Accumulate edit
             self.proposed_edits.append({
                 "scope": scope,
                 "path": path,
-                "new_content": new_content,
+                "new_content": final_content,
                 "explanation": explanation
             })
 
-            log.info(f"propose_file_edit: {scope}/{path} ({len(new_content)} chars) - {explanation[:50]}")
+            log.info(f"propose_file_edit: {scope}/{path} ({len(final_content)} chars) - {explanation[:50]}")
 
-            return f"Edit proposed for {scope}/{path}. {explanation}"
+            if start_line and end_line:
+                return f"Edit proposed for {scope}/{path} (lines {start_line}-{end_line}). {explanation}"
+            else:
+                return f"Edit proposed for {scope}/{path}. {explanation}"
         except Exception as e:
             log.exception(f"propose_file_edit unexpected error: {e}")
             return f"Error: Failed to propose edit - {str(e)}"
@@ -383,7 +486,7 @@ def build_tool_definitions() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "propose_file_edit",
-                "description": "Propose an edit to an existing file OR create a new file. The change will be reviewed by the user before being applied. For new files, use a relative path within the scope (e.g., 'TODO.md' for root level, 'docs/guide.md' for nested). Always explain why you're making this change.",
+                "description": "Propose an edit to an existing file OR create a new file. Supports both full-file replacement and line-based editing. For line-based edits, specify start_line and end_line, and provide only the new content for that section. The tool will automatically preserve the rest of the file.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -397,11 +500,19 @@ def build_tool_definitions() -> list[dict]:
                         },
                         "new_content": {
                             "type": "string",
-                            "description": "The complete new content for the file"
+                            "description": "For full-file edits: complete new file content. For line-based edits: only the new content for the specified line range."
                         },
                         "explanation": {
                             "type": "string",
                             "description": "Explanation of why this edit is being made"
+                        },
+                        "start_line": {
+                            "type": "integer",
+                            "description": "Optional: Starting line number for line-based edit (1-indexed, inclusive). If provided, end_line must also be provided."
+                        },
+                        "end_line": {
+                            "type": "integer",
+                            "description": "Optional: Ending line number for line-based edit (1-indexed, inclusive). If provided, start_line must also be provided."
                         }
                     },
                     "required": ["scope", "path", "new_content", "explanation"]

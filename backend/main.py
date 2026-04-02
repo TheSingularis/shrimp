@@ -315,19 +315,40 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
         "- `read_file(scope, path, start_line?, end_line?)` — Read a file or specific line range\n"
         "- `search_files(query, scopes)` — Semantic search when you don't know the path\n"
         "- `propose_file_edit(scope, path, new_content, explanation)` — Propose changes\n\n"
-        "## Reading Specific Line Ranges — CRITICAL\n"
-        "**When user mentions a line number (e.g., 'around line 698'), use start_line and end_line parameters!**\n"
-        "- Example: User says 'look at line 698' → call `read_file('shrimp', 'file.tsx', start_line=668, end_line=728)`\n"
-        "- This reads 60 lines centered on the requested line (30 before, 30 after)\n"
-        "- Output will include line numbers (e.g., '698: code here') so you can verify you read the right section\n"
-        "- For large files, ALWAYS use line ranges to reduce context usage\n"
-        "- If user says 'around line X', calculate: start_line=X-30, end_line=X+30\n\n"
+        "## Reading Files and Line Ranges\n"
+        "**Always use line ranges to conserve context:**\n"
+        "- User asks 'what does the main function do?' → read_file(start_line=50, end_line=100)\n"
+        "- User asks 'add comment to top' → read_file(start_line=1, end_line=50)\n"
+        "- User asks 'fix function at line 698' → read_file(start_line=668, end_line=728)\n"
+        "- Only read the section you need - don't waste context on irrelevant parts\n\n"
+        "## Line-Based Editing (NEW!)\n"
+        "**propose_file_edit now supports line-based edits** - you DON'T need to read the entire file!\n\n"
+        "**Workflow for editing:**\n"
+        "1. Read only the section you need to edit (use start_line/end_line)\n"
+        "2. Call propose_file_edit with:\n"
+        "   - new_content: ONLY the modified content for that section\n"
+        "   - start_line: Same start line you read\n"
+        "   - end_line: Same end line you read\n"
+        "3. The tool automatically preserves the rest of the file!\n\n"
+        "**Examples:**\n"
+        "- Add comment to top:\n"
+        "  → read_file('shrimp', 'main.py', start_line=1, end_line=10)\n"
+        "  → propose_file_edit('shrimp', 'main.py', '# comment\\nimport ...', start_line=1, end_line=10)\n"
+        "- Fix function at line 698:\n"
+        "  → read_file('shrimp', 'file.py', start_line=690, end_line=710)\n"
+        "  → propose_file_edit('shrimp', 'file.py', 'def fixed_function():\\n    ...', start_line=690, end_line=710)\n\n"
+        "**For small files (<500 lines), you can still do full-file edits** (omit start_line/end_line)\n\n"
         "## Workflow for File Operations\n"
         "1. User mentions a file → call `list_scope(scope)` to see all files\n"
         "2. Find the file you need in the list\n"
-        "3. Use the EXACT path from list_scope in your read_file call\n"
-        "4. If user mentions a line number, add start_line and end_line parameters\n"
-        "5. Never guess or invent paths — always verify first!\n\n"
+        "3. Determine what section you need:\n"
+        "   - Editing top of file? → start_line=1, end_line=20\n"
+        "   - Editing imports? → start_line=1, end_line=50\n"
+        "   - Editing specific function? → Use line range around that function\n"
+        "   - Understanding full structure? → Read entire file (no line params)\n"
+        "4. Call read_file with the EXACT path and appropriate line range\n"
+        "5. After reading, call propose_file_edit with new_content to make changes\n"
+        "6. Never guess paths — always verify with list_scope first!\n\n"
         "## Creating & Editing Files — CRITICAL RULES\n"
         "**NEVER claim to have created or edited a file without calling `propose_file_edit`!**\n"
         "- Files are ONLY created/edited when you call the tool and the user approves it\n"
@@ -387,9 +408,11 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
         nonlocal iteration, messages
         had_content_before_tools = False  # Track if we need line break before next content
         stage_history = []  # Track all stages and tool calls for persistent markers
+        executed_tools = set()  # Track executed tool calls to avoid duplicates
 
         while iteration < max_iterations:
             iteration += 1
+            executed_tools.clear()  # Reset for each iteration
 
             # Emit thinking stage at start of each iteration
             yield "__STAGE__thinking"
@@ -504,7 +527,21 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         tool_name = func.get("name")
                         arguments = func.get("arguments", {})
 
+                        # Create deduplication key
+                        tool_key = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
+
+                        # Skip if we've already executed this exact tool call
+                        if tool_key in executed_tools:
+                            log.info(f"chat_with_tools: skipping duplicate {tool_name} ({idx+1}/{len(tool_calls)})")
+                            # Still append a success message so the LLM knows we handled it
+                            messages.append({
+                                "role": "tool",
+                                "content": "(already executed in this iteration)"
+                            })
+                            continue
+
                         log.info(f"chat_with_tools: executing {tool_name} ({idx+1}/{len(tool_calls)})")
+                        executed_tools.add(tool_key)
 
                         # Extract detail for this specific tool call
                         detail = ""
@@ -567,31 +604,51 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
             edits = executor.get_proposed_edits()
 
             if len(edits) == 1:
-                # Single file edit
+                # Single file edit - use async I/O to prevent blocking
                 edit = edits[0]
+                loop = asyncio.get_event_loop()
 
                 # Read original content for diff (empty string for new files)
                 try:
-                    original = rag.read_file_from_scope(edit["scope"], edit["path"])
+                    # Run file read in thread pool to avoid blocking event loop
+                    original = await loop.run_in_executor(
+                        None,
+                        rag.read_file_from_scope,
+                        edit["scope"],
+                        edit["path"]
+                    )
                 except:
                     original = ""  # New file
 
-                sentinel = json.dumps({
-                    "type": "file_edit",
-                    "scope": edit["scope"],
-                    "path": edit["path"],
-                    "original": original,
-                    "new": edit["new_content"],
-                })
+                # Offload JSON serialization to thread pool
+                sentinel = await loop.run_in_executor(
+                    None,
+                    json.dumps,
+                    {
+                        "type": "file_edit",
+                        "scope": edit["scope"],
+                        "path": edit["path"],
+                        "original": original,
+                        "new": edit["new_content"],
+                    }
+                )
                 yield f"\n\n__SHRIMP_EDIT__{sentinel}"
                 log.info(f"chat_with_tools: emitted single edit sentinel for {edit['scope']}/{edit['path']}")
 
             else:
-                # Multi-file edit
+                # Multi-file edit - use async I/O to prevent blocking
                 file_diffs = []
+                loop = asyncio.get_event_loop()
+
                 for edit in edits:
                     try:
-                        original = rag.read_file_from_scope(edit["scope"], edit["path"])
+                        # Run file read in thread pool to avoid blocking event loop
+                        original = await loop.run_in_executor(
+                            None,
+                            rag.read_file_from_scope,
+                            edit["scope"],
+                            edit["path"]
+                        )
                     except:
                         original = ""  # New file
 
@@ -602,10 +659,12 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         "new": edit["new_content"],
                     })
 
-                sentinel = json.dumps({
-                    "type": "multi_file_edit",
-                    "files": file_diffs
-                })
+                # Offload JSON serialization to thread pool (can be slow for large payloads)
+                sentinel = await loop.run_in_executor(
+                    None,
+                    json.dumps,
+                    {"type": "multi_file_edit", "files": file_diffs}
+                )
                 yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
                 log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
 

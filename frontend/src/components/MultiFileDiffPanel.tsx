@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DiffEditor } from "@monaco-editor/react";
-import { X, Check, Edit3 } from "lucide-react";
+import { X, Check, Edit3, Loader2 } from "lucide-react";
 import "./MultiFileDiffPanel.css";
 
 interface MultiFileDiff {
@@ -8,6 +8,85 @@ interface MultiFileDiff {
     path: string;
     original: string;
     new: string;
+}
+
+// Deferred diff computation component
+// Mounts Monaco immediately but defers loading file content until browser is idle
+function DeferredDiffEditor({ original, modified, language, options }: {
+    original: string;
+    modified: string;
+    language: string;
+    options: any;
+}) {
+    const [content, setContent] = useState<{ original: string; modified: string } | null>(null);
+    const [isComputing, setIsComputing] = useState(true);
+
+    useEffect(() => {
+        // Defer diff computation using requestIdleCallback
+        const callback = () => {
+            setContent({ original, modified });
+            // Add small delay to let Monaco render before marking as done
+            setTimeout(() => setIsComputing(false), 100);
+        };
+
+        const requestIdleCB = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 1));
+        const handle = requestIdleCB(callback, { timeout: 200 });
+
+        return () => {
+            const cancelIdleCB = (window as any).cancelIdleCallback || clearTimeout;
+            cancelIdleCB(handle);
+        };
+    }, [original, modified]);
+
+    if (!content) {
+        return (
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                color: 'var(--color-text-muted)',
+                gap: '0.75rem'
+            }}>
+                <Loader2 size={20} className="spin" />
+                <span>Preparing diff...</span>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {isComputing && (
+                <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    background: 'var(--color-bg-elevated)',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-muted)',
+                    pointerEvents: 'none'
+                }}>
+                    <Loader2 size={20} className="spin" />
+                    <span>Computing diff...</span>
+                </div>
+            )}
+            <DiffEditor
+                height="100%"
+                language={language}
+                original={content.original}
+                modified={content.modified}
+                theme="vs-dark"
+                options={options}
+            />
+        </>
+    );
 }
 
 interface Props {
@@ -18,9 +97,10 @@ interface Props {
     applied: Record<string, boolean>;
 }
 
-// TODO: Investigate page freezing when loading/applying multi-file diffs
-// Likely caused by Monaco editor initialization or synchronous diff computation
-// Consider: Web Workers, virtual scrolling, lazy loading, async rendering
+// Two-stage deferred rendering to prevent UI freeze:
+// 1. Defer tab initialization (which tabs to render)
+// 2. Defer diff computation (when to load file content into Monaco)
+// This allows UI to remain responsive even with large files
 export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, applied }: Props) {
     const [activeTab, setActiveTab] = useState(0);
     const [fileStates, setFileStates] = useState<Record<string, {
@@ -31,10 +111,38 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
             files.map(f => [f.path, { approved: false, rejected: false }])
         )
     );
+    const [initializedTabs, setInitializedTabs] = useState<Set<number>>(new Set());
 
     const currentFile = files[activeTab];
     const currentState = fileStates[currentFile.path];
     const isApplied = applied[currentFile.path];
+
+    // Defer Monaco initialization for active tab using requestIdleCallback
+    useEffect(() => {
+        if (initializedTabs.has(activeTab)) {
+            return; // Already initialized
+        }
+
+        // Use requestIdleCallback to defer work until browser is idle
+        const callback = (deadline?: IdleDeadline) => {
+            // Initialize active tab
+            setInitializedTabs(prev => new Set(prev).add(activeTab));
+
+            // Pre-load next tab if we have time remaining
+            const nextTab = activeTab + 1;
+            if (nextTab < files.length && deadline && deadline.timeRemaining() > 50) {
+                setInitializedTabs(prev => new Set(prev).add(nextTab));
+            }
+        };
+
+        const requestIdleCB = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 1));
+        const handle = requestIdleCB(callback, { timeout: 100 });
+
+        return () => {
+            const cancelIdleCB = (window as any).cancelIdleCallback || clearTimeout;
+            cancelIdleCB(handle);
+        };
+    }, [activeTab, files.length, initializedTabs]);
 
     const approvedFiles = files.filter(f => fileStates[f.path].approved);
     const canApply = approvedFiles.length > 0 && !applying;
@@ -109,20 +217,32 @@ export function MultiFileDiffPanel({ files, onClose, onApplyAll, applying, appli
                 })}
             </div>
 
-            <div className="multi-diff-editor">
-                <DiffEditor
-                    height="100%"
-                    language={getLanguageFromPath(currentFile.path)}
-                    original={currentFile.original}
-                    modified={currentFile.new}
-                    theme="vs-dark"
-                    options={{
-                        readOnly: true,
-                        renderSideBySide: true,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                    }}
-                />
+            <div className="multi-diff-editor" style={{ position: 'relative' }}>
+                {initializedTabs.has(activeTab) ? (
+                    <DeferredDiffEditor
+                        language={getLanguageFromPath(currentFile.path)}
+                        original={currentFile.original}
+                        modified={currentFile.new}
+                        options={{
+                            readOnly: true,
+                            renderSideBySide: true,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                        }}
+                    />
+                ) : (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        color: 'var(--color-text-muted)',
+                        gap: '0.75rem'
+                    }}>
+                        <Loader2 size={20} className="spin" />
+                        <span>Loading diff editor...</span>
+                    </div>
+                )}
             </div>
 
             <div className="multi-diff-actions">
