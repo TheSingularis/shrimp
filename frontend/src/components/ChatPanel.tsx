@@ -5,8 +5,11 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
-import { MultiFileDiffPanel } from "./MultiFileDiffPanel";
+import { lazy, Suspense, startTransition } from "react";
 import { RefreshCw, Check, X, Edit3 } from "lucide-react";
+
+// Lazy load Monaco-based diff panel to reduce initial bundle and defer heavy initialization
+const MultiFileDiffPanel = lazy(() => import("./MultiFileDiffPanel").then(module => ({ default: module.MultiFileDiffPanel })));
 
 interface Props {
     scopes: string[];
@@ -214,10 +217,17 @@ function parseSentinel(content: string): {
 const STAGE_LABELS: Record<string, string> = {
     detecting: "Detecting intent…",
     finding: "Finding file…",
+    finding_: "Finding file…",
     reading: "Reading file…",
+    reading_: "Reading file…",
     thinking: "Thinking…",
     searching: "Searching…",
+    searching_: "Searching…",
     planning: "Planning changes…",
+    planning_: "Planning changes…",
+    editing_: "Editing…",
+    reviewing_: "Reviewing…",
+    refining_: "Refining…",
     done: "Done",
 };
 
@@ -324,6 +334,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
     const [streaming, setStreaming] = useState(false);
     const [responseStarted, setResponseStarted] = useState(false);
     const [stage, setStage] = useState<string>("");
+    const [renderKey, setRenderKey] = useState(0); // Force re-render when streaming stops
 
     // per-file pending edits keyed by path
     const [pendingEdits, setPendingEdits] = useState<Record<string, PendingEdit>>({});
@@ -412,7 +423,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         // Helper to flush displayable content
         const flushContent = (content: string) => {
             if (content) {
-                console.log("[Flush Debug] Flushing to UI:", content.slice(0, 100), content.length > 100 ? `... (${content.length} chars)` : "");
                 if (!responseStarted) setResponseStarted(true);
                 fullResponse += content;
                 onMessagesChange([
@@ -445,9 +455,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         try {
             await sendChat(augmentedInput, scopes, messages, (token) => {
                 // Debug: Log every token received
-                console.log("[Stream Debug] === NEW TOKEN ===");
-                console.log("[Stream Debug] Token:", token.slice(0, 100), token.length > 100 ? `... (${token.length} chars)` : "");
-                console.log("[Stream Debug] Buffer before:", stageBufferRef.current.slice(-100));
 
                 // Buffer tokens to handle partial __STAGE__ and __STAGE_MARKER__ tokens
                 stageBufferRef.current += token;
@@ -461,29 +468,21 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                     // Step 1: Extract and strip __STAGE__ tokens (for live spinner updates)
                     const stageMatch = buffer.match(/__STAGE__(?!MARKER)([a-z]+(?:_(?!_))?)/);
                     if (stageMatch) {
-                        console.log("[Stream Debug] Step 1 matched __STAGE__ token:", stageMatch[0], "captured:", stageMatch[1]);
-                        console.log("[Stream Debug] Buffer before Step 1:", buffer.slice(0, 100));
                         keepProcessing = true;
                         const key = stageMatch[1];
                         updateStage(key);
                         flushContent(buffer.slice(0, stageMatch.index));
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
-                        console.log("[Stream Debug] Buffer after Step 1:", buffer.slice(0, 100));
                         markerHoldCountRef.current = 0; // Reset hold counter
                         continue;
                     }
 
                     // Step 2: Extract and strip __STAGE_MARKER__ tokens (to prevent JSON artifacts)
-                    console.log("[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'):", buffer.includes("__STAGE_MARKER__"), "buffer start:", buffer.slice(0, 50));
                     if (buffer.includes("__STAGE_MARKER__")) {
-                        console.log("[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__");
                         keepProcessing = true;
                         const markerIdx = buffer.indexOf("__STAGE_MARKER__");
                         const jsonStart = markerIdx + "__STAGE_MARKER__".length;
 
-                        console.log("[Stream Debug] Found __STAGE_MARKER__ at position", markerIdx);
-                        console.log("[Stream Debug] Buffer around marker:", buffer.slice(Math.max(0, markerIdx - 10), Math.min(buffer.length, markerIdx + 50)));
-                        console.log("[Stream Debug] jsonStart:", jsonStart, "looking for closing brace...");
 
                         // Find complete JSON by counting braces
                         let braceCount = 0;
@@ -509,7 +508,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
                         // If JSON incomplete, hold in buffer for next chunk
                         if (jsonEnd === -1) {
-                            console.log("[Stream Debug] Incomplete JSON, jsonEnd = -1, holding buffer from", markerIdx);
                             markerHoldCountRef.current++;
 
                             // Safety: if we've held this partial marker for too long, it's probably malformed
@@ -529,9 +527,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                         }
 
                         // Complete marker found - parse it and render as inline text
-                        console.log("[Stream Debug] Found complete marker, jsonEnd:", jsonEnd);
                         const markerJson = buffer.slice(jsonStart, jsonEnd);
-                        console.log("[Stream Debug] Marker JSON:", markerJson);
 
                         markerHoldCountRef.current = 0;
                         flushContent(buffer.slice(0, markerIdx));
@@ -543,10 +539,11 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                             if (marker.type === "tools") {
                                 const details = marker.details?.join(", ") || "";
                                 markerText = `\n[${marker.stage.replace(/_/g, " ")}: ${details}]\n`;
+                            } else {
                             }
                             flushContent(markerText);
                         } catch (e) {
-                            console.warn("[Stream Debug] Failed to parse marker JSON:", e);
+                            // Don't flush the broken marker - it will be skipped
                         }
 
                         buffer = buffer.slice(jsonEnd);
@@ -557,9 +554,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 // Step 3: Check if buffer ends with partial token prefix
                 for (const prefix of STAGE_PREFIXES) {
                     if (buffer.endsWith(prefix)) {
-                        console.log("[Stream Debug] Buffer ends with partial prefix:", prefix);
-                        console.log("[Stream Debug] Flushing:", buffer.slice(0, -prefix.length).slice(-30));
-                        console.log("[Stream Debug] Holding:", prefix);
                         flushContent(buffer.slice(0, -prefix.length));
                         stageBufferRef.current = prefix;
                         return;
@@ -567,7 +561,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 }
 
                 // Step 4: Flush remaining buffer
-                console.log("[Stream Debug] Step 4: Flushing remaining buffer:", buffer.slice(0, 50), buffer.length > 50 ? `... (${buffer.length} chars)` : "");
                 flushContent(buffer);
                 stageBufferRef.current = "";
                 markerHoldCountRef.current = 0;
@@ -588,6 +581,8 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             setStage("");
             stageBufferRef.current = "";
             markerHoldCountRef.current = 0;
+            // Force re-render to apply marker styling to final content
+            setRenderKey(prev => prev + 1);
         }
 
         // if cancelled mid-stream, keep whatever was received as plain text
@@ -615,7 +610,11 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
         // All file edits are now normalized to multi-file format (even single files)
         if (sentinel?.type === "multi_file_edit") {
-            setMultiFileEdit(sentinel);
+            // Use startTransition to mark diff panel mounting as non-urgent (prevents freezing)
+            // Small delay ensures loading state is visible and main thread has time to render
+            startTransition(() => {
+                setTimeout(() => setMultiFileEdit(sentinel), 50);
+            });
 
             // Also populate pendingEdits for follow-up request tracking
             setPendingEdits((prev) => {
@@ -769,7 +768,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         // Helper to flush displayable content
         const flushContent = (content: string) => {
             if (content) {
-                console.log("[Flush Debug] Flushing to UI:", content.slice(0, 100), content.length > 100 ? `... (${content.length} chars)` : "");
                 if (!responseStarted) setResponseStarted(true);
                 fullResponse += content;
                 onMessagesChange([
@@ -814,29 +812,21 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                     // Step 1: Extract and strip __STAGE__ tokens (for live spinner updates)
                     const stageMatch = buffer.match(/__STAGE__(?!MARKER)([a-z]+(?:_(?!_))?)/);
                     if (stageMatch) {
-                        console.log("[Stream Debug] Step 1 matched __STAGE__ token:", stageMatch[0], "captured:", stageMatch[1]);
-                        console.log("[Stream Debug] Buffer before Step 1:", buffer.slice(0, 100));
                         keepProcessing = true;
                         const key = stageMatch[1];
                         updateStage(key);
                         flushContent(buffer.slice(0, stageMatch.index));
                         buffer = buffer.slice(stageMatch.index! + stageMatch[0].length);
-                        console.log("[Stream Debug] Buffer after Step 1:", buffer.slice(0, 100));
                         markerHoldCountRef.current = 0; // Reset hold counter
                         continue;
                     }
 
                     // Step 2: Extract and strip __STAGE_MARKER__ tokens (to prevent JSON artifacts)
-                    console.log("[Stream Debug] Step 2 check: buffer.includes('__STAGE_MARKER__'):", buffer.includes("__STAGE_MARKER__"), "buffer start:", buffer.slice(0, 50));
                     if (buffer.includes("__STAGE_MARKER__")) {
-                        console.log("[Stream Debug] Step 2 ENTERED - processing __STAGE_MARKER__");
                         keepProcessing = true;
                         const markerIdx = buffer.indexOf("__STAGE_MARKER__");
                         const jsonStart = markerIdx + "__STAGE_MARKER__".length;
 
-                        console.log("[Stream Debug] Found __STAGE_MARKER__ at position", markerIdx);
-                        console.log("[Stream Debug] Buffer around marker:", buffer.slice(Math.max(0, markerIdx - 10), Math.min(buffer.length, markerIdx + 50)));
-                        console.log("[Stream Debug] jsonStart:", jsonStart, "looking for closing brace...");
 
                         // Find complete JSON by counting braces
                         let braceCount = 0;
@@ -862,7 +852,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
                         // If JSON incomplete, hold in buffer for next chunk
                         if (jsonEnd === -1) {
-                            console.log("[Stream Debug] Incomplete JSON, jsonEnd = -1, holding buffer from", markerIdx);
                             markerHoldCountRef.current++;
 
                             // Safety: if we've held this partial marker for too long, it's probably malformed
@@ -882,9 +871,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                         }
 
                         // Complete marker found - parse it and render as inline text
-                        console.log("[Stream Debug] Found complete marker, jsonEnd:", jsonEnd);
                         const markerJson = buffer.slice(jsonStart, jsonEnd);
-                        console.log("[Stream Debug] Marker JSON:", markerJson);
 
                         markerHoldCountRef.current = 0;
                         flushContent(buffer.slice(0, markerIdx));
@@ -896,10 +883,11 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                             if (marker.type === "tools") {
                                 const details = marker.details?.join(", ") || "";
                                 markerText = `\n[${marker.stage.replace(/_/g, " ")}: ${details}]\n`;
+                            } else {
                             }
                             flushContent(markerText);
                         } catch (e) {
-                            console.warn("[Stream Debug] Failed to parse marker JSON:", e);
+                            // Don't flush the broken marker - it will be skipped
                         }
 
                         buffer = buffer.slice(jsonEnd);
@@ -910,9 +898,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 // Step 3: Check if buffer ends with partial token prefix
                 for (const prefix of STAGE_PREFIXES) {
                     if (buffer.endsWith(prefix)) {
-                        console.log("[Stream Debug] Buffer ends with partial prefix:", prefix);
-                        console.log("[Stream Debug] Flushing:", buffer.slice(0, -prefix.length).slice(-30));
-                        console.log("[Stream Debug] Holding:", prefix);
                         flushContent(buffer.slice(0, -prefix.length));
                         stageBufferRef.current = prefix;
                         return;
@@ -920,7 +905,6 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 }
 
                 // Step 4: Flush remaining buffer
-                console.log("[Stream Debug] Step 4: Flushing remaining buffer:", buffer.slice(0, 50), buffer.length > 50 ? `... (${buffer.length} chars)` : "");
                 flushContent(buffer);
                 stageBufferRef.current = "";
                 markerHoldCountRef.current = 0;
@@ -941,6 +925,8 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             setStage("");
             stageBufferRef.current = "";
             markerHoldCountRef.current = 0;
+            // Force re-render to apply marker styling to final content
+            setRenderKey(prev => prev + 1);
         }
 
         // if cancelled mid-stream, keep whatever was received as plain text
@@ -968,7 +954,11 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
 
         // All file edits are now normalized to multi-file format (even single files)
         if (sentinel?.type === "multi_file_edit") {
-            setMultiFileEdit(sentinel);
+            // Use startTransition to mark diff panel mounting as non-urgent (prevents freezing)
+            // Small delay ensures loading state is visible and main thread has time to render
+            startTransition(() => {
+                setTimeout(() => setMultiFileEdit(sentinel), 50);
+            });
 
             // Also populate pendingEdits for follow-up request tracking
             setPendingEdits((prev) => {
@@ -1087,36 +1077,72 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         // NOTE: __STAGE_MARKER__ tokens are NOT removed here - they're parsed during rendering
     }
 
+    // Parse content and render tool markers with styling
+    function renderContentWithMarkers(content: string, isStreaming: boolean) {
+        // Match our tool marker format: [tool_name: details]
+        // Capture the newline/start separately to preserve spacing
+        const markerRegex = /(^|\n)\[([\w\s]+):\s*([^\]]+)\](?:\n|$)/gm;
+        const parts: JSX.Element[] = [];
+        let lastIndex = 0;
+        let match;
+
+        while ((match = markerRegex.exec(content)) !== null) {
+            const leadingChar = match[1]; // Either '' (start of string) or '\n'
+            const markerStartIdx = match.index + leadingChar.length; // Skip past the leading \n
+
+            // Add text before the marker (including any leading newline from previous content)
+            if (markerStartIdx > lastIndex) {
+                const textBefore = content.slice(lastIndex, markerStartIdx);
+                parts.push(
+                    <ReactMarkdown key={`text-${lastIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {textBefore}
+                    </ReactMarkdown>
+                );
+            }
+
+            // Add the styled marker
+            const toolName = match[2];
+            const details = match[3];
+            parts.push(
+                <div key={`marker-${match.index}`} className="stage-marker">
+                    [{toolName}: {details}]
+                </div>
+            );
+
+            lastIndex = markerRegex.lastIndex;
+        }
+
+        // Add remaining content after last marker
+        if (lastIndex < content.length) {
+            const remaining = content.slice(lastIndex);
+            parts.push(
+                <ReactMarkdown key={`text-${lastIndex}`} remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {remaining}
+                </ReactMarkdown>
+            );
+        }
+
+        // Fallback: if no parts were created, render the raw content
+        if (parts.length === 0) {
+            return (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {content}
+                </ReactMarkdown>
+            );
+        }
+
+        return <>{parts}</>;
+    }
+
     function renderAssistantContent(msg: ChatMessage, isStreaming: boolean) {
         const content = cleanToolCallArtifacts(msg.content);
         const sentinel = (msg as AssistantMessage).sentinel;
 
-        if (isStreaming) {
-            const editMarkerIdx = content.indexOf("__EDIT_FILE__");
-            const visible = editMarkerIdx !== -1
-                ? content.slice(0, editMarkerIdx).trim()
-                : content;
-
-            // Render streaming content without inline markers
-            // The typing indicator at the bottom handles the spinner display
-            const completedMarkdown = completeIncompleteMarkdown(visible);
-            return (
-                <div className="content streaming">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                        {completedMarkdown}
-                    </ReactMarkdown>
-                </div>
-            );
-        }
-
+        // Handle multi-file edits first (special UI)
         if (sentinel?.type === "multi_file_edit") {
             return (
                 <div className="content">
-                    {(msg as AssistantMessage).prose && (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {(msg as AssistantMessage).prose!}
-                        </ReactMarkdown>
-                    )}
+                    {(msg as AssistantMessage).prose && renderContentWithMarkers((msg as AssistantMessage).prose!, false)}
                     <div className="file-edit-pill-row">
                         {sentinel.files.map((file) => {
                             const filename = file.path.split("/").pop() ?? file.path;
@@ -1162,11 +1188,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
         if (sentinel?.type === "file_edit_ambiguous") {
             return (
                 <div className="content">
-                    {(msg as AssistantMessage).prose && (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {(msg as AssistantMessage).prose!}
-                        </ReactMarkdown>
-                    )}
+                    {(msg as AssistantMessage).prose && renderContentWithMarkers((msg as AssistantMessage).prose!, false)}
                     <div className="file-picker">
                         <span className="file-picker-label">
                             Which file did you mean?
@@ -1186,12 +1208,21 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
             );
         }
 
-        // Render final content without inline markers
+        // Render all content (streaming or final) with unified marker styling
+        // Hide edit markers during streaming
+        const editMarkerIdx = content.indexOf("__EDIT_FILE__");
+        const visible = editMarkerIdx !== -1 ? content.slice(0, editMarkerIdx).trim() : content;
+
+        // Complete incomplete markdown only during streaming
+        const processedContent = isStreaming ? completeIncompleteMarkdown(visible) : visible;
+
         return (
-            <div className="content">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                    {content}
-                </ReactMarkdown>
+            <div className="content" key={`content-${isStreaming ? 'streaming' : 'final'}-${msg.content.length}-${renderKey}`}>
+                {renderContentWithMarkers(processedContent, isStreaming)}
+                {/* Hidden debug element - raw content for debugging styling/parsing issues */}
+                <pre className="debug-raw-content" style={{ display: 'none' }} data-original-length={msg.content.length}>
+                    {msg.content}
+                </pre>
             </div>
         );
     }
@@ -1325,15 +1356,43 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                 </div>
             </div>
 
-            {/* Multi-File Diff Panel */}
+            {/* Multi-File Diff Panel - Lazy loaded to avoid blocking main thread */}
             {multiFileEdit && (
-                <MultiFileDiffPanel
-                    files={multiFileEdit.files}
-                    onClose={() => setMultiFileEdit(null)}
-                    onApplyAll={handleMultiFileApply}
-                    applying={multiFileApplying}
-                    applied={applied}
-                />
+                <Suspense fallback={
+                    <div className="multi-diff-panel" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'var(--color-bg-elevated)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '0.75rem',
+                        padding: '3rem'
+                    }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{
+                                fontSize: '1.5rem',
+                                marginBottom: '1rem',
+                                color: 'var(--theme-primary)'
+                            }}>
+                                {spinner.frames[spinnerFrame]}
+                            </div>
+                            <div style={{
+                                color: 'var(--color-text-muted)',
+                                fontSize: '0.875rem'
+                            }}>
+                                Loading diff viewer...
+                            </div>
+                        </div>
+                    </div>
+                }>
+                    <MultiFileDiffPanel
+                        files={multiFileEdit.files}
+                        onClose={() => setMultiFileEdit(null)}
+                        onApplyAll={handleMultiFileApply}
+                        applying={multiFileApplying}
+                        applied={applied}
+                    />
+                </Suspense>
             )}
         </div>
     );
