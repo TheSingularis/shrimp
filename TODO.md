@@ -48,10 +48,12 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
     - Monaco async diff API usage
     - Progressive rendering for large files
 
-- [ ] **Update Branding** — Update styling to use shrimp icons (`frontend/public/icons`) and cohesive color scheme. Maybe add theme options in settings. Update ALL Icons to use a cohesive design.
-  - Rework settings page to utilize more screen space (possibly full window instead of drawer)
-  - Create a cohesive Styling Guide document defining colors, spacing, typography, component patterns
-  - **Why now:** Visual polish improves perceived quality. Quick win.
+- [x] **Update Branding** — Update styling to use shrimp icons (`frontend/public/icons`) and cohesive color scheme. Maybe add theme options in settings. Update ALL Icons to use a cohesive design.
+  - **COMPLETED:** Shrimp icons used in header and welcome screen
+  - **COMPLETED:** 3 switchable themes in settings (Shrimp/Purple/Blue)
+  - **COMPLETED:** All icons standardized with Lucide React
+  - **COMPLETED:** Settings reworked as full-window modal (SettingsModal.tsx)
+  - **COMPLETED:** Comprehensive STYLE_GUIDE.md (560+ lines covering colors, typography, spacing, components, icons, animations, responsive design)
 
 - [x] **Mobile-responsive CSS** — Make layout work on small screens for phone/tablet access.
   - **COMPLETED:** 44px touch targets, landscape mode, horizontal scrolling, ultra-compact mode for <360px screens
