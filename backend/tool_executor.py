@@ -21,8 +21,136 @@ import json
 import config
 import rag
 import file_ops
+import obsidian_ops
 
 log = logging.getLogger("shrimp.tool_executor")
+
+
+# ── Web helpers ────────────────────────────────────────────────────────────────
+
+def _parse_ddg_lite(html: str, max_results: int) -> list[dict]:
+    """Parse search result title/url/snippet triples from DuckDuckGo lite HTML.
+
+    DDG lite structure (per actual HTML inspection):
+      <td><a class='result-link' href='//duckduckgo.com/l/?uddg=<encoded-url>&...'>Title</a></td>
+      <td class='result-snippet'>Snippet text...</td>
+    The link anchor has class 'result-link' but the parent <td> has no class.
+    URLs are DDG redirect links; the real URL is in the 'uddg' query param.
+    """
+    import urllib.parse
+    from html.parser import HTMLParser
+
+    def _decode_ddg_url(href: str) -> str:
+        """Extract the real URL from a DDG redirect href."""
+        if not href:
+            return ""
+        # Make it a full URL so urlparse works
+        if href.startswith("//"):
+            href = "https:" + href
+        parsed = urllib.parse.urlparse(href)
+        params = urllib.parse.parse_qs(parsed.query)
+        uddg = params.get("uddg", [""])[0]
+        return urllib.parse.unquote(uddg) if uddg else href
+
+    class _Parser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.results: list[dict] = []
+            self._in_result_link = False   # inside <a class='result-link'>
+            self._in_snippet_td = False    # inside <td class='result-snippet'>
+            self._buf: str = ""
+            self._pending: dict = {}       # holds title+url while we wait for snippet
+
+        def handle_starttag(self, tag, attrs):
+            d = dict(attrs)
+            if tag == "a" and d.get("class") == "result-link":
+                self._in_result_link = True
+                self._buf = ""
+                self._pending = {"url": _decode_ddg_url(d.get("href", ""))}
+            elif tag == "td" and d.get("class") == "result-snippet":
+                self._in_snippet_td = True
+                self._buf = ""
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self._in_result_link:
+                self._pending["title"] = self._buf.strip()
+                self._in_result_link = False
+                self._buf = ""
+            elif tag == "td" and self._in_snippet_td:
+                if self._pending:
+                    self._pending["snippet"] = self._buf.strip()
+                    self.results.append(self._pending)
+                    self._pending = {}
+                self._in_snippet_td = False
+                self._buf = ""
+
+        def _collect(self, data: str):
+            if self._in_result_link or self._in_snippet_td:
+                self._buf += data
+
+        def handle_data(self, data):
+            self._collect(data)
+
+        def handle_entityref(self, name):
+            from html import unescape
+            self._collect(unescape(f"&{name};"))
+
+        def handle_charref(self, name):
+            from html import unescape
+            self._collect(unescape(f"&#{name};"))
+
+    p = _Parser()
+    p.feed(html)
+    return p.results[:max_results]
+
+
+def _extract_readable_text(html: str) -> tuple[str, str]:
+    """Strip HTML tags and return (title, body_text)."""
+    from html.parser import HTMLParser
+
+    class _Extractor(HTMLParser):
+        SKIP = {"script", "style", "noscript", "nav", "footer", "form", "head"}
+
+        def __init__(self):
+            super().__init__()
+            self._skip_depth = 0
+            self._title_mode = False
+            self.title = ""
+            self.parts: list[str] = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "title":
+                self._title_mode = True
+            if tag in self.SKIP:
+                self._skip_depth += 1
+            if tag in ("p", "h1", "h2", "h3", "h4", "h5", "li", "br", "tr"):
+                self.parts.append("\n")
+
+        def handle_endtag(self, tag):
+            if tag == "title":
+                self._title_mode = False
+            if tag in self.SKIP:
+                self._skip_depth = max(0, self._skip_depth - 1)
+
+        def handle_data(self, data):
+            if self._title_mode and not self.title:
+                self.title = data.strip()
+            elif self._skip_depth == 0:
+                self.parts.append(data)
+
+        def handle_entityref(self, name):
+            from html import unescape
+            if self._skip_depth == 0:
+                self.parts.append(unescape(f"&{name};"))
+
+        def handle_charref(self, name):
+            from html import unescape
+            if self._skip_depth == 0:
+                self.parts.append(unescape(f"&#{name};"))
+
+    e = _Extractor()
+    e.feed(html)
+    return e.title, "".join(e.parts)
 
 
 class ToolExecutor:
@@ -72,6 +200,18 @@ class ToolExecutor:
                 return self._list_scope(**arguments)
             case "propose_file_edit":
                 return self._propose_file_edit(**arguments)
+            case "fetch_emails":
+                return self._fetch_emails(**arguments)
+            case "search_obsidian":
+                return self._search_obsidian(**arguments)
+            case "create_obsidian_page":
+                return self._create_obsidian_page(**arguments)
+            case "update_obsidian_page":
+                return self._update_obsidian_page(**arguments)
+            case "web_search":
+                return self._web_search(**arguments)
+            case "web_fetch":
+                return self._web_fetch(**arguments)
             case _:
                 raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -429,6 +569,178 @@ class ToolExecutor:
             log.exception(f"propose_file_edit unexpected error: {e}")
             return f"Error: Failed to propose edit - {str(e)}"
 
+    def _fetch_emails(
+        self,
+        max_count: int = 10,
+        unread_only: bool = False,
+        from_filter: str | None = None,
+        subject_filter: str | None = None,
+    ) -> str:
+        """Return emails from the local cache, formatted for LLM consumption."""
+        try:
+            import email_client as ec
+            emails = ec.list_emails(limit=max_count * 4)  # over-fetch then filter
+            if unread_only:
+                emails = [e for e in emails if not e.get("read")]
+            if from_filter:
+                emails = [e for e in emails if from_filter.lower() in (e.get("from") or "").lower()]
+            if subject_filter:
+                emails = [e for e in emails if subject_filter.lower() in (e.get("subject") or "").lower()]
+            emails = emails[:max_count]
+
+            if not emails:
+                return "No emails found matching the criteria."
+
+            lines = [f"Found {len(emails)} email(s):\n"]
+            for i, em in enumerate(emails, 1):
+                lines.append(
+                    f"{i}. From: {em.get('from', '')}\n"
+                    f"   Subject: {em.get('subject', '')}\n"
+                    f"   Date: {em.get('date', '')}\n"
+                    f"   ID: {em.get('id', '')}\n"
+                    f"   Read: {em.get('read', False)}\n"
+                )
+            return "\n".join(lines)
+        except Exception as e:
+            log.exception("fetch_emails tool failed")
+            return f"Error fetching emails: {e}"
+
+    def _search_obsidian(self, query: str, scope: str | None = None) -> str:
+        """Semantic search within the Obsidian vault scope."""
+        try:
+            scope_name = scope or obsidian_ops._default_obsidian_scope()
+            if scope_name is None:
+                return "No Obsidian vault scope configured."
+            results = rag.query_scopes(query, [scope_name])
+            return results or "No results found."
+        except Exception as e:
+            log.exception("search_obsidian tool failed")
+            return f"Error searching vault: {e}"
+
+    def _create_obsidian_page(
+        self,
+        path: str,
+        content: str,
+        explanation: str = "Create Obsidian page",
+        scope: str | None = None,
+    ) -> str:
+        """Create a new page in the Obsidian vault."""
+        try:
+            scope_name = scope or obsidian_ops._default_obsidian_scope()
+            if scope_name is None:
+                return "No Obsidian vault scope configured."
+            result = obsidian_ops.propose_page_create(scope_name, path, content, explanation)
+            msg = f"Created page: {result['written']}"
+            if result.get("warning"):
+                msg += f"\nWarning: {result['warning']}"
+            return msg
+        except Exception as e:
+            log.exception("create_obsidian_page tool failed")
+            return f"Error creating page: {e}"
+
+    def _update_obsidian_page(
+        self,
+        path: str,
+        new_section_content: str,
+        section_header: str = "",
+        explanation: str = "Update Obsidian page",
+        scope: str | None = None,
+    ) -> str:
+        """Update a section of an existing Obsidian page."""
+        try:
+            scope_name = scope or obsidian_ops._default_obsidian_scope()
+            if scope_name is None:
+                return "No Obsidian vault scope configured."
+            result = obsidian_ops.propose_page_update(
+                scope_name, path, section_header, new_section_content, explanation
+            )
+            msg = f"Updated page: {result['written']}"
+            if result.get("warning"):
+                msg += f"\nWarning: {result['warning']}"
+            return msg
+        except Exception as e:
+            log.exception("update_obsidian_page tool failed")
+            return f"Error updating page: {e}"
+
+    def _web_search(self, query: str, max_results: int = 5) -> str:
+        """Search the web using DuckDuckGo lite and return results."""
+        import urllib.request
+        import urllib.parse
+        from html.parser import HTMLParser
+
+        if not getattr(config, "WEB_SEARCH_ENABLED", False):
+            return "Web search is disabled. Enable it in Settings → General."
+
+        try:
+            params = urllib.parse.urlencode({"q": query})
+            url = f"https://lite.duckduckgo.com/lite/?{params}"
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
+                "Accept": "text/html",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+
+            results = _parse_ddg_lite(html, max_results)
+
+            if not results:
+                return f'No results found for: "{query}"'
+
+            lines = [f'Web search results for: "{query}"\n']
+            for i, r in enumerate(results, 1):
+                lines.append(f"{i}. {r['title']}")
+                lines.append(f"   URL: {r['url']}")
+                if r.get("snippet"):
+                    lines.append(f"   {r['snippet']}")
+                lines.append("")
+            return "\n".join(lines)
+
+        except Exception as e:
+            log.exception("web_search failed")
+            return f"Error performing web search: {e}"
+
+    def _web_fetch(self, url: str, max_chars: int = 8000) -> str:
+        """Fetch a URL and return its readable text content."""
+        import urllib.request
+        from html.parser import HTMLParser
+        import re
+
+        if not getattr(config, "WEB_SEARCH_ENABLED", False):
+            return "Web fetch is disabled. Enable it in Settings → General."
+
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
+                "Accept": "text/html,application/xhtml+xml,text/plain",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                content_type = resp.headers.get("content-type", "")
+                raw = resp.read(1_000_000)  # cap at 1MB
+
+            if "text/plain" in content_type:
+                text = raw.decode("utf-8", errors="replace")
+                title = ""
+            else:
+                html = raw.decode("utf-8", errors="replace")
+                title, text = _extract_readable_text(html)
+
+            # Normalise whitespace
+            text = re.sub(r"\n{3,}", "\n\n", text).strip()
+            if len(text) > max_chars:
+                text = text[:max_chars] + f"\n\n[Truncated — {len(text) - max_chars} chars omitted]"
+
+            header = f"URL: {url}\n"
+            if title:
+                header += f"Title: {title}\n"
+            log.info("web_fetch: %s (%d chars returned)", url, len(text))
+            return header + "\n" + text
+
+        except Exception as e:
+            log.exception("web_fetch failed")
+            return f"Error fetching URL: {e}"
+
     def get_proposed_edits(self) -> list[dict]:
         """Return all accumulated proposed edits."""
         return self.proposed_edits
@@ -560,5 +872,175 @@ def build_tool_definitions() -> list[dict]:
                     "required": ["scope", "path", "new_content", "explanation"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fetch_emails",
+                "description": "Read emails from the local email cache. Use this to answer questions about recent emails, find messages from specific senders, or retrieve information from the inbox.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "max_count": {
+                            "type": "integer",
+                            "description": "Maximum number of emails to return (default 10)",
+                            "default": 10
+                        },
+                        "unread_only": {
+                            "type": "boolean",
+                            "description": "If true, only return unread emails",
+                            "default": False
+                        },
+                        "from_filter": {
+                            "type": "string",
+                            "description": "Optional: filter emails by sender (substring match)"
+                        },
+                        "subject_filter": {
+                            "type": "string",
+                            "description": "Optional: filter emails by subject (substring match)"
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
+    ] + _obsidian_tool_definitions() + _web_tool_definitions()
+
+
+def _web_tool_definitions() -> list[dict]:
+    if not getattr(config, "WEB_SEARCH_ENABLED", False):
+        return []
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Search the web for current information, news, documentation, or anything not in local files. Returns a list of results with titles, URLs, and snippets. Use web_fetch to read the full content of a promising result.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query"
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Number of results to return (default 5, max 10)",
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_fetch",
+                "description": "Fetch the readable text content of a URL. Use this after web_search to read the full content of a specific page, or when the user provides a URL to read.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The full URL to fetch (must start with http:// or https://)"
+                        },
+                        "max_chars": {
+                            "type": "integer",
+                            "description": "Maximum characters to return (default 8000)",
+                            "default": 8000
+                        }
+                    },
+                    "required": ["url"]
+                }
+            }
+        },
+    ]
+
+
+def _obsidian_tool_definitions() -> list[dict]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_obsidian",
+                "description": "Semantic search within the Obsidian vault. Use to find notes related to a topic.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query"
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "Vault scope name (optional, defaults to the configured Obsidian scope)"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_obsidian_page",
+                "description": "Create a new Obsidian vault note. Include YAML frontmatter with title and tags.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path within the vault, e.g. 'Projects/my-note.md'"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Full markdown content including frontmatter"
+                        },
+                        "explanation": {
+                            "type": "string",
+                            "description": "Why this page is being created"
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "Vault scope name (optional)"
+                        }
+                    },
+                    "required": ["path", "content", "explanation"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_obsidian_page",
+                "description": "Update a specific section of an existing Obsidian vault note. If section_header is empty, replaces the entire body.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path within the vault"
+                        },
+                        "new_section_content": {
+                            "type": "string",
+                            "description": "The new content for the section"
+                        },
+                        "section_header": {
+                            "type": "string",
+                            "description": "Heading text of the section to replace (without # prefix). Leave empty to replace full body."
+                        },
+                        "explanation": {
+                            "type": "string",
+                            "description": "Why this update is being made"
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "Vault scope name (optional)"
+                        }
+                    },
+                    "required": ["path", "new_section_content", "explanation"]
+                }
+            }
+        },
     ]
