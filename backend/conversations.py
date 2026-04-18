@@ -20,6 +20,7 @@ class Conversation:
         conversation_id: Optional[str] = None,
         title: Optional[str] = None,
         messages: Optional[list] = None,
+        active_path: Optional[list] = None,
         created_at: Optional[str] = None,
         updated_at: Optional[str] = None,
         active_scopes: Optional[list] = None,
@@ -28,6 +29,7 @@ class Conversation:
         self.conversation_id = conversation_id or str(uuid.uuid4())
         self.title = title or "New Conversation"
         self.messages = messages or []
+        self.active_path = active_path or []
         self.created_at = created_at or datetime.utcnow().isoformat() + "Z"
         self.updated_at = updated_at or datetime.utcnow().isoformat() + "Z"
         self.active_scopes = active_scopes or []
@@ -39,6 +41,7 @@ class Conversation:
             "conversation_id": self.conversation_id,
             "title": self.title,
             "messages": self.messages,
+            "active_path": self.active_path,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "active_scopes": self.active_scopes,
@@ -52,6 +55,7 @@ class Conversation:
             conversation_id=data.get("conversation_id"),
             title=data.get("title"),
             messages=data.get("messages", []),
+            active_path=data.get("active_path", []),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             active_scopes=data.get("active_scopes", []),
@@ -76,8 +80,32 @@ class Conversation:
         with open(file_path, "r") as f:
             data = json.load(f)
 
+        # Migrate old format (messages without IDs)
+        if data["messages"] and isinstance(data["messages"], list) and len(data["messages"]) > 0:
+            first_msg = data["messages"][0]
+            if "id" not in first_msg:
+                log.info("Migrating conversation %s to tree format", conversation_id)
+                data["messages"] = cls._migrate_flat_to_tree(data["messages"])
+                data["active_path"] = [msg["id"] for msg in data["messages"]]
+
+                # Save migrated version
+                conv = cls.from_dict(data)
+                conv.save()
+                return conv
+
         log.info("Loaded conversation %s", conversation_id)
         return cls.from_dict(data)
+
+    @staticmethod
+    def _migrate_flat_to_tree(messages: list) -> list:
+        """Add IDs and parent references to flat message list."""
+        migrated = []
+        for i, msg in enumerate(messages):
+            msg["id"] = str(uuid.uuid4())
+            msg["parentId"] = migrated[i-1]["id"] if i > 0 else None
+            msg["createdAt"] = datetime.utcnow().isoformat() + "Z"
+            migrated.append(msg)
+        return migrated
 
     @classmethod
     def list_all(cls) -> list[dict]:
@@ -88,6 +116,10 @@ class Conversation:
             try:
                 with open(file_path, "r") as f:
                     data = json.load(f)
+
+                # Skip non-conversation files (e.g. projects.json)
+                if "conversation_id" not in data:
+                    continue
 
                 # Return metadata only (no messages)
                 conversations.append({
