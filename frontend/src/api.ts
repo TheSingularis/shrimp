@@ -1,4 +1,4 @@
-const BASE = `http://${window.location.hostname}:8000`;
+const BASE = `http://${window.location.hostname || 'localhost'}:8000`;
 
 export interface Scope {
     name: string;
@@ -8,8 +8,23 @@ export interface Scope {
 }
 
 export interface Message {
+    id: string;              // UUID v4
     role: "user" | "assistant";
     content: string;
+    parentId: string | null; // null for root message
+    createdAt: string;       // ISO8601
+}
+
+export interface FileEdit {
+    scope: string;
+    original: string;
+    current: string;
+    status: "pending" | "applied" | "discarded";
+}
+
+export interface AssistantMessage extends Message {
+    role: "assistant";
+    fileEdits?: { [path: string]: FileEdit };
 }
 
 export interface IndexStatus {
@@ -231,6 +246,21 @@ export async function setCustomInstructions(custom_instructions: string): Promis
     if (!res.ok) throw new Error(`setCustomInstructions: ${res.status}`);
 }
 
+export async function getWebSearchEnabled(): Promise<boolean> {
+    const res = await fetch(`${BASE}/settings/web-search`);
+    if (!res.ok) throw new Error(`getWebSearchEnabled: ${res.status}`);
+    return (await res.json()).enabled;
+}
+
+export async function setWebSearchEnabled(enabled: boolean): Promise<void> {
+    const res = await fetch(`${BASE}/settings/web-search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) throw new Error(`setWebSearchEnabled: ${res.status}`);
+}
+
 export async function getTheme(): Promise<string> {
     const res = await fetch(`${BASE}/settings/theme`);
     if (!res.ok) throw new Error(`getTheme: ${res.status}`);
@@ -308,6 +338,7 @@ export interface ConversationFull {
     conversation_id: string;
     title: string;
     messages: Message[];
+    active_path: string[];   // Message IDs in current branch
     created_at: string;
     updated_at: string;
     active_scopes: string[];
@@ -328,6 +359,7 @@ export async function getConversation(id: string): Promise<ConversationFull> {
 
 export async function saveConversation(
     messages: Message[],
+    activePath: string[],
     activeScopes: string[],
     conversationId?: string,
     title?: string,
@@ -339,7 +371,8 @@ export async function saveConversation(
         body: JSON.stringify({
             conversation_id: conversationId,
             title,
-            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            messages,  // Send full message objects with tree structure
+            active_path: activePath,
             active_scopes: activeScopes,
             project_id: projectId,
         }),
@@ -442,4 +475,372 @@ export async function moveConversationToProject(
         body: JSON.stringify({ project_id: projectId }),
     });
     if (!res.ok) throw new Error("Failed to move conversation");
+}
+
+// ── Email ────────────────────────────────────────────────────────────────────
+
+export interface EmailMeta {
+    id: string;
+    message_id: string;
+    from: string;
+    subject: string;
+    date: string;
+    read: boolean;
+    triaged: boolean;
+    triage_priority?: string;
+    triage_note?: string;
+    triage_actions?: string[];
+    flagged?: boolean;
+    folder?: string;
+}
+
+export interface EmailAttachment {
+    filename: string;
+    original_filename: string;
+    content_type: string;
+    size: number;
+}
+
+export interface EmailFull extends EmailMeta {
+    to: string;
+    body: string;
+    html_body?: string;
+    triage_result: string | null;
+    attachments?: EmailAttachment[];
+    // flagged is inherited from EmailMeta
+}
+
+export interface EmailConfig {
+    enabled: boolean;
+    imap_host: string;
+    imap_port: number;
+    imap_ssl: boolean;
+    username: string;
+    password: string;
+    mailbox: string;
+    fetch_max: number;
+    poll_interval_minutes: number;
+}
+
+export async function getEmailConfig(): Promise<EmailConfig> {
+    const res = await fetch(`${BASE}/email/config`);
+    if (!res.ok) throw new Error("Failed to get email config");
+    return res.json();
+}
+
+export async function saveEmailConfig(cfg: Partial<EmailConfig>): Promise<void> {
+    const res = await fetch(`${BASE}/email/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+    });
+    if (!res.ok) throw new Error("Failed to save email config");
+}
+
+export async function testEmailConfig(): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${BASE}/email/config/test`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to test email config");
+    return res.json();
+}
+
+export interface SmtpConfig {
+    enabled: boolean;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_ssl: boolean;
+    smtp_starttls: boolean;
+    username: string;
+    password: string;
+    from_name: string;
+    from_email: string;
+}
+
+export async function getSmtpConfig(): Promise<SmtpConfig> {
+    const res = await fetch(`${BASE}/email/smtp/config`);
+    if (!res.ok) throw new Error("Failed to get SMTP config");
+    return res.json();
+}
+
+export async function saveSmtpConfig(cfg: Partial<SmtpConfig>): Promise<void> {
+    const res = await fetch(`${BASE}/email/smtp/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+    });
+    if (!res.ok) throw new Error("Failed to save SMTP config");
+}
+
+export async function testSmtpConfig(): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${BASE}/email/smtp/config/test`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to test SMTP config");
+    return res.json();
+}
+
+export async function sendEmail(params: {
+    to: string; subject: string; body: string; cc?: string; bcc?: string;
+}): Promise<void> {
+    const res = await fetch(`${BASE}/email/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Send failed" }));
+        throw new Error(err.detail || "Send failed");
+    }
+}
+
+export async function getInbox(limit = 50, folder = "INBOX"): Promise<EmailMeta[]> {
+    const res = await fetch(`${BASE}/email/inbox?limit=${limit}&folder=${encodeURIComponent(folder)}`);
+    if (!res.ok) throw new Error("Failed to get inbox");
+    return res.json();
+}
+
+export async function searchEmails(q: string, limit = 50): Promise<EmailMeta[]> {
+    const res = await fetch(`${BASE}/email/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to search emails");
+    return res.json();
+}
+
+export async function fetchInbox(): Promise<{ fetched: number }> {
+    const res = await fetch(`${BASE}/email/fetch`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to fetch inbox");
+    return res.json();
+}
+
+export async function fetchFolder(folder: string, limit = 50): Promise<{ fetched: number }> {
+    const res = await fetch(`${BASE}/email/fetch/${encodeURIComponent(folder)}?limit=${limit}`, { method: "POST" });
+    if (!res.ok) throw new Error(`Failed to fetch ${folder}`);
+    return res.json();
+}
+
+export interface EmailFolder {
+    imap_name: string;
+    display_name: string;
+    role: "inbox" | "sent" | "trash" | "archive" | "folder";
+}
+
+export async function getFolders(): Promise<EmailFolder[]> {
+    const res = await fetch(`${BASE}/email/folders`);
+    if (!res.ok) throw new Error("Failed to get folders");
+    return res.json();
+}
+
+export async function getEmail(id: string): Promise<EmailFull> {
+    const res = await fetch(`${BASE}/email/${id}`);
+    if (!res.ok) throw new Error("Failed to get email");
+    return res.json();
+}
+
+export function attachmentUrl(emailId: string, filename: string, download = false): string {
+    const dl = download ? "?dl=1" : "";
+    return `${BASE}/email/${emailId}/attachment/${encodeURIComponent(filename)}${dl}`;
+}
+
+export async function refreshEmailBody(id: string): Promise<EmailFull> {
+    const res = await fetch(`${BASE}/email/${id}/refresh-body`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to refresh email body");
+    return res.json();
+}
+
+export async function refreshAllEmailBodies(): Promise<{ refreshed: number }> {
+    const res = await fetch(`${BASE}/email/refresh-all`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to refresh emails");
+    return res.json();
+}
+
+export async function getFlaggedEmails(): Promise<EmailMeta[]> {
+    const res = await fetch(`${BASE}/email/flagged`);
+    if (!res.ok) throw new Error("Failed to get flagged emails");
+    return res.json();
+}
+
+export async function setEmailFlag(id: string, flagged: boolean): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/flag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flagged }),
+    });
+    if (!res.ok) throw new Error("Failed to update flag");
+}
+
+export async function setEmailRead(id: string, read: boolean): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ read }),
+    });
+    if (!res.ok) throw new Error("Failed to update read status");
+}
+
+export async function moveEmail(id: string, destFolder: string): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dest_folder: destFolder }),
+    });
+    if (!res.ok) throw new Error("Failed to move email");
+}
+
+export async function archiveEmail(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/archive`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to archive email");
+}
+
+export async function trashEmail(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/trash`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to trash email");
+}
+
+export async function junkEmail(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/junk`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to mark email as junk");
+}
+
+export interface TriageStatus { active: boolean; done: number; total: number; }
+
+export async function getTriageStatus(): Promise<TriageStatus> {
+    const res = await fetch(`${BASE}/email/triage/status`);
+    if (!res.ok) throw new Error("Failed to get triage status");
+    return res.json();
+}
+
+export async function triageEmail(
+    id: string,
+    onToken: (t: string) => void,
+    signal?: AbortSignal,
+): Promise<void> {
+    const res = await fetch(`${BASE}/email/${id}/triage`, { method: "POST", signal });
+    if (!res.ok || !res.body) throw new Error("Failed to triage email");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            onToken(decoder.decode(value, { stream: true }));
+        }
+    } finally {
+        reader.cancel();
+    }
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export interface Notification {
+    id: string;
+    created_at: string;
+    read: boolean;
+    priority: "high" | "normal" | "low";
+    type: string;
+    title: string;
+    body: string;
+    actions: { label: string; route: string }[];
+    source: string;
+}
+
+export async function listNotifications(limit = 50): Promise<Notification[]> {
+    const res = await fetch(`${BASE}/notifications?limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to list notifications");
+    return res.json();
+}
+
+export async function dismissNotification(id: string): Promise<void> {
+    await fetch(`${BASE}/notifications/${id}/dismiss`, { method: "POST" });
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+    await fetch(`${BASE}/notifications/${id}`, { method: "DELETE" });
+}
+
+// ── Jobs ─────────────────────────────────────────────────────────────────────
+
+export interface Job {
+    name: string;
+    description: string;
+    cron: string;
+    enabled: boolean;
+    last_run: string | null;
+    last_result: "ok" | "error" | null;
+}
+
+export async function listJobs(): Promise<Job[]> {
+    const res = await fetch(`${BASE}/jobs`);
+    if (!res.ok) throw new Error("Failed to list jobs");
+    return res.json();
+}
+
+export async function triggerJob(name: string): Promise<void> {
+    const res = await fetch(`${BASE}/jobs/${encodeURIComponent(name)}/run`, { method: "POST" });
+    if (!res.ok) throw new Error(`Failed to trigger job: ${name}`);
+}
+
+export async function updateJob(name: string, updates: { enabled?: boolean; cron?: string }): Promise<Job> {
+    const res = await fetch(`${BASE}/jobs/${encodeURIComponent(name)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error(`Failed to update job: ${name}`);
+    return res.json();
+}
+
+// ── Digest ───────────────────────────────────────────────────────────────────
+
+export interface DigestData {
+    date: string | null;
+    display_date?: string;
+    generated_at?: string;
+    unread_count: number;
+    summary: string | null;
+    action_items: string[];  // markdown todo lines: "- [ ] action — from: X re: Y"
+}
+
+export async function getDigest(): Promise<DigestData> {
+    const res = await fetch(`${BASE}/digest/latest`);
+    if (!res.ok) throw new Error("Failed to get digest");
+    return res.json();
+}
+
+// ── Obsidian ──────────────────────────────────────────────────────────────────
+
+export interface ObsidianPage {
+    path: string;
+    title: string;
+    size: number;
+    modified: number;
+    has_frontmatter: boolean;
+    tags: string[];
+}
+
+export interface ObsidianPageFull extends ObsidianPage {
+    frontmatter: Record<string, string>;
+    body: string;
+    content: string;
+    broken_links: string[];
+}
+
+export async function listObsidianPages(scope?: string): Promise<{ pages: ObsidianPage[]; scope: string | null }> {
+    const params = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+    const res = await fetch(`${BASE}/obsidian/pages${params}`);
+    if (!res.ok) throw new Error("Failed to list vault pages");
+    return res.json();
+}
+
+export async function getObsidianPage(scope: string, path: string): Promise<ObsidianPageFull> {
+    const res = await fetch(
+        `${BASE}/obsidian/page?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`
+    );
+    if (!res.ok) throw new Error("Page not found");
+    return res.json();
+}
+
+export async function searchObsidian(query: string, scope?: string): Promise<{ results: string; scope: string }> {
+    const res = await fetch(`${BASE}/obsidian/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, scope }),
+    });
+    if (!res.ok) throw new Error("Search failed");
+    return res.json();
 }
