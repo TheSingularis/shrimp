@@ -17,7 +17,7 @@ import email_processor
 import notifications
 import scheduler as _scheduler
 
-log = logging.getLogger("shrimp.jobs.email_triage")
+log = logging.getLogger("shrimp.automations.email_triage")
 
 
 def _triage_one(email_id: str, from_: str, subject: str) -> None:

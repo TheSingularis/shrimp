@@ -23,6 +23,9 @@ interface Props {
 // ── markdown components ────────────────────────────────────────────────────────
 
 const mdComponents: Components = {
+    a({ href, children }) {
+        return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+    },
     pre({ children }) {
         return <>{children}</>;
     },

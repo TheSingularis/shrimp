@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Mail, BriefcaseBusiness, RefreshCw, CheckCircle, XCircle, Clock, Star, Sparkles } from "lucide-react";
-import { listJobs, triggerJob, type Job, getDigest, type DigestData, getInbox, getFlaggedEmails, setEmailFlag, type EmailMeta } from "../api";
+import { listAutomations, triggerAutomation, type Automation, getDigest, type DigestData, getInbox, getFlaggedEmails, setEmailFlag, type EmailMeta } from "../api";
 import { listConversations, type ConversationMetadata } from "../api";
 import { senderName, formatDate } from "../utils/email";
 import { PRIORITY_ORDER, UrgencyBadge, toUrgencyLevel } from "../utils/urgency";
 
-type Panel = "chat" | "dashboard" | "email" | "jobs";
+type Panel = "chat" | "dashboard" | "email" | "automations";
 
 interface Props {
     onNavigate: (panel: Panel, emailId?: string, conversationId?: string) => void;
@@ -20,13 +20,13 @@ function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: s
     );
 }
 
-function JobRow({ job, onTrigger }: { job: Job; onTrigger: (name: string) => void }) {
+function AutomationRow({ automation, onTrigger }: { automation: Automation; onTrigger: (name: string) => void }) {
     const [triggering, setTriggering] = useState(false);
 
     async function handleTrigger() {
         setTriggering(true);
         try {
-            await onTrigger(job.name);
+            await onTrigger(automation.name);
         } finally {
             setTimeout(() => setTriggering(false), 1500);
         }
@@ -37,9 +37,9 @@ function JobRow({ job, onTrigger }: { job: Job; onTrigger: (name: string) => voi
         return formatDate(iso);
     }
 
-    const borderColor = job.last_result === "error"
+    const borderColor = automation.last_result === "error"
         ? "var(--color-error, #ef4444)"
-        : job.last_result === "ok"
+        : automation.last_result === "ok"
         ? "rgba(255,255,255,0.07)"
         : "rgba(255,255,255,0.07)";
 
@@ -54,17 +54,17 @@ function JobRow({ job, onTrigger }: { job: Job; onTrigger: (name: string) => voi
             }}
         >
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{job.name}</p>
+                <p className="text-sm font-medium truncate">{automation.name}</p>
                 <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                    {job.description || job.cron || "Manual"}
+                    {automation.description || automation.cron || "Manual"}
                 </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-                {job.last_result === "ok" && <CheckCircle size={14} style={{ color: 'var(--color-success, #22c55e)' }} />}
-                {job.last_result === "error" && <XCircle size={14} style={{ color: 'var(--color-error, #ef4444)' }} />}
-                {!job.last_result && <Clock size={14} style={{ color: 'var(--color-text-muted)' }} />}
+                {automation.last_result === "ok" && <CheckCircle size={14} style={{ color: 'var(--color-success, #22c55e)' }} />}
+                {automation.last_result === "error" && <XCircle size={14} style={{ color: 'var(--color-error, #ef4444)' }} />}
+                {!automation.last_result && <Clock size={14} style={{ color: 'var(--color-text-muted)' }} />}
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {formatLastRun(job.last_run)}
+                    {formatLastRun(automation.last_run)}
                 </span>
                 <button
                     onClick={handleTrigger}
@@ -115,7 +115,7 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
             const hasUntriaged = unread.some(e => !e.triaged);
             if (hasUntriaged && !triageQueued.current) {
                 triageQueued.current = true;
-                triggerJob("email_triage").catch(() => {});
+                triggerAutomation("email_triage").catch(() => {});
                 // Allow re-triggering after 5 min in case more emails arrive
                 setTimeout(() => { triageQueued.current = false; }, 5 * 60 * 1000);
             }
@@ -427,19 +427,19 @@ function FlaggedSection({ onNavigate }: { onNavigate: (panel: Panel, emailId?: s
 }
 
 export function DashboardHome({ onNavigate }: Props) {
-    const [jobs, setJobs] = useState<Job[]>([]);
+    const [automations, setAutomations] = useState<Automation[]>([]);
     const [recentConvs, setRecentConvs] = useState<ConversationMetadata[]>([]);
 
     useEffect(() => {
-        listJobs().then(setJobs).catch(() => {});
+        listAutomations().then(setAutomations).catch(() => {});
         listConversations()
             .then(convs => setRecentConvs(convs.slice(0, 3)))
             .catch(() => {});
     }, []);
 
     async function handleTrigger(name: string) {
-        await triggerJob(name);
-        setTimeout(() => listJobs().then(setJobs).catch(() => {}), 2000);
+        await triggerAutomation(name);
+        setTimeout(() => listAutomations().then(setAutomations).catch(() => {}), 2000);
     }
 
     return (
@@ -461,7 +461,7 @@ export function DashboardHome({ onNavigate }: Props) {
                         <div className="grid grid-cols-3 gap-3">
                             <QuickAction icon={<MessageSquare size={20} />} label="New Chat" onClick={() => onNavigate("chat")} />
                             <QuickAction icon={<Mail size={20} />} label="Email" onClick={() => onNavigate("email")} />
-                            <QuickAction icon={<BriefcaseBusiness size={20} />} label="Jobs" onClick={() => onNavigate("jobs")} />
+                            <QuickAction icon={<BriefcaseBusiness size={20} />} label="Automations" onClick={() => onNavigate("automations")} />
                         </div>
                     </section> */}
 
@@ -507,15 +507,15 @@ export function DashboardHome({ onNavigate }: Props) {
                         </section>
                     )}
 
-                    {/* Jobs */}
-                    {jobs.length > 0 && (
+                    {/* Automations */}
+                    {automations.length > 0 && (
                         <section className="dashboard-card mb-6">
                             <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)' }}>
-                                Background Jobs
+                                Automations
                             </h3>
                             <div className="flex flex-col gap-1.5">
-                                {jobs.map(job => (
-                                    <JobRow key={job.name} job={job} onTrigger={handleTrigger} />
+                                {automations.map(automation => (
+                                    <AutomationRow key={automation.name} automation={automation} onTrigger={handleTrigger} />
                                 ))}
                             </div>
                         </section>

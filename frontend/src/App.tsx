@@ -6,7 +6,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ConversationSidebar } from "./components/ConversationSidebar";
 import { ConversationTabs } from "./components/ConversationTabs";
 import { DashboardHome } from "./components/DashboardHome";
-import { JobsPanel } from "./components/JobsPanel";
+import { AutomationsPanel } from "./components/AutomationsPanel";
 import { EmailPanel } from "./components/EmailPanel";
 import { NotificationFeed, NotificationBadge } from "./components/NotificationFeed";
 import { useVisualViewport } from "./hooks/useVisualViewport";
@@ -15,7 +15,7 @@ import { TitleBar } from "./components/TitleBar";
 import { Settings, LayoutDashboard, MessageSquare, Mail, BriefcaseBusiness } from "lucide-react";
 import "./index.css";
 
-type Panel = "dashboard" | "chat" | "email" | "jobs";
+type Panel = "dashboard" | "chat" | "email" | "automations";
 
 interface ConversationTab {
     id: string;
@@ -325,7 +325,7 @@ export default function App() {
         { panel: "dashboard", icon: <LayoutDashboard size={18} />, label: "Home" },
         { panel: "chat",      icon: <MessageSquare size={18} />,   label: "Chat" },
         { panel: "email",     icon: <Mail size={18} />,            label: "Email" },
-        { panel: "jobs",      icon: <BriefcaseBusiness size={18} />, label: "Jobs" },
+        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Automations" },
     ];
 
     const isElectron = !!(window as any).__shrimp__?.isElectron;
@@ -429,7 +429,7 @@ export default function App() {
                     {activePanel === "email" && (
                         <EmailPanel initialEmailId={selectedEmailId} onEmailOpened={() => setSelectedEmailId(null)} />
                     )}
-                    {activePanel === "jobs" && <JobsPanel />}
+                    {activePanel === "automations" && <AutomationsPanel />}
                 </main>
             </div>
 

@@ -36,6 +36,10 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ## 🎨 Tier 3: Polish & Accessibility
 
+- [x] **Links in chat open in new tab** — Markdown links rendered by ReactMarkdown now use `target="_blank" rel="noopener noreferrer"`, matching the email viewer's behavior.
+
+- [ ] **Native right-click context menus** — Add right-click context menus across all panels (chat, email, obsidian, etc.) with context-appropriate actions: copy/paste for text, copy message for chat bubbles, copy link for URLs, select all, etc. Replaces browser default context menu.
+
 - [ ] **Investigate page freezing during file edit loading/applying** — UI freezes when loading multi-file diffs or applying edits, likely due to Monaco editor initialization or synchronous rendering.
   - ✅ **Implemented:** Lazy loading Monaco with React.lazy + Suspense (reduces bundle size, defers initialization)
   - ✅ **Implemented:** Two-stage deferred rendering with requestIdleCallback:
@@ -165,9 +169,9 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
   - **Prerequisite:** Multiple conversation tabs
 
 - [ ] **Tool calling phase 2** — Once tool calling refactor is stable, add:
-  - Web search tool
-  - Shell command execution tool
-  - File system operations (create, delete, move)
+  - [x] Web search tool
+  - [ ] Shell command execution tool
+  - [ ] File system operations (create, delete, move)
 
 ---
 

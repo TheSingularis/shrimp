@@ -20,7 +20,7 @@ import email_client
 import notifications
 import scheduler as _scheduler
 
-log = logging.getLogger("shrimp.jobs.daily_digest")
+log = logging.getLogger("shrimp.automations.daily_digest")
 
 _DIGEST_FILE = Path(__file__).parent.parent.parent / "notifications" / "digest_latest.json"
 _URGENCY_ORDER = {"urgent": 0, "high": 1, "normal": 2, "low": 3, "spam": 4}
