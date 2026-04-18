@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Literal
 from pathlib import Path
@@ -18,6 +19,11 @@ import conversations
 import projects
 import tool_executor
 import file_ops
+import notifications
+import scheduler
+import email_client
+import email_processor
+import obsidian_ops
 from urllib.parse import unquote
 
 logging.basicConfig(
@@ -88,7 +94,9 @@ class SaveConversationRequest(BaseModel):
     conversation_id: str | None = None
     title: str | None = None
     messages: list[dict]
+    active_path: list[str] = []
     active_scopes: list[str]
+    project_id: str | None = None
 
 
 class UpdateTitleRequest(BaseModel):
@@ -200,7 +208,46 @@ async def startup():
     await loop.run_in_executor(None, projects.migrate_to_projects)
     await loop.run_in_executor(None, rag._hydrate_status)
     await loop.run_in_executor(None, rag.build_all_structural_maps)
+    # Give the scheduler a reference to this event loop so background jobs
+    # can schedule async coroutines on it (avoids 0.0.0.0 routing issues
+    # that occur when asyncio.run() creates a new loop in a thread).
+    scheduler.set_main_loop(asyncio.get_event_loop())
+
+    # Register background jobs
+    from jobs.email_triage import run as email_triage_run
+    from jobs.daily_digest import run as daily_digest_run
+    poll_mins = config.EMAIL_CONFIG.get("poll_interval_minutes", 15)
+    scheduler.register_job(
+        "email_triage",
+        email_triage_run,
+        cron=f"*/{poll_mins} * * * *",
+        description="Polling fallback: fetch new emails and triage each one",
+        enabled=config.EMAIL_CONFIG.get("enabled", False),
+    )
+    scheduler.register_job(
+        "daily_digest",
+        daily_digest_run,
+        cron="0 8 * * *",
+        description="Today's focus: action items from triaged emails",
+        enabled=True,
+    )
+    scheduler.start()
+
+    # Start IMAP IDLE listener for real-time email push
+    import email_idle
+    email_idle.start()
+
+    # Backfill semantic embeddings for any cached emails missing them
+    threading.Thread(target=email_client.embed_all_emails, daemon=True, name="email-embed-backfill").start()
+
     log.info("Startup complete - structural maps and index status ready")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    import email_idle
+    email_idle.stop()
+    scheduler.stop()
 
 
 # ── routes: health ────────────────────────────────────────────────────────────
@@ -518,6 +565,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         yield "__STAGE__finding"
                     elif first_tool == "propose_file_edit":
                         yield "__STAGE__planning"
+                    elif first_tool in ("web_search", "web_fetch"):
+                        yield "__STAGE__browsing"
                     else:
                         yield "__STAGE__thinking"
 
@@ -562,6 +611,10 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         elif tool_name == "propose_file_edit":
                             path = arguments.get("path", "unknown")
                             detail = path
+                        elif tool_name == "web_search":
+                            detail = f'"{arguments.get("query", "")}"'
+                        elif tool_name == "web_fetch":
+                            detail = arguments.get("url", "")
 
                         # Execute tool
                         try:
@@ -1628,7 +1681,9 @@ async def save_conversation(req: SaveConversationRequest):
         try:
             conv = conversations.Conversation.load(req.conversation_id)
             conv.messages = req.messages
+            conv.active_path = req.active_path
             conv.active_scopes = req.active_scopes
+            conv.project_id = req.project_id
             if title:
                 conv.title = title
         except FileNotFoundError:
@@ -1637,7 +1692,9 @@ async def save_conversation(req: SaveConversationRequest):
                 conversation_id=req.conversation_id,
                 title=title,
                 messages=req.messages,
+                active_path=req.active_path,
                 active_scopes=req.active_scopes,
+                project_id=req.project_id,
             )
     else:
         # New conversation
@@ -1645,7 +1702,9 @@ async def save_conversation(req: SaveConversationRequest):
             conversation_id=req.conversation_id,
             title=title,
             messages=req.messages,
+            active_path=req.active_path,
             active_scopes=req.active_scopes,
+            project_id=req.project_id,
         )
     conv.save()
     return {"conversation_id": conv.conversation_id, "title": conv.title}
@@ -2018,6 +2077,32 @@ async def set_custom_instructions(update: CustomInstructionsUpdate):
         return {"custom_instructions": config.CUSTOM_INSTRUCTIONS}
 
 
+@app.get("/settings/web-search")
+async def get_web_search():
+    return {"enabled": getattr(config, "WEB_SEARCH_ENABLED", False)}
+
+
+class WebSearchUpdate(BaseModel):
+    enabled: bool
+
+
+@app.post("/settings/web-search")
+async def set_web_search(update: WebSearchUpdate):
+    config.WEB_SEARCH_ENABLED = update.enabled
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    if _re.search(r"WEB_SEARCH_ENABLED: bool = (True|False)", current):
+        current = _re.sub(
+            r"WEB_SEARCH_ENABLED: bool = (True|False)",
+            f"WEB_SEARCH_ENABLED: bool = {update.enabled}",
+            current,
+        )
+        config_path.write_text(current)
+    log.info("settings: WEB_SEARCH_ENABLED set to %s", update.enabled)
+    return {"enabled": config.WEB_SEARCH_ENABLED}
+
+
 @app.get("/settings/theme")
 async def get_theme():
     return {"theme": config.UI_THEME}
@@ -2169,3 +2254,520 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
     log.info(f"Updated OLLAMA_HOST to: {new_host}")
 
     return {"status": "updated", "mode": req.mode, "host": new_host}
+
+
+# ── routes: notifications ──────────────────────────────────────────────────────
+
+
+@app.get("/notifications")
+async def get_notifications(limit: int = 50, unread_only: bool = False):
+    return notifications.list_notifications(limit=limit, include_read=not unread_only)
+
+
+@app.get("/notifications/count")
+async def get_notification_count():
+    return {"unread": notifications.unread_count()}
+
+
+@app.post("/notifications/{notification_id}/dismiss")
+async def dismiss_notification(notification_id: str):
+    found = notifications.mark_read(notification_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"status": "ok"}
+
+
+@app.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    found = notifications.delete(notification_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"status": "ok"}
+
+
+@app.get("/notifications/stream")
+async def notification_stream(request: Request):
+    """SSE endpoint — pushes new notifications to connected clients in real time."""
+    q = notifications.subscribe()
+
+    async def generator():
+        try:
+            yield {"data": json.dumps({"type": "connected"})}
+            while True:
+                if await request.is_disconnected():
+                    break
+                # Poll the queue with a short timeout so we can check disconnect
+                await asyncio.sleep(0.25)
+                items: list[dict] = []
+                try:
+                    while True:
+                        items.append(q.get_nowait())
+                except Exception:
+                    pass
+                for item in items:
+                    yield {"data": json.dumps(item)}
+        finally:
+            notifications.unsubscribe(q)
+
+    return EventSourceResponse(generator())
+
+
+# ── routes: jobs ───────────────────────────────────────────────────────────────
+
+
+class JobUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    cron: str | None = None
+
+
+@app.get("/jobs")
+async def list_jobs():
+    return scheduler.get_jobs()
+
+
+@app.post("/jobs/{job_name}/run")
+async def run_job(job_name: str):
+    triggered = scheduler.trigger_job(job_name)
+    if not triggered:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found")
+    return {"status": "triggered", "job": job_name}
+
+
+@app.put("/jobs/{job_name}")
+async def update_job(job_name: str, req: JobUpdateRequest):
+    job = scheduler.get_job(job_name)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found")
+    if req.enabled is not None:
+        scheduler.set_job_enabled(job_name, req.enabled)
+    return scheduler.get_job(job_name)
+
+
+# ── routes: email ───────────────────────────────────────────────────────────────
+
+import email_smtp
+
+
+class EmailConfigRequest(BaseModel):
+    enabled: bool = False
+    imap_host: str = ""
+    imap_port: int = 993
+    imap_ssl: bool = True
+    username: str = ""
+    password: str = ""
+    mailbox: str = "INBOX"
+    fetch_max: int = 50
+    poll_interval_minutes: int = 15
+
+
+class SmtpConfigRequest(BaseModel):
+    enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_ssl: bool = False
+    smtp_starttls: bool = True
+    username: str = ""
+    password: str = ""
+    from_name: str = ""
+    from_email: str = ""
+
+
+class SendEmailRequest(BaseModel):
+    to: str
+    subject: str
+    body: str
+    cc: str = ""
+    bcc: str = ""
+
+
+def _write_smtp_config(cfg: dict) -> None:
+    """Persist SMTP_CONFIG changes to config.py."""
+    import re as _re
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    new_block = f"SMTP_CONFIG: dict = {repr(cfg)}"
+    current = _re.sub(
+        r"SMTP_CONFIG: dict = \{.*?\}",
+        new_block,
+        current,
+        flags=_re.DOTALL,
+    )
+    config_path.write_text(current)
+    config.SMTP_CONFIG.update(cfg)
+    log.info("SMTP_CONFIG written")
+
+
+def _write_email_config(cfg: dict) -> None:
+    """Persist EMAIL_CONFIG changes to config.py."""
+    import re as _re
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    new_block = f"EMAIL_CONFIG: dict = {repr(cfg)}"
+    current = _re.sub(
+        r"EMAIL_CONFIG: dict = \{.*?\}",
+        new_block,
+        current,
+        flags=_re.DOTALL,
+    )
+    config_path.write_text(current)
+    # Update runtime config too
+    config.EMAIL_CONFIG.update(cfg)
+    log.info("EMAIL_CONFIG written")
+
+
+@app.get("/email/config")
+async def get_email_config():
+    cfg = dict(config.EMAIL_CONFIG)
+    cfg["password"] = "••••••••" if cfg.get("password") else ""  # redact
+    return cfg
+
+
+@app.post("/email/config")
+async def save_email_config(req: EmailConfigRequest):
+    cfg = dict(config.EMAIL_CONFIG)
+    cfg.update(req.model_dump())
+    # If password is the redacted placeholder, keep the existing one
+    if req.password == "••••••••":
+        cfg["password"] = config.EMAIL_CONFIG.get("password", "")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _write_email_config, cfg)
+    # Update scheduler job enabled state to match
+    scheduler.set_job_enabled("email_triage", cfg.get("enabled", False))
+    return {"status": "ok"}
+
+
+@app.post("/email/config/test")
+async def test_email_config():
+    loop = asyncio.get_event_loop()
+    success, message = await loop.run_in_executor(None, email_client.test_connection)
+    return {"success": success, "message": message}
+
+
+@app.get("/email/smtp/config")
+async def get_smtp_config():
+    cfg = dict(config.SMTP_CONFIG)
+    cfg["password"] = "••••••••" if cfg.get("password") else ""
+    return cfg
+
+
+@app.post("/email/smtp/config")
+async def save_smtp_config(req: SmtpConfigRequest):
+    cfg = dict(config.SMTP_CONFIG)
+    data = req.model_dump()
+    # Preserve existing password if redacted placeholder sent
+    if data.get("password") == "••••••••":
+        data["password"] = cfg.get("password", "")
+    cfg.update(data)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _write_smtp_config, cfg)
+    return {"status": "ok"}
+
+
+@app.post("/email/smtp/config/test")
+async def test_smtp_config():
+    loop = asyncio.get_event_loop()
+    success, message = await loop.run_in_executor(None, email_smtp.test_connection)
+    return {"success": success, "message": message}
+
+
+@app.post("/email/send")
+async def send_email(req: SendEmailRequest):
+    loop = asyncio.get_event_loop()
+    success, message = await loop.run_in_executor(
+        None, email_smtp.send_email, req.to, req.subject, req.body, req.cc, req.bcc
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail=message)
+    return {"status": "sent"}
+
+
+@app.get("/email/inbox")
+async def get_inbox(limit: int = 50, folder: str = "INBOX"):
+    loop = asyncio.get_event_loop()
+    emails = await loop.run_in_executor(None, email_client.list_emails_by_folder, folder, limit)
+    return emails
+
+
+@app.get("/email/search")
+async def search_emails(q: str = "", limit: int = 50):
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, email_client.search_emails, q, limit)
+    return results
+
+
+@app.post("/email/embed-all")
+async def embed_all_emails():
+    """Backfill semantic embeddings for all cached emails. Safe to call multiple times."""
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, email_client.embed_all_emails)
+    return result
+
+
+@app.get("/email/folders")
+async def list_email_folders():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, email_client.list_imap_folders)
+
+
+@app.post("/email/fetch")
+async def fetch_inbox():
+    loop = asyncio.get_event_loop()
+    new_emails = await loop.run_in_executor(None, email_client.fetch_emails)
+    return {"fetched": len(new_emails), "emails": new_emails}
+
+
+@app.post("/email/fetch/{folder}")
+async def fetch_folder(folder: str, limit: int = 50):
+    loop = asyncio.get_event_loop()
+    count, msg = await loop.run_in_executor(None, email_client.fetch_folder, folder, limit)
+    if msg == "IMAP error":
+        raise HTTPException(status_code=500, detail=msg)
+    return {"fetched": count, "folder": folder, "message": msg}
+
+
+@app.post("/email/refresh-all")
+async def refresh_all_emails():
+    """Re-fetch all cached emails from IMAP to backfill html_body for old cache entries."""
+    loop = asyncio.get_event_loop()
+    emails = await loop.run_in_executor(None, email_client.list_emails, 500)
+    count = 0
+    for em in emails:
+        if not em.get("html_body"):  # only refresh ones missing HTML
+            result = await loop.run_in_executor(None, email_client.refresh_email_body, em["id"])
+            if result and result.get("html_body"):
+                count += 1
+    return {"refreshed": count}
+
+
+@app.get("/email/triage/status")
+async def email_triage_status():
+    return email_processor.get_triage_status()
+
+
+@app.post("/email/{email_id}/refresh-body")
+async def refresh_email_body(email_id: str):
+    loop = asyncio.get_event_loop()
+    updated = await loop.run_in_executor(None, email_client.refresh_email_body, email_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Email not found or IMAP not configured")
+    return updated
+
+
+@app.get("/email/flagged")
+async def get_flagged_emails():
+    loop = asyncio.get_event_loop()
+    emails = await loop.run_in_executor(None, email_client.list_flagged)
+    return emails
+
+
+class FlagRequest(BaseModel):
+    flagged: bool
+
+
+@app.post("/email/{email_id}/flag")
+async def flag_email(email_id: str, req: FlagRequest):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.flag_email, email_id, req.flagged)
+    if not ok:
+        raise HTTPException(status_code=404, detail=msg)
+    return {"status": "ok", "flagged": req.flagged, "message": msg}
+
+
+class ReadRequest(BaseModel):
+    read: bool
+
+
+@app.post("/email/{email_id}/read")
+async def set_email_read_route(email_id: str, req: ReadRequest):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.set_email_read, email_id, req.read)
+    if not ok:
+        raise HTTPException(status_code=404, detail=msg)
+    return {"status": "ok", "read": req.read, "message": msg}
+
+
+class MoveEmailRequest(BaseModel):
+    dest_folder: str
+
+
+@app.post("/email/{email_id}/move")
+async def move_email_route(email_id: str, req: MoveEmailRequest):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.move_email, email_id, req.dest_folder)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok", "folder": req.dest_folder, "message": msg}
+
+
+@app.post("/email/{email_id}/archive")
+async def archive_email_route(email_id: str):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.archive_email, email_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@app.post("/email/{email_id}/trash")
+async def trash_email_route(email_id: str):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.trash_email, email_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@app.post("/email/{email_id}/junk")
+async def junk_email_route(email_id: str):
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(None, email_client.junk_email, email_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@app.get("/email/{email_id}/attachment/{filename}")
+async def get_email_attachment(email_id: str, filename: str, dl: bool = False):
+    attach_path = email_client._ATTACH_DIR / email_id / filename
+    if not attach_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    data = email_client.load_email(email_id)
+    content_type = "application/octet-stream"
+    if data:
+        for a in data.get("attachments", []):
+            if a.get("filename") == filename:
+                content_type = a.get("content_type", content_type)
+                break
+    disposition = f'attachment; filename="{filename}"' if dl else f'inline; filename="{filename}"'
+    return FileResponse(
+        str(attach_path),
+        media_type=content_type,
+        headers={"Content-Disposition": disposition},
+    )
+
+
+@app.get("/email/{email_id}")
+async def get_email(email_id: str):
+    data = email_client.load_email(email_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+    email_client.mark_email_read(email_id)
+    return data
+
+
+@app.post("/email/{email_id}/triage")
+async def triage_email(email_id: str):
+    data = email_client.load_email(email_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    async def _stream():
+        async for token in email_processor.triage_email(email_id):
+            yield token.encode()
+
+    return StreamingResponse(_stream(), media_type="text/plain; charset=utf-8")
+
+
+# ── routes: obsidian ─────────────────────────────────────────────────────────
+
+
+class ObsidianPageRequest(BaseModel):
+    scope: str
+    path: str
+    content: str
+    explanation: str = "Create page"
+
+
+class ObsidianUpdateRequest(BaseModel):
+    scope: str
+    path: str
+    section_header: str = ""
+    new_section_content: str
+    explanation: str = "Update section"
+
+
+class ObsidianSearchRequest(BaseModel):
+    query: str
+    scope: str | None = None
+
+
+@app.get("/obsidian/pages")
+async def list_obsidian_pages(scope: str | None = None):
+    loop = asyncio.get_event_loop()
+    pages = await loop.run_in_executor(None, obsidian_ops.list_vault_pages, scope)
+    return {"pages": pages, "scope": scope or obsidian_ops._default_obsidian_scope()}
+
+
+@app.get("/obsidian/page")
+async def get_obsidian_page(scope: str, path: str):
+    path = unquote(path)
+    loop = asyncio.get_event_loop()
+    page = await loop.run_in_executor(None, obsidian_ops.get_page, scope, path)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return page
+
+
+@app.post("/obsidian/page")
+async def create_obsidian_page(req: ObsidianPageRequest):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        obsidian_ops.propose_page_create,
+        req.scope, req.path, req.content, req.explanation,
+    )
+    return result
+
+
+@app.put("/obsidian/page")
+async def update_obsidian_page(req: ObsidianUpdateRequest):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        obsidian_ops.propose_page_update,
+        req.scope, req.path, req.section_header,
+        req.new_section_content, req.explanation,
+    )
+    return result
+
+
+@app.post("/obsidian/search")
+async def search_obsidian(req: ObsidianSearchRequest):
+    scope = req.scope or obsidian_ops._default_obsidian_scope()
+    if scope is None:
+        return {"results": [], "error": "No Obsidian scope configured"}
+    loop = asyncio.get_event_loop()
+    raw = await loop.run_in_executor(None, rag.query_scopes, req.query, [scope])
+    return {"results": raw, "scope": scope}
+
+
+# ── routes: digest ────────────────────────────────────────────────────────────
+
+_DIGEST_FILE = Path(__file__).parent.parent / "notifications" / "digest_latest.json"
+
+
+@app.get("/digest/latest")
+async def get_latest_digest():
+    if not _DIGEST_FILE.exists():
+        return {"date": None, "summary": None, "emails": [], "unread_count": 0}
+    try:
+        return json.loads(_DIGEST_FILE.read_text())
+    except Exception:
+        return {"date": None, "summary": None, "emails": [], "unread_count": 0}
+
+
+# ── Electron: serve built frontend ────────────────────────────────────────────
+# Only mounted when the Vite dist folder exists (i.e. running in Electron mode).
+# In dev mode the Vite dev server serves the frontend on port 5173.
+
+_DIST_DIR = Path(__file__).parent.parent / "frontend" / "dist"
+
+if _DIST_DIR.exists():
+    # Serve static assets (JS, CSS, icons, etc.)
+    app.mount("/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets")
+    app.mount("/icons", StaticFiles(directory=str(_DIST_DIR / "icons")), name="icons")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        """Catch-all: serve index.html for any path not matched by an API route."""
+        return FileResponse(str(_DIST_DIR / "index.html"))

@@ -6,7 +6,9 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import cliSpinners from "cli-spinners";
 import { lazy, Suspense, startTransition } from "react";
-import { RefreshCw, Check, X, Edit3 } from "lucide-react";
+import { RefreshCw, Check, X, Edit3, ChevronLeft, ChevronRight } from "lucide-react";
+import { getActiveBranch, buildPathToMessage, navigateToPreviousBranch, navigateToNextBranch, getBranchInfo, getSiblings } from "../utils/messageTree";
+import { v4 as uuidv4 } from "uuid";
 
 // Lazy load Monaco-based diff panel to reduce initial bundle and defer heavy initialization
 const MultiFileDiffPanel = lazy(() => import("./MultiFileDiffPanel").then(module => ({ default: module.MultiFileDiffPanel })));
@@ -1252,7 +1254,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                         {messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center opacity-70">
                                 <img
-                                    src="/icons/shrimp(1).png"
+                                    src="./icons/shrimp(1).png"
                                     alt="SHRIMP"
                                     className="w-32 h-32 mb-8"
                                 />
@@ -1347,8 +1349,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                             {streaming ? (
                                 <button
                                     onClick={cancel}
-                                    className="shrink-0 h-[52px] px-6 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30
-                                               text-red-400 font-medium transition-all flex items-center justify-center"
+                                    className="btn-primary-lg danger shrink-0"
                                 >
                                     Stop
                                 </button>
@@ -1356,11 +1357,7 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                                 <button
                                     onClick={submit}
                                     disabled={!input.trim()}
-                                    className="shrink-0 h-[52px] px-8 rounded-full bg-gradient-to-r from-blue-primary to-purple-accent
-                                               hover:from-blue-hover hover:to-purple-accent text-white font-semibold
-                                               transition-all disabled:opacity-30 disabled:cursor-not-allowed
-                                               shadow-lg hover:shadow-xl hover:scale-105 active:scale-95
-                                               flex items-center justify-center"
+                                    className="btn-primary-lg shrink-0"
                                 >
                                     Send
                                 </button>
