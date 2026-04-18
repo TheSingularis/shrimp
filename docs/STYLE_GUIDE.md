@@ -153,42 +153,75 @@ Based on `0.25rem` (4px) increments:
 
 ### Buttons
 
-#### Primary Button
-```css
-background: var(--theme-accent-dim);
-border: 1px solid var(--theme-primary);
-color: var(--theme-primary);
-padding: 0.6rem 1.25rem;
-border-radius: 6px;
-transition: all 0.2s;
+Every `<button>` element MUST use one of these CSS classes. Never use raw Tailwind utilities on buttons — the unlayered `button {}` base rule in `index.css` beats `@layer utilities`.
 
-/* Hover */
-background: var(--theme-primary);
-color: #000;
+#### `btn-primary` — Pill action button
+Accent border + text, transparent bg. Fills with `accent-dim` on hover. Matches scope pill aesthetic.
+Use for: Send, Save, primary modal confirm actions.
+```tsx
+<button className="btn-primary">Send</button>
+<button className="btn-primary">Save Settings</button>
 ```
 
-#### Secondary Button
-```css
-background: transparent;
-border: 1px solid var(--color-border);
-color: var(--color-text-muted);
-
-/* Hover */
-border-color: var(--theme-primary);
-color: var(--theme-primary);
+#### `btn-secondary` — Small labeled action button
+Muted border + text at rest. Accent tint bg + accent text on hover.
+Use for: Reply, Forward, Run Now, Enable/Disable, Archive.
+Variants: `.danger` (red, destructive), `.active` (accent fill, for toggle groups).
+```tsx
+<button className="btn-secondary">Reply</button>
+<button className="btn-secondary danger">Trash</button>
+<button className="btn-secondary active">HTML</button>  {/* toggle group */}
 ```
 
-#### Danger Button
-```css
-/* Hover only */
-border-color: #ef4444;
-color: #ef4444;
+#### `btn-ghost` — Borderless utility icon button
+No visual presence at rest (muted color, transparent bg). Subtle white tint on hover.
+Use for: Back arrow, Flag/Star, Copy, utility Refresh buttons.
+Variant: `.flagged` (amber, for active flag/star state).
+```tsx
+<button className="btn-ghost"><ArrowLeft size={16} /></button>
+<button className={`btn-ghost${flagged ? " flagged" : ""}`}><Star size={14} /></button>
+```
+
+#### `icon-btn` — Prominent icon-only button (with accent border)
+Accent border + accent-dim bg. More visually heavy than `btn-ghost`.
+Use sparingly — only for the most important header icon actions (Compose, Fetch emails).
+```tsx
+<button className="icon-btn"><Pencil size={13} /></button>
+```
+
+#### `btn-card` — Dashboard card button
+Surface bg + border. Lifts with accent tint on hover.
+Use for: QuickAction cards on the dashboard.
+Icon inside must use the `card-icon` class to get accent color.
+```tsx
+<button className="btn-card">
+    <span className="card-icon"><Mail size={20} /></span>
+    Open Inbox
+</button>
+```
+
+#### `btn-row` — Full-width list/row button
+No border, no bg, no padding. Primary hover: theme-primary tint.
+Use for: email list rows, conversation list items.
+```tsx
+<button className="btn-row">...</button>
+```
+
+#### `nav-btn` — Navigation rail button
+Transparent, square (44×44px). Active state uses accent-dim bg.
+Use only in the nav rail (`App.tsx`).
+
+#### `btn-bare` — Invisible inline button
+No bg, border, or padding. Opacity 0.7 on hover.
+Use for: icon buttons embedded inside other elements (search bar X, etc.).
+```tsx
+<button className="btn-bare"><X size={12} /></button>
 ```
 
 #### Disabled State
-```css
-opacity: 0.4;
-cursor: not-allowed;
+All classes support the native `disabled` attribute — opacity 0.4, cursor not-allowed.
+```tsx
+<button className="btn-primary" disabled>Sending…</button>
 ```
 
 ### Pills/Badges

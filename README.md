@@ -26,7 +26,7 @@ A local-first AI assistant that knows your files. Point it at your code, notes, 
 | RAG / vector store | [LlamaIndex](https://www.llamaindex.ai) + [ChromaDB](https://www.trychroma.com) |
 | Backend | Python 3.11, FastAPI, uvicorn |
 | Frontend | React 19, TypeScript, Vite |
-| Dev environment | Nix shell (`shell.nix`) |
+| Dev environment | Arch distrobox (`distrobox enter arch-dev -- bash start.sh`) |
 
 ---
 
@@ -168,10 +168,8 @@ EMBED_MODEL = "nomic-embed-text"
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download) (NixOS or nix on any Linux distro)
+- [distrobox](https://github.com/89luca89/distrobox) with an Arch Linux container named `arch-dev`
 - A GPU or CPU capable of running Ollama models (7B models work well on most modern hardware)
-
-That's it. Everything else — Python, Node, Ollama, dependencies — is managed by `shell.nix`.
 
 ---
 
@@ -209,7 +207,7 @@ You can also add, edit, and delete scopes from the UI after starting the app —
 ### 3. Start the stack
 
 ```sh
-nix-shell
+distrobox enter arch-dev -- bash start.sh
 ```
 
 On first run this will:
@@ -272,10 +270,8 @@ tail -f .ollama/frontend.log   # Vite
 
 SHRIMP can be accessed from other devices on your local network:
 
-1. Start SHRIMP: `nix-shell`
-2. Find your computer's IP address:
-   - Linux: `ip addr show | grep "inet "`
-   - macOS: `ifconfig | grep "inet "`
+1. Start SHRIMP: `distrobox enter arch-dev -- bash start.sh`
+2. Find your computer's IP address: `ip addr show | grep "inet "`
 3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
 
 **Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
@@ -337,85 +333,21 @@ shrimp/
 │           ├── ChatPanel.tsx
 │           ├── ScopeSelector.tsx
 │           └── SettingsDrawer.tsx
-└── shell.nix            # Full dev environment
 ```
 
----
-
-## Prerequisites
-
-- [Nix](https://nixos.org/download) (NixOS or nix on any Linux distro)
-- A GPU or CPU capable of running Ollama models (7B models work well on most modern hardware)
-
-Everything else — Python, Node, Ollama, dependencies — is managed by `shell.nix`.
-
----
-
-## Getting started
-
-### 1. Clone the repo
-
-```sh
-git clone https://github.com/TheSingularis/shrimp.git
-cd shrimp
-```
-
-### 2. Configure your watched directories
-
-Copy the example config and edit it:
-
-```sh
-cp backend/config.example.py backend/config.py
-```
-
-Edit `backend/config.py`:
-
-```python
-OLLAMA_MODEL = "qwen2.5-coder:7b"   # any model you have pulled in Ollama
-EMBED_MODEL  = "nomic-embed-text"   # embedding model — must be pulled in Ollama
-
-WATCHED_DIRS: list[dict] = [
-    {"name": "code",  "path": "~/Documents/my-projects", "enabled": True},
-    {"name": "notes", "path": "~/Documents/obsidian",    "enabled": True},
-]
-```
-
-You can also add, edit, and delete scopes from the UI after starting the app — changes are written back to `config.py` automatically.
-
-### 3. Start the stack
-
-For local development we now use `distrobox` for faster, reproducible dev testing on non-NixOS hosts. The repository still includes `shell.nix` for the full environment; you can either run the full `nix-shell` inside a distrobox or use the distrobox workflow shown below.
-
-Example (create + enter a distrobox):
-
-```sh
-# create a distrobox (one-time)
-distrobox-create --name shrimp --image docker.io/library/ubuntu:22.04
-
-# enter the distrobox
-distrobox-enter shrimp
-
-# inside the distrobox you can run the normal dev entrypoint
-nix-shell
-```
-
-On first run this will:
-- Pull Ollama models (`qwen2.5-coder:7b`, `nomic-embed-text`) if not present
-- Create a Python venv and install backend dependencies
-- Install frontend npm packages
-- Start Ollama, the FastAPI backend (port 8000), and the Vite dev server (port 5173)
-
-If you prefer to run `nix-shell` directly on a NixOS machine, the previous workflow is still supported — `shell.nix` manages the same setup.
 ---
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started automatically by the `shellHook` in `shell.nix`.
+All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh` inside the Arch distrobox:
 
-- **USE `shell.nix` FOR NIX PACKAGES** — any native library, system tool, or runtime (Python, Node, Ollama) must be declared in the `packages` list in `shell.nix`.
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always go through `nix-shell`.
-- If a service needs to be restarted, `exit` the shell and re-enter with `nix-shell`.
-- `node_modules` must be installed inside the nix-shell. If stale or installed outside the shell, delete it and re-enter.
+```sh
+distrobox enter arch-dev -- bash start.sh
+```
+
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox.
+- To restart, stop the running processes and re-run the above command.
+- Install Python packages with `pip install` inside the distrobox; system packages with `pacman -S`.
 
 ### Watching logs
 
@@ -470,7 +402,7 @@ tail -f .ollama/backend.log .ollama/frontend.log .ollama/serve.log  # everything
 - Do not make any calls to external APIs or cloud services
 - Do not store sensitive data (file contents, paths) in frontend state longer than needed
 - Do not use `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `nix-shell`
+- Do not run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox
 
 ---
 
@@ -532,10 +464,8 @@ tail -f .ollama/frontend.log   # Vite
 
 SHRIMP can be accessed from other devices on your local network:
 
-1. Start SHRIMP: `nix-shell`
-2. Find your computer's IP address:
-   - Linux: `ip addr show | grep "inet "`
-   - macOS: `ifconfig | grep "inet "`
+1. Start SHRIMP: `distrobox enter arch-dev -- bash start.sh`
+2. Find your computer's IP address: `ip addr show | grep "inet "`
 3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
 
 **Note:** Your firewall must allow connections on ports 5173 (frontend), 8000 (backend), and 11434 (Ollama).
@@ -597,26 +527,24 @@ shrimp/
 │           ├── ChatPanel.tsx
 │           ├── ScopeSelector.tsx
 │           └── SettingsDrawer.tsx
-└── shell.nix            # Full dev environment
 ```
 
 ---
 
 ## Restarting
 
-`nix-shell` manages all three processes. To restart everything cleanly:
+Stop the running processes and re-run the start command:
 
 ```sh
-exit        # stops Ollama, backend, and frontend
-nix-shell   # starts them all again
+distrobox enter arch-dev -- bash start.sh
 ```
 
 ---
 
 ## Troubleshooting
 
-**Backend won't start / `libstdc++.so.6` error**
-The `shell.nix` wraps the venv Python to set `LD_LIBRARY_PATH` before any C-extension loads. If you see this error, make sure you're starting via `nix-shell` and not running uvicorn directly.
+**Backend won't start**
+Make sure you're running via `distrobox enter arch-dev -- bash start.sh` and not invoking uvicorn directly.
 
 **Scopes show "not indexed"**
 Click **↻** next to the scope in the Settings drawer. Check `.ollama/backend.log` for errors — the most common cause is a path that doesn't exist or contains no supported file types.
@@ -625,7 +553,7 @@ Click **↻** next to the scope in the Settings drawer. Check `.ollama/backend.l
 Ollama may still be starting up. Check `.ollama/serve.log`. You can also run `ollama list` in a separate terminal to verify models are available.
 
 **Port already in use**
-`nix-shell` runs `fuser -k 8000/tcp` and `fuser -k 5173/tcp` on startup to clear stale processes. If you still see the error, run those commands manually before entering the shell.
+Run `fuser -k 8000/tcp` and `fuser -k 5173/tcp` manually to clear stale processes, then re-run the start command.
 
 ---
 

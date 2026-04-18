@@ -4,6 +4,22 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
+## [Unreleased] — 2026-04-17
+
+### Added
+- **Email multi-select**: Ctrl+click to toggle emails, shift+click to range-select. Visual accent highlight, no checkboxes.
+- **Bulk action bar**: Appears on selection — Mark Read, Mark Unread, Flag, Archive, Trash. Parallel optimistic updates.
+- **Email right-click context menu**: Per-email actions (mark read/unread, flag, archive, trash) on right-click.
+- **`POST /email/{id}/read` backend route**: Read/unread toggle with IMAP `\Seen` flag sync.
+
+
+- **Obsidian vault panel** — Browse all notes in the vault scope, filter by title/tag/path, semantic search via RAG, view full page content with frontmatter metadata and broken wikilink warnings (`ObsidianPanel.tsx`)
+- **Obsidian backend module** — `obsidian_ops.py` with vault listing, page reading, frontmatter parsing, section-targeted page updates, wikilink validation; all writes go through `file_ops.write_accept()`
+- **Obsidian routes** — `GET /obsidian/pages`, `GET /obsidian/page`, `POST /obsidian/page`, `PUT /obsidian/page`, `POST /obsidian/search`
+- **Obsidian chat tools** — LLM can now call `search_obsidian`, `create_obsidian_page`, `update_obsidian_page` from within chat
+- **Daily digest job** — Runs at 8am, compiles unread emails + recent conversations into an LLM-generated summary, posts to notification feed, and writes a dated daily note to the Obsidian vault
+- **Dashboard now links to live panels** — Email Inbox and Obsidian Vault cards on dashboard are clickable buttons navigating to their panels (no longer "coming soon")
+
 ## [Unreleased] — 2026-03-30
 
 ### Changed
@@ -292,7 +308,7 @@ All notable changes to SHRIMP* will be documented in this file.
 - Index status display showing file count and last-indexed timestamp per scope
 - Structured backend logging to `.ollama/backend.log` covering index progress, chat requests, config changes, and errors
 - Automatic port clearing on shell start — stale processes on ports 8000 and 5173 are killed before services start
-- Full dev environment managed by a single `nix-shell` command — starts Ollama, the backend, and the frontend automatically
+- Full dev environment started via `distrobox enter arch-dev -- bash start.sh` — starts Ollama, the backend, and the frontend automatically
 - Indexed file types: `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.env.example`
 
 - **New:** Indexing now automatically skips common dependency and junk folders (`node_modules`, `.git`, `.venv`, `dist`, `build`, `out`, `chroma_db`, etc.) for much faster indexing of large projects.
