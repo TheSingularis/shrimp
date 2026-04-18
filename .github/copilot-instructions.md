@@ -30,7 +30,7 @@ shrimp/
 │   ├── main.py          # FastAPI app — all route definitions live here
 │   ├── rag.py           # LlamaIndex setup, index builders, query engine
 │   ├── config.py        # User-configured paths, model names, Chroma path
-│   └── config.example.py  # Template — copied to config.py on first nix-shell
+│   └── config.example.py  # Template — copy to config.py before first run
 │
 ├── frontend/
 │   ├── src/
@@ -42,35 +42,26 @@ shrimp/
 │   │       └── SettingsDrawer.tsx     # Model picker, scope management, index controls
 │   └── package.json
 │
-└── shell.nix    # Dev environment: starts Ollama, backend, and frontend
 ```
 
 ---
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started automatically by the `shellHook` in `shell.nix`. To start the full stack:
+All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh` inside the Arch distrobox:
 
 ```sh
-nix-shell
+distrobox enter arch-dev -- bash start.sh
 ```
 
-- **USE `shell.nix` FOR NIX PACKAGES** — any native library, system tool, or runtime (Python, Node, Ollama) must be declared in the `packages` list in `shell.nix`. Do not assume system libraries are available; on NixOS they are not in standard paths.
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always go through `nix-shell`.
-- If a service needs to be restarted, `exit` the shell and re-enter with `nix-shell`.
-- `node_modules` must be installed inside the nix-shell. If stale or installed outside the shell, delete it and re-enter.
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox.
+- To restart, stop the running processes and re-run the above command.
+- Python packages: `pip install` inside the distrobox. System packages: `pacman -S`.
 
-### What `shell.nix` does
-
-1. Sets `LD_LIBRARY_PATH` to expose `libstdc++.so.6` and `libz.so` (required by pip-installed `numpy`/`chromadb` on NixOS)
-2. Wraps the venv Python binary with a shell script that re-exports `LD_LIBRARY_PATH` so uvicorn `--reload` subprocesses inherit it
-3. Creates `backend/.venv` and pip-installs Python deps on first run (guarded by `.deps-installed` marker)
-4. Kills anything on ports 8000 and 5173 with `fuser -k` before starting
-5. Starts Ollama, FastAPI (port 8000), and Vite (port 5173) as background processes
-6. Writes logs to `.ollama/serve.log`, `.ollama/backend.log`, `.ollama/frontend.log`
-7. Traps `EXIT` to clean up all three processes
-
-Note: For faster iterative dev testing on non-NixOS hosts, a `distrobox`-based workflow is supported. Create and enter a distrobox, then run `nix-shell` inside it to obtain the full development environment. See `README.md` for example commands and guidance on when to prefer `distrobox` vs running `nix-shell` directly on NixOS.
+`start.sh` handles:
+1. Killing anything on ports 8000 and 5173 with `fuser -k` before starting
+2. Starting Ollama, FastAPI (port 8000), and Vite (port 5173) as background processes
+3. Writing logs to `.ollama/serve.log`, `.ollama/backend.log`, `.ollama/frontend.log`
 
 ### Watching logs
 
@@ -236,8 +227,8 @@ interface IndexStatus {
 - Do not suggest storing sensitive data (file contents, paths) in frontend state longer than needed
 - Do not add `any` types in TypeScript without a comment explaining why
 - Do not suggest using `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `nix-shell`
-- Do not add packages to the Python venv by hand — add them to the `pip install` block in `shell.nix` and delete `backend/.venv/.deps-installed` to force reinstall
+- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `distrobox enter arch-dev -- bash start.sh`
+- Install Python packages with `pip install` inside the distrobox; system packages with `pacman -S`
 
 SHRIMP (Self-Hosted RAG Intelligence Model Project) is a local-first AI assistant with two layers:
 
@@ -361,16 +352,15 @@ Note: A new `DiffPanel` / `DiffViewer` component was recently added to the front
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started automatically by the `shellHook` in `shell.nix`. To start the full stack:
+All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh` inside the Arch distrobox:
 
 ```sh
-nix-shell
+distrobox enter arch-dev -- bash start.sh
 ```
 
-- **USE `shell.nix` FOR NIX PACKAGES** — any native library, system tool, or runtime (Python, Node, Ollama) must be declared in the `packages` list in `shell.nix`. Do not assume system libraries are available; on NixOS they are not in standard paths.
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always go through `nix-shell`.
-- If a service needs to be restarted, `exit` the shell and re-enter with `nix-shell`. This ensures the correct Node and Python environments are used.
-- `node_modules` must be installed inside the nix-shell so the correct Node version is used. If `node_modules` is stale or was installed outside the shell, delete it and re-enter `nix-shell`.
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox.
+- To restart, stop the running processes and re-run the above command.
+- Install Python packages with `pip install` inside the distrobox; system packages with `pacman -S`.
 
 ---
 
@@ -381,4 +371,4 @@ nix-shell
 - Do not suggest storing sensitive data (file contents, paths) in frontend state longer than needed for the current diff review
 - Do not add `any` types in TypeScript without a comment explaining why
 - Do not suggest using `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `nix-shell`
+- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `distrobox enter arch-dev -- bash start.sh`
