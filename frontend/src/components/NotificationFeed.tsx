@@ -17,7 +17,7 @@ function sourceIcon(source: string) {
     switch (source) {
         case "email_triage": return <Mail size={14} />;
         case "scheduler":
-        case "job_complete": return <BriefcaseBusiness size={14} />;
+        case "automation_complete": return <BriefcaseBusiness size={14} />;
         case "chat": return <MessageSquare size={14} />;
         default: return <Info size={14} />;
     }

@@ -753,9 +753,9 @@ export async function deleteNotification(id: string): Promise<void> {
     await fetch(`${BASE}/notifications/${id}`, { method: "DELETE" });
 }
 
-// ── Jobs ─────────────────────────────────────────────────────────────────────
+// ── Automations ───────────────────────────────────────────────────────────────
 
-export interface Job {
+export interface Automation {
     name: string;
     description: string;
     cron: string;
@@ -764,24 +764,24 @@ export interface Job {
     last_result: "ok" | "error" | null;
 }
 
-export async function listJobs(): Promise<Job[]> {
-    const res = await fetch(`${BASE}/jobs`);
-    if (!res.ok) throw new Error("Failed to list jobs");
+export async function listAutomations(): Promise<Automation[]> {
+    const res = await fetch(`${BASE}/automations`);
+    if (!res.ok) throw new Error("Failed to list automations");
     return res.json();
 }
 
-export async function triggerJob(name: string): Promise<void> {
-    const res = await fetch(`${BASE}/jobs/${encodeURIComponent(name)}/run`, { method: "POST" });
-    if (!res.ok) throw new Error(`Failed to trigger job: ${name}`);
+export async function triggerAutomation(name: string): Promise<void> {
+    const res = await fetch(`${BASE}/automations/${encodeURIComponent(name)}/run`, { method: "POST" });
+    if (!res.ok) throw new Error(`Failed to trigger automation: ${name}`);
 }
 
-export async function updateJob(name: string, updates: { enabled?: boolean; cron?: string }): Promise<Job> {
-    const res = await fetch(`${BASE}/jobs/${encodeURIComponent(name)}`, {
+export async function updateAutomation(name: string, updates: { enabled?: boolean; cron?: string }): Promise<Automation> {
+    const res = await fetch(`${BASE}/automations/${encodeURIComponent(name)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error(`Failed to update job: ${name}`);
+    if (!res.ok) throw new Error(`Failed to update automation: ${name}`);
     return res.json();
 }
 

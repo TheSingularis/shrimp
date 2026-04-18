@@ -213,18 +213,18 @@ async def startup():
     # that occur when asyncio.run() creates a new loop in a thread).
     scheduler.set_main_loop(asyncio.get_event_loop())
 
-    # Register background jobs
-    from jobs.email_triage import run as email_triage_run
-    from jobs.daily_digest import run as daily_digest_run
+    # Register background automations
+    from automations.email_triage import run as email_triage_run
+    from automations.daily_digest import run as daily_digest_run
     poll_mins = config.EMAIL_CONFIG.get("poll_interval_minutes", 15)
-    scheduler.register_job(
+    scheduler.register_automation(
         "email_triage",
         email_triage_run,
         cron=f"*/{poll_mins} * * * *",
         description="Polling fallback: fetch new emails and triage each one",
         enabled=config.EMAIL_CONFIG.get("enabled", False),
     )
-    scheduler.register_job(
+    scheduler.register_automation(
         "daily_digest",
         daily_digest_run,
         cron="0 8 * * *",
@@ -2312,35 +2312,35 @@ async def notification_stream(request: Request):
     return EventSourceResponse(generator())
 
 
-# ── routes: jobs ───────────────────────────────────────────────────────────────
+# ── routes: automations ────────────────────────────────────────────────────────
 
 
-class JobUpdateRequest(BaseModel):
+class AutomationUpdateRequest(BaseModel):
     enabled: bool | None = None
     cron: str | None = None
 
 
-@app.get("/jobs")
-async def list_jobs():
-    return scheduler.get_jobs()
+@app.get("/automations")
+async def list_automations():
+    return scheduler.get_automations()
 
 
-@app.post("/jobs/{job_name}/run")
-async def run_job(job_name: str):
-    triggered = scheduler.trigger_job(job_name)
+@app.post("/automations/{automation_name}/run")
+async def run_automation(automation_name: str):
+    triggered = scheduler.trigger_automation(automation_name)
     if not triggered:
-        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found")
-    return {"status": "triggered", "job": job_name}
+        raise HTTPException(status_code=404, detail=f"Automation '{automation_name}' not found")
+    return {"status": "triggered", "automation": automation_name}
 
 
-@app.put("/jobs/{job_name}")
-async def update_job(job_name: str, req: JobUpdateRequest):
-    job = scheduler.get_job(job_name)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found")
+@app.put("/automations/{automation_name}")
+async def update_automation(automation_name: str, req: AutomationUpdateRequest):
+    automation = scheduler.get_automation(automation_name)
+    if automation is None:
+        raise HTTPException(status_code=404, detail=f"Automation '{automation_name}' not found")
     if req.enabled is not None:
-        scheduler.set_job_enabled(job_name, req.enabled)
-    return scheduler.get_job(job_name)
+        scheduler.set_automation_enabled(automation_name, req.enabled)
+    return scheduler.get_automation(automation_name)
 
 
 # ── routes: email ───────────────────────────────────────────────────────────────
@@ -2432,7 +2432,7 @@ async def save_email_config(req: EmailConfigRequest):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _write_email_config, cfg)
     # Update scheduler job enabled state to match
-    scheduler.set_job_enabled("email_triage", cfg.get("enabled", False))
+    scheduler.set_automation_enabled("email_triage", cfg.get("enabled", False))
     return {"status": "ok"}
 
 
