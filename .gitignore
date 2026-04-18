@@ -1,11 +1,14 @@
 # python
+.venv/
 backend/.venv/
-backend/__pycache__/
+**/__pycache__/
 backend/chroma_db/
 *.pyc
 
 # config has local paths in it
-# backend/config.py
+backend/config.py
+emails/
+notifications/
 
 # conversations are local
 conversations/
@@ -17,6 +20,18 @@ conversations/
 .ollama/
 .ollama/bin/
 .ollama/*.log
+
+# syncthing conflict files
+*.sync-conflict-*
+
+# vite dev-server artifact dump (SHRIMP__files gets created when
+# the browser fetches /SHRIMP__files/* and something writes to disk)
+SHRIMP__files/
+
+# root-level node / package files (uuid was accidentally installed here)
+node_modules/
+package.json
+package-lock.json
 
 # node
 frontend/node_modules/
