@@ -63,35 +63,106 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ---
 
+## 🚀 Expansion: Dashboard & General-Purpose LLM Platform
+
+> Full plan: `docs/EXPANSION_PLAN.md`
+
+### Phase 1 — Foundation (Dashboard Shell + Notifications) ✅ COMPLETE
+
+- [x] **`backend/notifications.py`** — Append-only JSONL feed with `append()`, `list()`, `mark_read()`, `delete()`
+- [x] **Notification routes in `main.py`** — `GET /notifications`, `POST /notifications/{id}/dismiss`, `DELETE /notifications/{id}`, `GET /notifications/stream` (SSE)
+- [x] **`backend/scheduler.py`** — APScheduler wrapper; `register_job`, `get_job_status`, `trigger_job`; started on FastAPI startup hook
+- [x] **Job routes in `main.py`** — `GET /jobs`, `POST /jobs/{name}/run`, `PUT /jobs/{name}`
+- [x] **Nav rail in `App.tsx`** — Dashboard, Chat, Email, Obsidian, Jobs panels; Chat is default; zero regressions
+- [x] **`DashboardHome.tsx`** — Landing page: quick stats, recent conversations, job status grid, quick actions
+- [x] **`NotificationFeed.tsx`** — SSE consumer, notification list, dismiss; overlay drawer
+- [x] **`NotificationBadge.tsx`** — Unread count badge on bell icon in nav rail
+- [x] **`useNotifications.ts`** — SSE hook with reconnect logic
+- [x] **`JobsPanel.tsx`** — Job status grid with run/enable/disable controls
+- [x] **New `api.ts` entries** — notification and job API calls
+
+### Phase 2 — Email Integration ✅ COMPLETE
+
+- [x] **`backend/email_client.py`** — IMAP fetch (stdlib imaplib in executor), local JSON store in `emails/`, HTML stripping via stdlib html.parser
+- [x] **`backend/email_processor.py`** — LLM triage prompt: classify urgency, extract action items, post notification
+- [x] **Email routes in `main.py`** — `GET /email/inbox`, `POST /email/fetch`, `GET|POST /email/config`, `POST /email/config/test`, `GET /email/{id}`, `POST /email/{id}/triage`
+- [x] **`EMAIL_CONFIG` block in `config.py`** — IMAP host, port, SSL, credentials, poll interval
+- [x] **`backend/jobs/email_triage.py`** — Periodic fetch + triage job registered with APScheduler
+- [x] **`fetch_emails` tool in `tool_executor.py`** — LLM can query local email cache from chat
+- [x] **`EmailPanel.tsx`** — Two-pane inbox browser (list + detail), responsive mobile/desktop
+- [x] **`EmailDetail.tsx`** — Full email view with streaming "Triage with AI" button
+- [x] **Email config tab in `SettingsModal.tsx`** — IMAP credentials, test connection, save
+
+### Phase 3 — Obsidian Panel + Daily Digest ✅ COMPLETE
+
+- [x] **`backend/obsidian_ops.py`** — `list_vault_pages`, `get_page`, `propose_page_update`, `propose_page_create`; wikilink validation; frontmatter parsing
+- [x] **Obsidian routes in `main.py`** — `GET /obsidian/pages`, `POST /obsidian/search`, `GET /obsidian/page`, `POST /obsidian/page`, `PUT /obsidian/page`
+- [x] **Obsidian tools in `tool_executor.py`** — `create_obsidian_page`, `update_obsidian_page`, `search_obsidian`
+- [x] **`jobs/daily_digest.py`** — Morning digest (8am): unread emails + recent conversations → notification + optional Obsidian daily note
+- [x] **`ObsidianPanel.tsx`** — Vault browser with client-side filter + semantic search, page detail view, frontmatter display, broken wikilink warnings
+
+> **Note (2026-04-15):** `ObsidianPanel` tab removed from the UI nav rail — shelved until email UX is solid. Backend routes, tools, and `ObsidianPanel.tsx` remain intact. The panel currently offers no advantage over Obsidian directly; revisit when SHRIMP can meaningfully enhance the workflow (e.g. inline AI editing, smart backlinks, or cross-referencing email content with notes). Re-add by restoring the nav item and import in `App.tsx`.
+
+### Phase 4 — Jobs Dashboard + Additional Agents
+
+- [ ] **`jobs/news_digest.py`** — RSS fetch, LLM summarise, vault relevance matching
+- [ ] **`jobs/obsidian_maintenance.py`** — Broken links, orphan detection, weekly report
+- [ ] **`jobs/file_summary.py`** — Changed file summaries appended to `CHANGES.md`
+- [ ] **`PUT /jobs/{name}`** route — schedule editing / enable/disable
+- [ ] **RSS/OPML config in `config.py`**
+- [ ] **`JobsPanel.tsx`** — Job status grid with trigger and schedule controls
+- [ ] **RSS feed config in `SettingsModal.tsx`**
+
+### Phase 5 — Advanced Chat Tools
+
+- [ ] **`run_shell_command` tool** — Opt-in sandboxed shell execution with command whitelist in `config.py`
+- [ ] **`web_fetch` tool** — Fetch + extract readable text from a URL; disabled by default
+- [ ] **`get_calendar_events` tool** — Read `.ics` files from configured local calendar directory
+- [ ] **`send_notification` tool** — LLM can post to notification feed from chat response
+
+---
+
+## 🖥️ Standalone Electron App
+
+- [x] **Standalone Electron app (dev-mode working)** — Electron shell launches, spawns the Python backend, shows splash screen while it boots, then loads the built frontend. System tray with show/hide and quit. Tested on Arch Linux (distrobox).
+  - Run: `DISPLAY=:0 npx electron . --no-sandbox` from the project root inside the distrobox
+  - Build frontend first: `cd frontend && ELECTRON=1 npm run build`
+  - System deps needed in distrobox: `nss libxss atk gtk3 libdrm alsa-lib mesa`
+
+- [ ] **Electron: distributable package** — Package as installable `.AppImage` / `.deb`.
+  - **What it includes:**
+    - Electron wrapper for the React frontend
+    - Bundled Python backend (FastAPI/uvicorn) launched as child process
+    - System tray icon with quick access
+    - Auto-start backend on app launch
+    - Proper shutdown handling (cleanup Python/Ollama processes on quit)
+    - Native file picker dialogs for scope selection
+    - Linux `.AppImage`/`.deb` as primary targets; macOS `.dmg` and Windows `.exe` as stretch goals
+  - **Approach:** Electron main process spawns `uvicorn` and `ollama serve` on startup, waits for health check, then loads the React UI in a BrowserWindow. Python deps bundled via PyInstaller or shipped as a venv.
+
+## 📧 Email — Remaining Functionality
+
+- [ ] **Revisit Inbox / Today's Focus logic** — The digest summary sometimes shows stale content (e.g. "Inbox clear") while new emails are present. Currently hidden when `visible.length > 0` as a workaround. Needs a proper rethink: maybe show digest with a timestamp, or only show action items that are still relevant given current inbox state.
+
+- [x] **Email search** — Keyword (subject/sender/body) and semantic search across cached emails. Search bar in EmailPanel header.
+
+- [x] **Compose new email** — Write and send via SMTP. `ComposeModal.tsx` with To/Subject/Body/CC fields, SMTP backend, config in Settings → Email.
+
+- [x] **Reply / Forward** — Reply/forward from EmailDetail with quoted original and pre-populated fields via ComposeModal.
+
+- [x] **Folder operations** — Trash, archive, and IMAP folder moves implemented. Action buttons in EmailDetail header. Grouped folder tabs (Sent, Filed/Trash) with dropdowns.
+
+- [x] **Multi-select + bulk actions** — Ctrl+click to toggle, shift+click to range-select. No checkboxes — visual highlight only. Bulk action bar with: Mark read, Mark unread, Archive, Trash, Flag.
+  - [x] Add right click context menu for bulk/individual email actions
+
+- [ ] **AI-assisted compose** — "Write for me" button in compose modal. Describe what you want to say, LLM drafts the full email. Optional: suggest subject line from body.
+
+---
+
 ## 🔮 Tier 4: Advanced Features (future)
 
 - [ ] **Fork conversations** — Branch a conversation from any point in history into a new tab. Requires tree structure instead of flat array.
   - **Prerequisite:** Multiple conversation tabs
-
-- [ ] **Standalone Electron app** — Package as distributable desktop application for easy installation without technical setup.
-  - **What it includes:**
-    - Electron wrapper for the React frontend
-    - Bundled Python backend (FastAPI/uvicorn) as subprocess
-    - Optional: Bundled Ollama binary (or auto-download on first run)
-    - System tray icon with quick access
-    - Auto-start backend on app launch
-    - Proper shutdown handling (cleanup Python/Ollama processes)
-    - Native file picker dialogs for scope selection
-    - OS-specific installers (`.dmg` for macOS, `.exe` for Windows, `.AppImage`/`.deb` for Linux)
-  - **Benefits:**
-    - One-click install for non-technical users
-    - No need to run `nix-shell` or manage terminals
-    - Better OS integration (menubar, notifications, file associations)
-    - Can ship pre-configured with good default models
-  - **Challenges:**
-    - Large bundle size (especially if including Ollama)
-    - Platform-specific packaging and signing
-    - Keeping Python/Node dependencies aligned
-    - Auto-update mechanism for backend code
-  - **Alternatives to consider:**
-    - Tauri (Rust-based, smaller than Electron)
-    - Native Python GUI (PyQt/PySide) instead of web stack
-  - **Why later:** Significant packaging effort. Current web app with nix-shell works well for technical users.
 
 - [ ] **Tool calling phase 2** — Once tool calling refactor is stable, add:
   - Web search tool
