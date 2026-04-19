@@ -231,6 +231,30 @@ async def startup():
         description="Today's focus: action items from triaged emails",
         enabled=True,
     )
+    from automations.news_digest import run as news_digest_run
+    from automations.obsidian_maintenance import run as obsidian_maintenance_run
+    scheduler.register_automation(
+        "news_digest",
+        news_digest_run,
+        cron="0 9 * * *",
+        description="Fetch RSS feeds and add new articles to checklist",
+        enabled=bool(getattr(config, "RSS_FEEDS", [])),
+    )
+    scheduler.register_automation(
+        "obsidian_maintenance",
+        obsidian_maintenance_run,
+        cron="0 7 * * 1",  # Monday 7am
+        description="Scan Obsidian vault for broken links and orphaned notes",
+        enabled=True,
+    )
+    import checklist as _checklist
+    scheduler.register_automation(
+        "checklist_rollover",
+        _checklist.rollover_items,
+        cron="0 0 * * *",
+        description="Roll overdue checklist items forward to today",
+        enabled=True,
+    )
     scheduler.start()
 
     # Start IMAP IDLE listener for real-time email push
@@ -2254,6 +2278,30 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
     log.info(f"Updated OLLAMA_HOST to: {new_host}")
 
     return {"status": "updated", "mode": req.mode, "host": new_host}
+
+
+@app.get("/settings/rss-feeds")
+async def get_rss_feeds():
+    return {"feeds": getattr(config, "RSS_FEEDS", [])}
+
+
+class RssFeedsUpdate(BaseModel):
+    feeds: list[dict]
+
+
+@app.post("/settings/rss-feeds")
+async def set_rss_feeds(update: RssFeedsUpdate):
+    config.RSS_FEEDS = update.feeds
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    import re as _re
+    new_val = json.dumps(update.feeds)
+    if _re.search(r"RSS_FEEDS: list\[dict\] = \[.*?\]", current, _re.DOTALL):
+        current = _re.sub(r"RSS_FEEDS: list\[dict\] = \[.*?\]", f"RSS_FEEDS: list[dict] = {new_val}", current, flags=_re.DOTALL)
+    else:
+        current += f"\nRSS_FEEDS: list[dict] = {new_val}\n"
+    config_path.write_text(current)
+    return {"feeds": config.RSS_FEEDS}
 
 
 # ── routes: notifications ──────────────────────────────────────────────────────

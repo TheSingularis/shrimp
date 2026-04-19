@@ -6,6 +6,7 @@ import { getCustomInstructions, setCustomInstructions, generateScopeDescription,
 import { getTheme, setTheme, getLanguage, setLanguage, getOllamaHostSetting, setOllamaHostSetting } from "../api";
 import { getEmailConfig, saveEmailConfig, testEmailConfig, type EmailConfig,
          getSmtpConfig, saveSmtpConfig, testSmtpConfig, type SmtpConfig } from "../api";
+import { getRssFeeds, saveRssFeeds } from "../api";
 import { X, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import "./SettingsModal.css";
 
@@ -17,7 +18,7 @@ interface Props {
     onScopesChanged: (scopes: Scope[]) => void;
 }
 
-type TabType = "appearance" | "models" | "scopes" | "advanced" | "email";
+type TabType = "appearance" | "models" | "scopes" | "advanced" | "email" | "automations";
 
 // ── context slider ─────────────────────────────────────────────────────────────
 
@@ -141,6 +142,10 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
     const [smtpSaving, setSmtpSaving] = useState(false);
     const [smtpTesting, setSmtpTesting] = useState(false);
     const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [rssFeeds, setRssFeeds] = useState<{ url: string; name: string; enabled: boolean }[]>([]);
+    const [newFeedUrl, setNewFeedUrl] = useState("");
+    const [newFeedName, setNewFeedName] = useState("");
+    const [rssSaving, setRssSaving] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -173,6 +178,12 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
         getEmailConfig().then(setEmailConfig).catch(() => {});
         getSmtpConfig().then(setSmtpConfig).catch(() => {});
     }, [open]);
+
+    useEffect(() => {
+        if (activeTab === "automations") {
+            getRssFeeds().then(setRssFeeds).catch(() => {});
+        }
+    }, [activeTab]);
 
     async function handleCtxChange(value: number) {
         setCtxValue(value);
@@ -500,6 +511,9 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
                         onClick={() => setActiveTab("email")}
                     >
                         Email
+                    </button>
+                    <button onClick={() => setActiveTab("automations")} className={`tab ${activeTab === "automations" ? "active" : ""}`}>
+                        Automations
                     </button>
                 </div>
 
@@ -1102,6 +1116,95 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
                                 )}
                             </section>
                         </>
+                    )}
+                    {activeTab === "automations" && (
+                        <section className="drawer-section">
+                            <h2>RSS FEEDS</h2>
+                            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                                News articles from these feeds appear in your Daily Focus checklist each morning.
+                            </p>
+
+                            <div className="scope-list" style={{ marginBottom: "0.75rem" }}>
+                                {rssFeeds.length === 0 && (
+                                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>No feeds configured.</p>
+                                )}
+                                {rssFeeds.map((feed, i) => (
+                                    <div key={i} className="scope-row">
+                                        <div className="scope-header">
+                                            <div className="scope-main-info">
+                                                <span className="scope-name">{feed.name || feed.url}</span>
+                                                <span className="scope-path">{feed.url}</span>
+                                            </div>
+                                            <div className="scope-actions">
+                                                <button
+                                                    className={`toggle-btn ${feed.enabled ? "on" : "off"}`}
+                                                    onClick={async () => {
+                                                        const updated = rssFeeds.map((f, j) => j === i ? { ...f, enabled: !f.enabled } : f);
+                                                        setRssFeeds(updated);
+                                                        await saveRssFeeds(updated);
+                                                    }}
+                                                >
+                                                    {feed.enabled ? "on" : "off"}
+                                                </button>
+                                                <button
+                                                    className="delete-btn"
+                                                    title="Remove"
+                                                    onClick={async () => {
+                                                        const updated = rssFeeds.filter((_, j) => j !== i);
+                                                        setRssFeeds(updated);
+                                                        await saveRssFeeds(updated);
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="add-scope">
+                                <input
+                                    type="text"
+                                    placeholder="Feed name (e.g. Hacker News)"
+                                    value={newFeedName}
+                                    onChange={e => setNewFeedName(e.target.value)}
+                                />
+                                <input
+                                    type="url"
+                                    placeholder="Feed URL (RSS or Atom)"
+                                    value={newFeedUrl}
+                                    onChange={e => setNewFeedUrl(e.target.value)}
+                                    onKeyDown={async e => {
+                                        if (e.key === "Enter" && newFeedUrl.trim()) {
+                                            const updated = [...rssFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || newFeedUrl.trim(), enabled: true }];
+                                            setRssFeeds(updated);
+                                            await saveRssFeeds(updated);
+                                            setNewFeedUrl("");
+                                            setNewFeedName("");
+                                        }
+                                    }}
+                                />
+                                <button
+                                    disabled={!newFeedUrl.trim() || rssSaving}
+                                    onClick={async () => {
+                                        if (!newFeedUrl.trim()) return;
+                                        setRssSaving(true);
+                                        try {
+                                            const updated = [...rssFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || newFeedUrl.trim(), enabled: true }];
+                                            setRssFeeds(updated);
+                                            await saveRssFeeds(updated);
+                                            setNewFeedUrl("");
+                                            setNewFeedName("");
+                                        } finally {
+                                            setRssSaving(false);
+                                        }
+                                    }}
+                                >
+                                    Add Feed
+                                </button>
+                            </div>
+                        </section>
                     )}
                 </div>
             </div>

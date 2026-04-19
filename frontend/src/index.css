@@ -396,6 +396,23 @@ button.btn-ghost.flagged { color: #f59e0b; }
 button.btn-ghost.flagged:hover:not(:disabled) { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 button.btn-ghost:disabled { opacity: 0.4; cursor: default; }
 
+/* Checklist checkbox — 16×16 square, overrides global button padding/radius */
+button.btn-checkbox {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    padding: 0;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: transparent;
+    transition: background 0.1s, border-color 0.1s;
+    font-family: inherit;
+    line-height: 0;
+}
+
 /* Dashboard card button — icon + label, lifts with accent tint on hover.
    Use for: QuickAction cards on the dashboard. */
 button.btn-card {
@@ -869,4 +886,30 @@ button:disabled {
 
 .spin {
     animation: spin 1s linear infinite;
+}
+
+@keyframes shimmer-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+}
+
+.indeterminate-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    overflow: hidden;
+    border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.indeterminate-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 30%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: shimmer-slide 1.4s ease-in-out infinite;
 }

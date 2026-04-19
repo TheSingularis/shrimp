@@ -43,7 +43,7 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
     }
 
     return (
-        <div className="rounded-xl border border-shrimp-border bg-shrimp-surface p-4 flex flex-col gap-3">
+        <div className="rounded-xl border border-shrimp-border bg-shrimp-surface p-4 flex flex-col gap-3" style={{ position: 'relative', overflow: 'hidden' }}>
             <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -84,6 +84,7 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
                     }
                 </button>
             </div>
+            {(running || toggling) && <div className="indeterminate-bar" />}
         </div>
     );
 }
