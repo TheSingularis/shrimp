@@ -23,16 +23,18 @@ A local-first AI assistant that knows your files. Point it at your code, notes, 
 | RAG / vector store | [LlamaIndex](https://www.llamaindex.ai) + [ChromaDB](https://www.trychroma.com) |
 | Backend | Python 3.11, FastAPI, uvicorn |
 | Frontend | React 19, TypeScript, Vite |
-| Dev environment | Nix shell (`shell.nix`) |
+| Desktop app | Electron + electron-builder |
+| Dev environment | Arch Linux distrobox (`start.sh`) |
 
 ---
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download) (NixOS or nix on any Linux distro)
+- [Distrobox](https://github.com/89luca89/distrobox) (on any Linux host) or Arch Linux directly
 - A GPU or CPU capable of running Ollama models (7B models work well on most modern hardware)
+- Node.js 20+ and npm (for building the Electron app)
 
-That's it. Everything else — Python, Node, Ollama, dependencies — is managed by `shell.nix`.
+The `start.sh` script manages everything else: Python venv, Ollama, npm packages, and all services.
 
 ---
 
@@ -69,32 +71,41 @@ You can also add, edit, and delete scopes from the UI after starting the app —
 
 ### 3. Start the stack
 
+**Browser dev mode** (Vite dev server at port 5173):
 ```sh
-nix-shell
+distrobox enter arch-dev -- bash start.sh
+```
+
+**Electron dev mode** (built frontend, full Electron window):
+```sh
+distrobox enter arch-dev -- bash start-electron.sh
 ```
 
 On first run this will:
-- Pull `qwen2.5-coder:7b` and `nomic-embed-text` into Ollama (takes a few minutes)
 - Create a Python venv and install all backend dependencies
 - Install frontend npm packages
-- Start Ollama, the FastAPI backend (port 8000), and the Vite dev server
+- Pull `qwen2.5-coder:7b` and `nomic-embed-text` into Ollama (takes a few minutes)
+- Start Ollama, the FastAPI backend (port 8000), and the UI
 
-When everything is ready you'll see:
+When everything is ready the terminal will show a banner with service URLs.
 
+### 4. Build for distribution (optional)
+
+To produce a distributable AppImage / .deb:
+
+```sh
+# Install root-level Electron deps first (only needed once)
+npm install
+
+# Build everything and package
+bash build.sh
 ```
-┌─────────────────────────────────────────┐
-│           SHRIMP* is running            │
-│                                         │
-│  Ollama   →  http://127.0.0.1:11434     │
-│  API      →  http://127.0.0.1:8000      │
-│  API docs →  http://127.0.0.1:8000/docs │
-│  UI       →  http://localhost:5173      │
-└─────────────────────────────────────────┘
-```
 
-Open the UI URL in your browser.
+Output lands in `dist-electron/`. Pass `--mac` or `--win` to target other platforms.
 
-### 4. Index your files
+> **Note on Python bundling**: `electron-builder` copies `backend/` and `backend/.venv/` into the app as extra resources. The bundled `.venv` must be built on the same OS and architecture as the target machine. Cross-compiling Python extensions is not supported.
+
+### 5. Index your files
 
 Open the ⚙ settings drawer and click **↻** next to a scope to index it, or **↻ index all** to index everything at once. Indexing embeds your files into ChromaDB — this only needs to happen once per scope (or when files change significantly).
 
@@ -146,6 +157,9 @@ shrimp/
 │   ├── rag.py           # LlamaIndex indexing and querying
 │   ├── config.py        # Your local configuration (not committed)
 │   └── config.example.py
+├── electron/
+│   ├── main.js          # Electron main process (dev + packaged mode)
+│   └── preload.js       # Context bridge for window controls
 ├── frontend/
 │   └── src/
 │       ├── App.tsx
@@ -154,26 +168,21 @@ shrimp/
 │           ├── ChatPanel.tsx
 │           ├── ScopeSelector.tsx
 │           └── SettingsDrawer.tsx
-└── shell.nix            # Full dev environment
+├── start.sh             # Browser dev mode (Vite + FastAPI + Ollama)
+├── start-electron.sh    # Electron dev mode
+├── build.sh             # Distribution build (AppImage / deb)
+└── package.json         # Root Electron + electron-builder config
 ```
 
 ---
 
 ## Restarting
 
-`nix-shell` manages all three processes. To restart everything cleanly:
-
-```sh
-exit        # stops Ollama, backend, and frontend
-nix-shell   # starts them all again
-```
+Press `Ctrl+C` in the terminal running `start.sh` or `start-electron.sh` — the cleanup trap kills all child processes cleanly.
 
 ---
 
 ## Troubleshooting
-
-**Backend won't start / `libstdc++.so.6` error**
-The `shell.nix` wraps the venv Python to set `LD_LIBRARY_PATH` before any C-extension loads. If you see this error, make sure you're starting via `nix-shell` and not running uvicorn directly.
 
 **Scopes show "not indexed"**
 Click **↻** next to the scope in the Settings drawer. Check `.ollama/backend.log` for errors — the most common cause is a path that doesn't exist or contains no supported file types.
@@ -182,4 +191,7 @@ Click **↻** next to the scope in the Settings drawer. Check `.ollama/backend.l
 Ollama may still be starting up. Check `.ollama/serve.log`. You can also run `ollama list` in a separate terminal to verify models are available.
 
 **Port already in use**
-`nix-shell` runs `fuser -k 8000/tcp` and `fuser -k 5173/tcp` on startup to clear stale processes. If you still see the error, run those commands manually before entering the shell.
+`start.sh` runs `fuser -k` on startup to clear stale processes. If you still see the error, run `fuser -k 8000/tcp 5173/tcp 11434/tcp` manually before starting.
+
+**Electron window is blank (packaged build)**
+The frontend must be built with `ELECTRON=1` so Vite uses relative asset paths (`base: './'`). Run `bash build.sh` rather than building manually.
