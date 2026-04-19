@@ -802,6 +802,68 @@ export async function getDigest(): Promise<DigestData> {
     return res.json();
 }
 
+// ── Checklist ─────────────────────────────────────────────────────────────────
+
+export interface ChecklistItem {
+    id: string;
+    text: string;
+    completed: boolean;
+    completed_at: string | null;
+    created_at: string;
+    due_date: string;
+    source: "email_digest" | "news_digest" | "calendar" | "manual";
+    source_ref: string | null;
+    priority: "urgent" | "high" | "normal" | "low";
+    context: {
+        from?: string;
+        subject?: string;
+        email_id?: string;
+        rolled_from?: string;
+    };
+    rolled_over?: boolean;
+}
+
+export async function getChecklist(includeCompleted = false): Promise<ChecklistItem[]> {
+    const params = includeCompleted ? "?include_completed=true" : "";
+    const res = await fetch(`${BASE}/checklist${params}`);
+    if (!res.ok) throw new Error("Failed to get checklist");
+    return res.json();
+}
+
+export async function createChecklistItem(
+    text: string,
+    priority: "urgent" | "high" | "normal" | "low" = "normal"
+): Promise<ChecklistItem> {
+    const res = await fetch(`${BASE}/checklist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, priority }),
+    });
+    if (!res.ok) throw new Error("Failed to create checklist item");
+    return res.json();
+}
+
+export async function toggleChecklistItem(id: string, completed: boolean): Promise<ChecklistItem> {
+    const res = await fetch(`${BASE}/checklist/${id}/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed }),
+    });
+    if (!res.ok) throw new Error("Failed to toggle checklist item");
+    return res.json();
+}
+
+export async function deleteChecklistItem(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/checklist/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete checklist item");
+}
+
+export async function clearCompletedItems(): Promise<{ cleared: number }> {
+    const res = await fetch(`${BASE}/checklist/clear-completed`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to clear completed items");
+    return res.json();
+}
+
 // ── Obsidian ──────────────────────────────────────────────────────────────────
 
 export interface ObsidianPage {

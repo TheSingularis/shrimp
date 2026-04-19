@@ -4,6 +4,7 @@ import { listAutomations, triggerAutomation, type Automation, getDigest, type Di
 import { listConversations, type ConversationMetadata } from "../api";
 import { senderName, formatDate } from "../utils/email";
 import { PRIORITY_ORDER, UrgencyBadge, toUrgencyLevel } from "../utils/urgency";
+import { DailyChecklist } from "./DailyChecklist";
 
 type Panel = "chat" | "dashboard" | "email" | "automations";
 
@@ -177,45 +178,8 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                 </div>
             </div>
 
-            {/* Today's Focus — only shown when inbox is currently clear; stale summaries conflict with visible emails */}
-            {freshDigest && visible.length === 0 && (
-                <div className="flex flex-col gap-1.5 mb-3">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-                            Today's Focus
-                        </span>
-                        <button
-                            onClick={handleDigestRefresh}
-                            disabled={digestRefreshing}
-                            className="btn-ghost"
-                            title="Regenerate today's focus"
-                        >
-                            <Sparkles size={14} className={digestRefreshing ? "animate-pulse" : ""} />
-                        </button>
-                    </div>
-                    <div
-                        style={{
-                            borderLeft: "2px solid var(--accent)",
-                            borderRadius: "0 6px 6px 0",
-                            padding: "10px 14px",
-                            background: "rgba(255,255,255,0.02)",
-                        }}
-                    >
-                        {freshDigest.summary && (
-                            <p className="text-sm leading-relaxed mb-2">{freshDigest.summary}</p>
-                        )}
-                        {freshDigest.action_items && freshDigest.action_items.length > 0 && (
-                            <ul className="flex flex-col gap-0.5">
-                                {freshDigest.action_items.map((item, i) => (
-                                    <li key={i} className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                </div>
-            )}
+            {/* Daily Focus Checklist — interactive task list */}
+            <DailyChecklist onNavigate={onNavigate} />
 
             {loading ? (
                 <p className="text-sm py-2" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
