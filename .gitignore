@@ -1,18 +1,38 @@
 # python
+.venv/
 backend/.venv/
-backend/__pycache__/
+**/__pycache__/
 backend/chroma_db/
 *.pyc
 
 # config has local paths in it
-# backend/config.py
+backend/config.py
+emails/
+notifications/
+
+# conversations are local
+conversations/
+
+# claude instructions
+.claude/
 
 # ollama logs
 .ollama/
+.ollama/bin/
+.ollama/*.log
+
+# syncthing conflict files
+*.sync-conflict-*
+
+# vite dev-server artifact dump
+SHRIMP__files/
 
 # node
+node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 
-# electron
+# electron build output
+dist-electron/
 frontend/out/

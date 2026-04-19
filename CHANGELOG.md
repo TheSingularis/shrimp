@@ -4,6 +4,19 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
+## Unreleased
+
+### Added
+
+- Electron desktop app packaging via `electron-builder` — produces AppImage and .deb installers on Linux (dmg on macOS, NSIS on Windows)
+- `build.sh` script for one-command distribution builds
+- `electron/main.js` — Electron main process with packaged-mode support: loads built frontend from `frontend/dist/` via `file://` when packaged, spawns the Python backend from `process.resourcesPath`, and pipes backend/Ollama output to the OS log directory (`app.getPath('logs')`)
+- `electron/preload.js` — context bridge exposing window controls and Electron detection to the renderer
+- `start-electron.sh` — dev convenience script that builds the frontend, starts Ollama + backend, then launches Electron in dev mode
+- Vite `base: './'` when `ELECTRON=1` so all asset URLs are relative and work under `file://`
+
+---
+
 ## [v0.1.0] — 2025-07-15
 
 ### Added
