@@ -76,13 +76,13 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [x] **`backend/notifications.py`** — Append-only JSONL feed with `append()`, `list()`, `mark_read()`, `delete()`
 - [x] **Notification routes in `main.py`** — `GET /notifications`, `POST /notifications/{id}/dismiss`, `DELETE /notifications/{id}`, `GET /notifications/stream` (SSE)
 - [x] **`backend/scheduler.py`** — APScheduler wrapper; `register_job`, `get_job_status`, `trigger_job`; started on FastAPI startup hook
-- [x] **Job routes in `main.py`** — `GET /jobs`, `POST /jobs/{name}/run`, `PUT /jobs/{name}`
-- [x] **Nav rail in `App.tsx`** — Dashboard, Chat, Email, Obsidian, Jobs panels; Chat is default; zero regressions
+- [x] **Job routes in `main.py`** — `GET /automations`, `POST /automations/{name}/run`, `PUT /automations/{name}`
+- [x] **Nav rail in `App.tsx`** — Dashboard, Chat, Email, Obsidian, Automations panels; Chat is default; zero regressions
 - [x] **`DashboardHome.tsx`** — Landing page: quick stats, recent conversations, job status grid, quick actions
 - [x] **`NotificationFeed.tsx`** — SSE consumer, notification list, dismiss; overlay drawer
 - [x] **`NotificationBadge.tsx`** — Unread count badge on bell icon in nav rail
 - [x] **`useNotifications.ts`** — SSE hook with reconnect logic
-- [x] **`JobsPanel.tsx`** — Job status grid with run/enable/disable controls
+- [x] **`AutomationsPanel.tsx`** — Job status grid with run/enable/disable controls
 - [x] **New `api.ts` entries** — notification and job API calls
 
 ### Phase 2 — Email Integration ✅ COMPLETE
@@ -91,7 +91,7 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [x] **`backend/email_processor.py`** — LLM triage prompt: classify urgency, extract action items, post notification
 - [x] **Email routes in `main.py`** — `GET /email/inbox`, `POST /email/fetch`, `GET|POST /email/config`, `POST /email/config/test`, `GET /email/{id}`, `POST /email/{id}/triage`
 - [x] **`EMAIL_CONFIG` block in `config.py`** — IMAP host, port, SSL, credentials, poll interval
-- [x] **`backend/jobs/email_triage.py`** — Periodic fetch + triage job registered with APScheduler
+- [x] **`backend/automations/email_triage.py`** — Periodic fetch + triage job registered with APScheduler
 - [x] **`fetch_emails` tool in `tool_executor.py`** — LLM can query local email cache from chat
 - [x] **`EmailPanel.tsx`** — Two-pane inbox browser (list + detail), responsive mobile/desktop
 - [x] **`EmailDetail.tsx`** — Full email view with streaming "Triage with AI" button
@@ -102,19 +102,19 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [x] **`backend/obsidian_ops.py`** — `list_vault_pages`, `get_page`, `propose_page_update`, `propose_page_create`; wikilink validation; frontmatter parsing
 - [x] **Obsidian routes in `main.py`** — `GET /obsidian/pages`, `POST /obsidian/search`, `GET /obsidian/page`, `POST /obsidian/page`, `PUT /obsidian/page`
 - [x] **Obsidian tools in `tool_executor.py`** — `create_obsidian_page`, `update_obsidian_page`, `search_obsidian`
-- [x] **`jobs/daily_digest.py`** — Morning digest (8am): unread emails + recent conversations → notification + optional Obsidian daily note
+- [x] **`automations/daily_digest.py`** — Morning digest (8am): unread emails + recent conversations → notification + optional Obsidian daily note
 - [x] **`ObsidianPanel.tsx`** — Vault browser with client-side filter + semantic search, page detail view, frontmatter display, broken wikilink warnings
 
 > **Note (2026-04-15):** `ObsidianPanel` tab removed from the UI nav rail — shelved until email UX is solid. Backend routes, tools, and `ObsidianPanel.tsx` remain intact. The panel currently offers no advantage over Obsidian directly; revisit when SHRIMP can meaningfully enhance the workflow (e.g. inline AI editing, smart backlinks, or cross-referencing email content with notes). Re-add by restoring the nav item and import in `App.tsx`.
 
-### Phase 4 — Jobs Dashboard + Additional Agents
+### Phase 4 — Automations Dashboard + Additional Agents
 
-- [ ] **`jobs/news_digest.py`** — RSS fetch, LLM summarise, vault relevance matching
-- [ ] **`jobs/obsidian_maintenance.py`** — Broken links, orphan detection, weekly report
-- [ ] **`jobs/file_summary.py`** — Changed file summaries appended to `CHANGES.md`
-- [ ] **`PUT /jobs/{name}`** route — schedule editing / enable/disable
+- [ ] **`automations/news_digest.py`** — RSS fetch, LLM summarise, vault relevance matching
+- [ ] **`automations/obsidian_maintenance.py`** — Broken links, orphan detection, weekly report
+- [ ] **`automationsok /file_summary.py`** — Changed file summaries appended to `CHANGES.md`
+- [ ] **`PUT /automations/{name}`** route — schedule editing / enable/disable
 - [ ] **RSS/OPML config in `config.py`**
-- [ ] **`JobsPanel.tsx`** — Job status grid with trigger and schedule controls
+- [ ] **`AutomationsPanel.tsx`** — Job status grid with trigger and schedule controls
 - [ ] **RSS feed config in `SettingsModal.tsx`**
 
 ### Phase 5 — Advanced Chat Tools
