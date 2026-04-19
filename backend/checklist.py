@@ -117,6 +117,10 @@ def list_items(
 
     result: list[dict] = []
     for item in items:
+        # Archived stubs exist only for dedup — never shown in the UI
+        if item.get("archived"):
+            continue
+
         item_date = item.get("due_date", today)
         is_completed = item.get("completed", False)
 
@@ -175,23 +179,48 @@ def delete_item(item_id: str) -> bool:
 
 
 def clear_completed(before_date: str | None = None) -> int:
-    """Delete completed items. Returns count deleted."""
+    """
+    Clear completed items. Returns count cleared.
+    Automation items (source != manual, has source_ref) are reduced to a
+    minimal archived stub so the same task cannot be re-added by the next
+    automation run. Manual items are fully deleted.
+    """
     items = _read_all()
-    original_len = len(items)
+    count = 0
+    result: list[dict] = []
 
-    if before_date:
-        items = [
-            item for item in items
-            if not item.get("completed") or item.get("due_date", "") >= before_date
-        ]
-    else:
-        items = [item for item in items if not item.get("completed")]
+    for item in items:
+        # Existing archived stubs are always kept as-is
+        if item.get("archived"):
+            result.append(item)
+            continue
 
-    deleted = original_len - len(items)
-    if deleted > 0:
-        _write_all(items)
+        if not item.get("completed"):
+            result.append(item)
+            continue
 
-    return deleted
+        # Apply optional date filter — keep if due_date is on/after cutoff
+        if before_date and item.get("due_date", "") >= before_date:
+            result.append(item)
+            continue
+
+        count += 1
+        # Automation items: shrink to a dedup stub
+        if item.get("source", "manual") != "manual" and item.get("source_ref"):
+            result.append({
+                "id": item["id"],
+                "source": item["source"],
+                "source_ref": item["source_ref"],
+                "completed": True,
+                "archived": True,
+                "text": "",
+            })
+        # Manual items: fully removed (nothing appended to result)
+
+    if count > 0:
+        _write_all(result)
+
+    return count
 
 
 def rollover_items() -> int:

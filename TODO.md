@@ -113,6 +113,7 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 - [ ] **`automations/obsidian_maintenance.py`** — Broken links, orphan detection, weekly report
 - [ ] **`automationsok /file_summary.py`** — Changed file summaries appended to `CHANGES.md`
 - [ ] **`PUT /automations/{name}`** route — schedule editing / enable/disable
+- [ ] **Persist automation enabled state** — write enable/disable toggles to `config.py` so they survive backend restarts (currently in-memory only)
 - [ ] **RSS/OPML config in `config.py`**
 - [ ] **`AutomationsPanel.tsx`** — Job status grid with trigger and schedule controls
 - [ ] **RSS feed config in `SettingsModal.tsx`**

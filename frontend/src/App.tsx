@@ -446,6 +446,7 @@ export default function App() {
                 connected={connected}
                 onDismiss={dismissNotif}
                 onDelete={removeNotif}
+                topOffset={isElectron ? 32 : 0}
             />
 
             <SettingsModal

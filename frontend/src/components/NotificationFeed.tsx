@@ -11,6 +11,7 @@ interface Props {
     connected: boolean;
     onDismiss: (id: string) => void;
     onDelete: (id: string) => void;
+    topOffset?: number;
 }
 
 function sourceIcon(source: string) {
@@ -58,7 +59,7 @@ function NotifCard({ n, onDismiss, onDelete, onNavigate }: {
                     {!n.read && (
                         <button
                             onClick={() => onDismiss(n.id)}
-                            className="icon-btn"
+                            className="btn-ghost"
                             title="Mark read"
                             style={{ color: 'var(--color-text-muted)' }}
                         >
@@ -67,7 +68,7 @@ function NotifCard({ n, onDismiss, onDelete, onNavigate }: {
                     )}
                     <button
                         onClick={() => onDelete(n.id)}
-                        className="icon-btn"
+                        className="btn-ghost"
                         title="Delete"
                         style={{ color: 'var(--color-text-muted)' }}
                     >
@@ -81,8 +82,7 @@ function NotifCard({ n, onDismiss, onDelete, onNavigate }: {
                     {n.actions.map((a, i) => (
                         <button
                             key={i}
-                            className="text-xs px-2 py-0.5 rounded border border-shrimp-border hover:bg-shrimp-surface transition-colors"
-                            style={{ color: 'var(--accent)' }}
+                            className="btn-secondary"
                             onClick={() => {
                                 if (onNavigate && a.route.startsWith("/")) {
                                     const panel = a.route.split("/")[1] || "dashboard";
@@ -103,7 +103,7 @@ function NotifCard({ n, onDismiss, onDelete, onNavigate }: {
     );
 }
 
-export function NotificationFeed({ open, onClose, onNavigate, notifications, unreadCount, connected, onDismiss, onDelete }: Props) {
+export function NotificationFeed({ open, onClose, onNavigate, notifications, unreadCount, connected, onDismiss, onDelete, topOffset = 0 }: Props) {
     if (!open) return null;
 
     const unread = notifications.filter(n => !n.read);
@@ -114,11 +114,12 @@ export function NotificationFeed({ open, onClose, onNavigate, notifications, unr
             {/* Backdrop */}
             <div
                 className="fixed inset-0 z-40"
+                style={{ top: topOffset }}
                 onClick={onClose}
             />
 
             {/* Drawer */}
-            <div className="fixed right-0 top-0 bottom-0 z-50 w-80 max-w-[90vw] flex flex-col bg-shrimp-surface border-l border-shrimp-border shadow-xl">
+            <div className="fixed right-0 bottom-0 z-50 w-80 max-w-[90vw] flex flex-col bg-shrimp-surface border-l border-shrimp-border shadow-xl" style={{ top: topOffset }}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-shrimp-border shrink-0">
                     <div className="flex items-center gap-2">
@@ -138,7 +139,7 @@ export function NotificationFeed({ open, onClose, onNavigate, notifications, unr
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded hover:bg-shrimp-border/50 transition-colors"
+                        className="btn-ghost"
                         style={{ color: 'var(--color-text-muted)' }}
                     >
                         <X size={16} />

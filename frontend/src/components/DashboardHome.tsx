@@ -69,7 +69,7 @@ function AutomationRow({ automation, onTrigger }: { automation: Automation; onTr
                 </span>
                 <button
                     onClick={handleTrigger}
-                    disabled={triggering || !job.enabled}
+                    disabled={triggering || !automation.enabled}
                     className="icon-btn"
                     title="Run now"
                     style={{ color: 'var(--accent)' }}
@@ -177,9 +177,6 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                     </button>
                 </div>
             </div>
-
-            {/* Daily Focus Checklist — interactive task list */}
-            <DailyChecklist onNavigate={onNavigate} />
 
             {loading ? (
                 <p className="text-sm py-2" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
@@ -428,6 +425,11 @@ export function DashboardHome({ onNavigate }: Props) {
                             <QuickAction icon={<BriefcaseBusiness size={20} />} label="Automations" onClick={() => onNavigate("automations")} />
                         </div>
                     </section> */}
+
+                    {/* Daily Focus Checklist */}
+                    <div className="dashboard-card">
+                        <DailyChecklist onNavigate={onNavigate} />
+                    </div>
 
                     {/* Flagged emails */}
                     <div className="dashboard-card">

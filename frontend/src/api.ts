@@ -697,6 +697,24 @@ export async function junkEmail(id: string): Promise<void> {
     if (!res.ok) throw new Error("Failed to mark email as junk");
 }
 
+// ── RSS Feeds ────────────────────────────────────────────────────────────────
+
+export async function getRssFeeds(): Promise<{ url: string; name: string; enabled: boolean }[]> {
+    const res = await fetch(`${BASE}/settings/rss-feeds`);
+    if (!res.ok) throw new Error("Failed to get RSS feeds");
+    const data = await res.json();
+    return data.feeds || [];
+}
+
+export async function saveRssFeeds(feeds: { url: string; name: string; enabled: boolean }[]): Promise<void> {
+    const res = await fetch(`${BASE}/settings/rss-feeds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feeds }),
+    });
+    if (!res.ok) throw new Error("Failed to save RSS feeds");
+}
+
 export interface TriageStatus { active: boolean; done: number; total: number; }
 
 export async function getTriageStatus(): Promise<TriageStatus> {

@@ -277,6 +277,49 @@ app.whenReady().then(async () => {
     isOllamaRunning(),
   ]);
 
+  // Show splash while services boot
+  let splash = null;
+  let setSplashStatus = () => {};
+
+  if (!backendUp) {
+    splash = new BrowserWindow({
+      width: 360,
+      height: 200,
+      frame: false,
+      alwaysOnTop: true,
+      backgroundColor: "#0D0F17",
+      webPreferences: { contextIsolation: true },
+    });
+
+    const splashHtml = `data:text/html,<!DOCTYPE html>
+<html><head><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:%230D0F17;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;height:100vh;font-family:-apple-system,sans-serif;
+  color:%238891A8;font-size:13px;-webkit-app-region:drag;user-select:none}
+.title{font-size:22px;font-weight:700;color:%23E8EAF0;margin-bottom:6px}
+.status{margin-bottom:18px;min-height:1.2em}
+.track{width:240px;height:3px;background:%231A1D2E;border-radius:2px;overflow:hidden}
+.bar{height:100%;width:40%;background:linear-gradient(90deg,%235b4fcf,%238b78ff,%235b4fcf);
+  background-size:200%25 100%25;border-radius:2px;animation:shimmer 1.4s linear infinite}
+@keyframes shimmer{0%{background-position:200%25 0}100%{background-position:-200%25 0}}
+</style></head><body>
+<p class="title">SHRIMP*</p>
+<p class="status" id="s">Starting services\u2026</p>
+<div class="track"><div class="bar"></div></div>
+</body></html>`;
+
+    splash.loadURL(splashHtml);
+
+    setSplashStatus = (text) => {
+      if (splash && !splash.isDestroyed()) {
+        splash.webContents
+          .executeJavaScript(`document.getElementById('s').textContent=${JSON.stringify(text)}`)
+          .catch(() => {});
+      }
+    };
+  }
+
   if (ollamaUp) {
     console.log("[electron] Ollama already running — skipping spawn");
   } else {
@@ -288,6 +331,7 @@ app.whenReady().then(async () => {
   } else {
     // Wait for Ollama first so the backend can reach it on startup
     if (!ollamaUp) {
+      setSplashStatus("Starting Ollama\u2026");
       try {
         await waitForOllama();
         console.log("[electron] Ollama ready");
@@ -295,30 +339,18 @@ app.whenReady().then(async () => {
         console.error("[electron] Ollama failed to start:", e.message);
       }
     }
+    setSplashStatus("Starting backend\u2026");
     startBackend();
   }
 
-  // Show splash while backend boots
-  let splash = null;
-  if (!backendUp) {
-    splash = new BrowserWindow({
-      width: 360,
-      height: 200,
-      frame: false,
-      alwaysOnTop: true,
-      backgroundColor: "#0D0F17",
-      webPreferences: { contextIsolation: true },
-    });
-    splash.loadURL(`data:text/html,<html><body style="margin:0;background:#0D0F17;
-            display:flex;flex-direction:column;align-items:center;justify-content:center;
-            height:100vh;font-family:sans-serif;color:#8891A8;font-size:13px;">
-            <p style="font-size:22px;font-weight:700;color:#E8EAF0;margin-bottom:8px">SHRIMP*</p>
-            <p>Starting services\u2026</p></body></html>`);
-
+  if (splash) {
+    setSplashStatus("Waiting for backend\u2026");
     try {
       await waitForBackend();
     } catch (e) {
       console.error("[electron] Backend failed to start:", e.message);
+      setSplashStatus("Backend failed to start");
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     splash.close();

@@ -107,7 +107,6 @@ export function DailyChecklist({ onNavigate }: Props) {
     }, [addingTask]);
 
     const completedCount = items.filter(i => i.completed).length;
-    const hasCompleted = completedCount > 0 || showCompleted;
 
     return (
         <div className="mb-4">
@@ -120,15 +119,13 @@ export function DailyChecklist({ onNavigate }: Props) {
                     Daily Focus
                 </span>
                 <div className="flex items-center gap-1">
-                    {hasCompleted && (
-                        <button
-                            onClick={() => setShowCompleted(!showCompleted)}
-                            className="btn-ghost text-xs"
-                            style={{ padding: "2px 6px" }}
-                        >
-                            {showCompleted ? "Hide done" : `${completedCount} done`}
-                        </button>
-                    )}
+                    <button
+                        onClick={() => setShowCompleted(!showCompleted)}
+                        className="btn-ghost text-xs"
+                        style={{ padding: "2px 6px" }}
+                    >
+                        {showCompleted ? "Hide done" : (completedCount > 0 ? `${completedCount} done` : "Completed")}
+                    </button>
                     {showCompleted && completedCount > 0 && (
                         <button
                             onClick={handleClearCompleted}
@@ -264,9 +261,10 @@ function ChecklistItemRow({
             {/* Checkbox */}
             <button
                 onClick={onToggle}
-                className="w-4 h-4 rounded border flex items-center justify-center shrink-0 mt-0.5"
+                className="btn-checkbox mt-0.5"
                 style={{
                     borderColor: item.completed ? "var(--accent)" : priorityColor,
+                    border: `1px solid ${item.completed ? "var(--accent)" : priorityColor}`,
                     background: item.completed ? "var(--accent)" : "transparent",
                 }}
             >
