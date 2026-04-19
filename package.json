@@ -2,6 +2,10 @@
   "name": "shrimp",
   "version": "0.1.0",
   "description": "Self-Hosted RAG Intelligence Model Project",
+  "author": {
+    "name": "TheSingularis",
+    "email": "jordan.sluiter@icloud.com"
+  },
   "main": "electron/main.js",
   "private": true,
   "scripts": {
