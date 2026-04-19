@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 
+import checklist
 import config
 import email_client
 import notifications
@@ -112,6 +113,53 @@ def _parse_digest(raw: str) -> tuple[str, list[str]]:
     return focus, actions
 
 
+def _parse_action_item(action_text: str, emails: list[dict]) -> dict:
+    """
+    Parse action item format and match to source email.
+    Format: "- [ ] <action> — from: <sender> re: <subject>"
+    Returns dict with text, from, subject, email_id, priority.
+    """
+    import re
+
+    result: dict = {"text": action_text, "priority": "normal"}
+
+    # Remove checkbox prefix
+    text = action_text
+    if text.startswith("- [ ] "):
+        text = text[6:]
+    elif text.startswith("- [x] "):
+        text = text[6:]
+
+    # Try to extract "from: X re: Y" pattern
+    # Pattern: "action text — from: sender re: subject" or similar
+    match = re.search(r"[—–-]\s*(?:from:?\s*)(.+?)\s+re:\s*(.+)$", text, re.IGNORECASE)
+    if match:
+        sender_hint = match.group(1).strip()
+        subject_hint = match.group(2).strip()
+        # Extract just the action part (before the dash)
+        action_part = re.sub(r"\s*[—–-]\s*(?:from:?\s*).+$", "", text, flags=re.IGNORECASE)
+        result["text"] = action_part.strip() if action_part.strip() else text
+        result["from"] = sender_hint
+        result["subject"] = subject_hint
+
+        # Try to find matching email for dedup and linking
+        for email in emails:
+            email_from = email.get("from", "")
+            email_subject = email.get("subject", "")
+            # Fuzzy match: check if hints appear in email fields
+            if (sender_hint.lower() in email_from.lower() or
+                email_from.lower() in sender_hint.lower()):
+                if (subject_hint.lower() in email_subject.lower() or
+                    email_subject.lower() in subject_hint.lower()):
+                    result["email_id"] = email.get("id")
+                    result["from"] = email_from
+                    result["subject"] = email_subject
+                    result["priority"] = email.get("triage_priority", "normal")
+                    break
+
+    return result
+
+
 def run() -> None:
     """Entry point called by the scheduler (sync)."""
     try:
@@ -146,18 +194,37 @@ def run() -> None:
             summary_text = "No unread emails with actions. Inbox clear."
             action_items = []
 
+        # Add action items to the persistent checklist
+        added_count = 0
+        for action_text in action_items:
+            # Parse action item format: "- [ ] <action> — from: <sender> re: <subject>"
+            parsed = _parse_action_item(action_text, relevant)
+            checklist.append_item(
+                text=parsed["text"],
+                source="email_digest",
+                source_ref=parsed.get("email_id"),
+                priority=parsed.get("priority", "normal"),
+                context={
+                    "from": parsed.get("from"),
+                    "subject": parsed.get("subject"),
+                    "email_id": parsed.get("email_id"),
+                },
+            )
+            added_count += 1
+        log.info("Daily digest: added %d items to checklist", added_count)
+
+        # Save digest summary (action_items no longer needed here)
         digest_data = {
             "date": date_str,
             "display_date": display_date,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "unread_count": len(relevant),
             "summary": summary_text,
-            "action_items": action_items,
         }
 
         _DIGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
         _DIGEST_FILE.write_text(json.dumps(digest_data, indent=2))
-        log.info("Daily digest: saved (%d action items)", len(action_items))
+        log.info("Daily digest: saved summary")
 
         notifications.append(
             title="Today's Focus",

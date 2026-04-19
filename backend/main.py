@@ -2756,6 +2756,69 @@ async def get_latest_digest():
         return {"date": None, "summary": None, "emails": [], "unread_count": 0}
 
 
+# ── routes: checklist ──────────────────────────────────────────────────────────
+
+import checklist
+
+
+class ChecklistItemCreate(BaseModel):
+    text: str
+    priority: str = "normal"
+    due_date: str | None = None
+
+
+class ChecklistItemToggle(BaseModel):
+    completed: bool
+
+
+@app.get("/checklist")
+async def get_checklist(include_completed: bool = False, date: str | None = None):
+    """Get checklist items for dashboard."""
+    return checklist.list_items(due_date=date, include_completed=include_completed)
+
+
+@app.post("/checklist")
+async def create_checklist_item(req: ChecklistItemCreate):
+    """Manually add a checklist item."""
+    return checklist.append_item(
+        text=req.text,
+        source="manual",
+        priority=req.priority,
+        due_date=req.due_date,
+    )
+
+
+@app.post("/checklist/{item_id}/toggle")
+async def toggle_checklist_item(item_id: str, req: ChecklistItemToggle):
+    """Toggle completion status."""
+    result = checklist.toggle_item(item_id, req.completed)
+    if result is None:
+        raise HTTPException(404, "Checklist item not found")
+    return result
+
+
+@app.delete("/checklist/{item_id}")
+async def delete_checklist_item(item_id: str):
+    """Delete a checklist item."""
+    if not checklist.delete_item(item_id):
+        raise HTTPException(404, "Checklist item not found")
+    return {"deleted": True}
+
+
+@app.post("/checklist/clear-completed")
+async def clear_completed_items():
+    """Clear all completed items."""
+    count = checklist.clear_completed()
+    return {"cleared": count}
+
+
+@app.post("/checklist/rollover")
+async def trigger_rollover():
+    """Manually trigger rollover of overdue items to today."""
+    count = checklist.rollover_items()
+    return {"rolled_over": count}
+
+
 # ── Electron: serve built frontend ────────────────────────────────────────────
 # Only mounted when the Vite dist folder exists (i.e. running in Electron mode).
 # In dev mode the Vite dev server serves the frontend on port 5173.
