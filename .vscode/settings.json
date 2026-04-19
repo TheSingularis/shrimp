@@ -5,14 +5,14 @@
             {
                 "name": "$(play) Run SHRIMP webui",
                 "color": "orange",
-                "command": "distrobox enter arch-dev -- bash start.sh",
-                "singleInstance": false
+                "command": "bash start.sh",
+                "singleInstance": true
             },
             {
                 "name": "$(window) Run SHRIMP electron",
                 "color": "#8B5CF6",
-                "command": "distrobox enter arch-dev -- bash -c 'SHRIMP=/home/jordan/Documents/Code-Projects/shrimp; echo \"[shrimp] Building frontend...\"; ELECTRON=1 npm --prefix \"$SHRIMP/frontend\" run build || { echo \"[shrimp] Build failed\"; exit 1; }; echo \"[shrimp] Starting backend...\"; fuser -k 8000/tcp 2>/dev/null || true; (cd \"$SHRIMP/backend\" && .venv/bin/python -m uvicorn main:app --reload --reload-dir . --host 0.0.0.0 --port 8000 >> \"$SHRIMP/.ollama/backend.log\" 2>&1) & BPID=$!; echo \"[shrimp] Starting Electron...\"; GTK_MODULES= DISPLAY=:0 npx --prefix \"$SHRIMP\" electron . --no-sandbox 2>/dev/null & EPID=$!; cleanup() { echo \"[shrimp] Shutting down...\"; kill $BPID $EPID 2>/dev/null; wait $BPID $EPID 2>/dev/null; }; trap cleanup EXIT INT TERM; echo \"[shrimp] Running — Ctrl+C to stop both\"; wait $EPID'",
-                "singleInstance": false
+                "command": "bash start-electron.sh",
+                "singleInstance": true
             }
         ]
     },

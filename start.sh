@@ -2,6 +2,7 @@
 set -e
 
 SHRIMP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DISTROBOX_NAME="arch-dev"
 
 # ── colours ───────────────────────────────────────────────────────────────────
 G='\033[0;32m'; Y='\033[0;33m'; R='\033[0;31m'; N='\033[0m'
@@ -9,12 +10,18 @@ info()  { echo -e "${G}[shrimp]${N} $*"; }
 warn()  { echo -e "${Y}[shrimp]${N} $*"; }
 error() { echo -e "${R}[shrimp]${N} $*"; }
 
-# ── sanity check: must run inside distrobox ───────────────────────────────────
+# ── bootstrap: create distrobox if not inside one ─────────────────────────────
 if [ ! -f /run/.containerenv ] && [ -z "$DISTROBOX_ENTER_PATH" ]; then
-  warn "Not inside a distrobox container."
-  info "Enter the container first with: distrobox enter arch-dev"
-  info "Then run: bash start.sh"
-  exit 1
+  # Check if distrobox exists
+  if ! distrobox list 2>/dev/null | grep -q "$DISTROBOX_NAME"; then
+    info "Creating distrobox '$DISTROBOX_NAME'..."
+    distrobox create --name "$DISTROBOX_NAME" --image archlinux:latest --yes
+    info "Distrobox created. First run may take a moment to initialize."
+  fi
+
+  # Enter distrobox and re-run this script
+  info "Entering distrobox '$DISTROBOX_NAME'..."
+  exec distrobox enter "$DISTROBOX_NAME" -- bash "$SHRIMP_DIR/start.sh"
 fi
 
 # ── 1. system deps (idempotent) ───────────────────────────────────────────────
@@ -61,8 +68,10 @@ if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
 fi
 
 # ── 6. python venv ────────────────────────────────────────────────────────────
-if [ ! -d "$SHRIMP_DIR/backend/.venv" ]; then
+# Check if venv exists and is valid (symlinks work)
+if [ ! -d "$SHRIMP_DIR/backend/.venv" ] || [ ! -x "$SHRIMP_DIR/backend/.venv/bin/python" ]; then
   info "Creating Python venv..."
+  rm -rf "$SHRIMP_DIR/backend/.venv"
   python3 -m venv "$SHRIMP_DIR/backend/.venv"
 fi
 
