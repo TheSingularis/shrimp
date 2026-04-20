@@ -18,6 +18,14 @@ emails/
 notifications/
 conversations/
 .ollama/
+.ollama/bin/
+.ollama/*.log
+
+# syncthing conflict files
+*.sync-conflict-*
+
+# vite dev-server artifact dump
+SHRIMP__files/
 
 # ── Node / frontend ───────────────────────────────────────────────────────────
 node_modules/

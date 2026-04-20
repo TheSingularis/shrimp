@@ -20,8 +20,25 @@ let ollamaProcess;
 const BACKEND_PORT = 8000;
 const OLLAMA_PORT = 11434;
 const ROOT_DIR = path.join(__dirname, "..");
-const BACKEND_DIR = path.join(ROOT_DIR, "backend");
-const VENV_PYTHON = path.join(BACKEND_DIR, ".venv", "bin", "python");
+
+// ── Path resolution (dev vs packaged) ──────────────────────────────────────────
+
+// In packaged mode:
+//   - __dirname is <app>/resources/app/electron/ (inside the ASAR or alongside it)
+//   - process.resourcesPath is <app>/resources/
+//   - extraFiles land at <app>/resources/backend/ and <app>/resources/backend/.venv/
+// In dev mode:
+//   - __dirname is <repo>/electron/
+//   - ROOT_DIR is <repo>/
+
+const BACKEND_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, "backend")
+  : path.join(ROOT_DIR, "backend");
+
+const VENV_PYTHON = app.isPackaged
+  ? path.join(BACKEND_DIR, ".venv", "bin", "python")
+  : path.join(path.join(ROOT_DIR, "backend"), ".venv", "bin", "python");
+
 const ICON_PATH = path.join(
   ROOT_DIR,
   "frontend",
@@ -29,6 +46,17 @@ const ICON_PATH = path.join(
   "icons",
   "shrimp(1).png",
 );
+
+// ── Logging setup (packaged mode writes to OS log dir) ─────────────────────────
+
+function getLogStream(filename) {
+  if (!app.isPackaged) return null; // dev mode logs to console
+  const logDir = app.getPath("logs");
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+  } catch (_) {}
+  return fs.createWriteStream(path.join(logDir, filename), { flags: "a" });
+}
 
 // ── Ollama ─────────────────────────────────────────────────────────────────────
 
@@ -53,12 +81,16 @@ function startOllama() {
       ROCR_VISIBLE_DEVICES: "0",
     },
   });
-  ollamaProcess.stdout.on("data", (d) =>
-    console.log("[ollama]", d.toString().trimEnd()),
-  );
-  ollamaProcess.stderr.on("data", (d) =>
-    console.log("[ollama]", d.toString().trimEnd()),
-  );
+
+  const ollamaLog = getLogStream("ollama.log");
+  function logOllama(data) {
+    const line = data.toString().trimEnd();
+    if (ollamaLog) ollamaLog.write(line + "\n");
+    else console.log("[ollama]", line);
+  }
+
+  ollamaProcess.stdout.on("data", logOllama);
+  ollamaProcess.stderr.on("data", logOllama);
   ollamaProcess.on("exit", (code) => {
     if (code !== 0 && !app.isQuitting) {
       console.error(`[ollama] exited with code ${code}`);
@@ -100,6 +132,7 @@ function isBackendRunning() {
 
 function startBackend() {
   const python = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : "python3";
+
   backendProcess = spawn(
     python,
     [
@@ -116,11 +149,18 @@ function startBackend() {
       env: { ...process.env },
     },
   );
-  backendProcess.stdout.on("data", (d) =>
-    console.log("[backend]", d.toString().trimEnd()),
-  );
+
+  const backendLog = getLogStream("backend.log");
+
+  backendProcess.stdout.on("data", (d) => {
+    const line = d.toString().trimEnd();
+    if (backendLog) backendLog.write(line + "\n");
+    else console.log("[backend]", line);
+  });
+
   backendProcess.stderr.on("data", (d) => {
     const line = d.toString().trimEnd();
+    // Filter known-noisy Electron/GTK/GPU stderr noise
     if (
       line.includes("dbus/bus.cc") ||
       line.includes("Failed to connect to the bus") ||
@@ -129,8 +169,10 @@ function startBackend() {
       line.includes("allow_glsl_extension_directive")
     )
       return;
-    console.error("[backend]", line);
+    if (backendLog) backendLog.write("[stderr] " + line + "\n");
+    else console.error("[backend]", line);
   });
+
   backendProcess.on("exit", (code) => {
     if (code !== 0 && !app.isQuitting) {
       console.error(`[backend] exited with code ${code}`);
@@ -207,7 +249,14 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
+  // Packaged: load built frontend from disk; dev: connect to Vite dev server
+  if (app.isPackaged) {
+    mainWindow.loadFile(
+      path.join(__dirname, "..", "frontend", "dist", "index.html"),
+    );
+  } else {
+    mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
+  }
 
   mainWindow.on("close", (e) => {
     if (!app.isQuitting) {
@@ -277,49 +326,6 @@ app.whenReady().then(async () => {
     isOllamaRunning(),
   ]);
 
-  // Show splash while services boot
-  let splash = null;
-  let setSplashStatus = () => {};
-
-  if (!backendUp) {
-    splash = new BrowserWindow({
-      width: 360,
-      height: 200,
-      frame: false,
-      alwaysOnTop: true,
-      backgroundColor: "#0D0F17",
-      webPreferences: { contextIsolation: true },
-    });
-
-    const splashHtml = `data:text/html,<!DOCTYPE html>
-<html><head><style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:%230D0F17;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;height:100vh;font-family:-apple-system,sans-serif;
-  color:%238891A8;font-size:13px;-webkit-app-region:drag;user-select:none}
-.title{font-size:22px;font-weight:700;color:%23E8EAF0;margin-bottom:6px}
-.status{margin-bottom:18px;min-height:1.2em}
-.track{width:240px;height:3px;background:%231A1D2E;border-radius:2px;overflow:hidden}
-.bar{height:100%;width:40%;background:linear-gradient(90deg,%235b4fcf,%238b78ff,%235b4fcf);
-  background-size:200%25 100%25;border-radius:2px;animation:shimmer 1.4s linear infinite}
-@keyframes shimmer{0%{background-position:200%25 0}100%{background-position:-200%25 0}}
-</style></head><body>
-<p class="title">SHRIMP*</p>
-<p class="status" id="s">Starting services\u2026</p>
-<div class="track"><div class="bar"></div></div>
-</body></html>`;
-
-    splash.loadURL(splashHtml);
-
-    setSplashStatus = (text) => {
-      if (splash && !splash.isDestroyed()) {
-        splash.webContents
-          .executeJavaScript(`document.getElementById('s').textContent=${JSON.stringify(text)}`)
-          .catch(() => {});
-      }
-    };
-  }
-
   if (ollamaUp) {
     console.log("[electron] Ollama already running — skipping spawn");
   } else {
@@ -331,7 +337,6 @@ body{background:%230D0F17;display:flex;flex-direction:column;align-items:center;
   } else {
     // Wait for Ollama first so the backend can reach it on startup
     if (!ollamaUp) {
-      setSplashStatus("Starting Ollama\u2026");
       try {
         await waitForOllama();
         console.log("[electron] Ollama ready");
@@ -339,18 +344,30 @@ body{background:%230D0F17;display:flex;flex-direction:column;align-items:center;
         console.error("[electron] Ollama failed to start:", e.message);
       }
     }
-    setSplashStatus("Starting backend\u2026");
     startBackend();
   }
 
-  if (splash) {
-    setSplashStatus("Waiting for backend\u2026");
+  // Show splash while backend boots
+  let splash = null;
+  if (!backendUp) {
+    splash = new BrowserWindow({
+      width: 360,
+      height: 200,
+      frame: false,
+      alwaysOnTop: true,
+      backgroundColor: "#0D0F17",
+      webPreferences: { contextIsolation: true },
+    });
+    splash.loadURL(`data:text/html,<html><body style="margin:0;background:#0D0F17;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            height:100vh;font-family:sans-serif;color:#8891A8;font-size:13px;">
+            <p style="font-size:22px;font-weight:700;color:#E8EAF0;margin-bottom:8px">SHRIMP*</p>
+            <p>Starting services\u2026</p></body></html>`);
+
     try {
       await waitForBackend();
     } catch (e) {
       console.error("[electron] Backend failed to start:", e.message);
-      setSplashStatus("Backend failed to start");
-      await new Promise((r) => setTimeout(r, 2000));
     }
 
     splash.close();

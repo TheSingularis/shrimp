@@ -47,7 +47,6 @@ else
 fi
 
 # ── 3. ROCm for RX 9060 XT (gfx1200) ─────────────────────────────────────────
-# rocm-hip-runtime is the runtime; hip-runtime-amd pulls in the right userspace libs
 if ! pacman -Q rocm-hip-runtime &>/dev/null; then
   info "Installing ROCm (this may take a while)..."
   sudo pacman -Sy --noconfirm rocm-hip-runtime rocm-opencl-runtime
@@ -63,12 +62,11 @@ export ROCR_VISIBLE_DEVICES="0"
 if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
   warn "No config.py found — copying from config.example.py"
   cp "$SHRIMP_DIR/backend/config.example.py" "$SHRIMP_DIR/backend/config.py"
-  warn "⚠  Edit backend/config.py to set your watched directories, then re-run."
+  warn "Edit backend/config.py to set your watched directories, then re-run."
   exit 1
 fi
 
 # ── 6. python venv ────────────────────────────────────────────────────────────
-# Check if venv exists and is valid (symlinks work)
 if [ ! -d "$SHRIMP_DIR/backend/.venv" ] || [ ! -x "$SHRIMP_DIR/backend/.venv/bin/python" ]; then
   info "Creating Python venv..."
   rm -rf "$SHRIMP_DIR/backend/.venv"
@@ -85,7 +83,8 @@ pip install --quiet \
   llama-index-embeddings-ollama \
   llama-index-vector-stores-chroma \
   chromadb \
-  sse-starlette
+  sse-starlette \
+  apscheduler
 
 # ── 7. frontend deps ──────────────────────────────────────────────────────────
 if [ ! -d "$SHRIMP_DIR/frontend/node_modules" ]; then
@@ -101,6 +100,7 @@ fuser -k 11434/tcp 2>/dev/null || true
 
 # ── 9. start ollama ───────────────────────────────────────────────────────────
 info "Starting Ollama..."
+mkdir -p "$SHRIMP_DIR/.ollama"
 OLLAMA_HOST="0.0.0.0:11434" \
 OLLAMA_MODELS="$HOME/.ollama/models" \
 OLLAMA_KEEP_ALIVE="15m" \
@@ -121,7 +121,6 @@ ollama pull nomic-embed-text  > /dev/null 2>&1 &
 
 # ── 10. start backend ─────────────────────────────────────────────────────────
 info "Starting FastAPI backend..."
-mkdir -p "$SHRIMP_DIR/.ollama"
 ( cd "$SHRIMP_DIR/backend" && \
   python -m uvicorn main:app \
     --reload \
@@ -155,19 +154,10 @@ for i in $(seq 1 20); do
 done
 vite_url="${vite_url:-http://localhost:5173}"
 
-# verify GPU is actually being used
-sleep 2
-GPU_STATUS=$(ollama ps 2>/dev/null | grep -i "gpu" || echo "CPU (model not loaded yet)")
-
-# get local IP for network access (try multiple methods)
+# get local IP for network access
 LOCAL_IP=$(
-  # Try ip route - most reliable in containers
   ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' ||
-  # Try hostname -I
   hostname -I 2>/dev/null | awk '{print $1}' ||
-  # Try ip addr
-  ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1 ||
-  # Fallback: show placeholder with instructions
   echo "<YOUR-IP>"
 )
 
@@ -180,17 +170,12 @@ echo "│    UI     →  http://localhost:5173      │"
 echo "│    API    →  http://localhost:8000      │"
 echo "│    Ollama →  http://localhost:11434     │"
 echo "│                                         │"
-echo "│  Network (LAN/Tailscale):               │"
-printf "│    UI     →  http://%-17s  │\n" "$LOCAL_IP:5173"
-printf "│    API    →  http://%-17s  │\n" "$LOCAL_IP:8000"
-echo "│                                         │"
 echo "│  Logs:                                  │"
 echo "│    .ollama/serve.log                    │"
 echo "│    .ollama/backend.log                  │"
 echo "│    .ollama/frontend.log                 │"
 echo "└─────────────────────────────────────────┘"
 echo ""
-info "GPU status: $GPU_STATUS"
 info "Press Ctrl+C to shut down."
 echo ""
 
