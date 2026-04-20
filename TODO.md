@@ -159,6 +159,94 @@ Reordered by impact and strategic value. Frontloaded with high-value features th
 
 ---
 
+## 🔌 Refactor: Plugin System
+
+> Inspired by Obsidian's plugin architecture. The goal is to make SHRIMP modularly extensible — both for first-party features and user-authored plugins — while keeping the core lean.
+
+### Concept
+
+Split functionality into three layers:
+
+1. **Core** — the irreducible kernel: RAG engine, chat pipeline, tool calling loop, scope management, settings. Always on.
+2. **Core Plugins** — first-party features that ship with SHRIMP but can be disabled. Treated identically to community plugins at the API level.
+3. **Community Plugins** — user-installed standalone modules that register new automations, tools, UI panels, or settings tabs.
+
+### Core Plugins (candidates for extraction)
+
+| Plugin | Currently | Adds |
+|---|---|---|
+| `email` | `email_client.py`, `email_processor.py`, `email_smtp.py`, `email_idle.py`, `EmailPanel.tsx` | IMAP/SMTP, triage, inbox panel |
+| `automations` | `scheduler.py`, `automations/`, `AutomationsPanel.tsx` | APScheduler, job registry, automations UI |
+| `news_digest` | `automations/news_digest.py` | RSS feeds, interest filtering, checklist items |
+| `daily_digest` | `automations/daily_digest.py` | Morning email summary |
+| `obsidian` | `obsidian_ops.py`, `ObsidianPanel.tsx` | Vault browser, obsidian chat tools |
+| `checklist` | `checklist.py`, `DailyChecklist.tsx` | Focus list, AI triage |
+| `notifications` | `notifications.py`, `NotificationFeed.tsx` | In-app notification feed |
+
+### Plugin API (sketch)
+
+Each plugin would be a self-contained directory exposing a manifest:
+
+```python
+# plugins/email/__init__.py
+MANIFEST = {
+    "id": "email",
+    "name": "Email Client",
+    "version": "1.0.0",
+    "core": True,          # ships with SHRIMP, but disableable
+    "description": "IMAP/SMTP email integration with AI triage",
+    "backend": ["routes", "startup", "tools"],   # hooks it registers
+    "frontend": ["panel", "settings_tab"],        # UI it contributes
+}
+```
+
+Backend hooks:
+- `routes(app)` — register FastAPI routes
+- `startup()` — run on app startup (start IDLE listener, schedule jobs, etc.)
+- `tools() -> list[Tool]` — expose tools to the LLM tool-calling loop
+- `settings_schema() -> dict` — declare config fields the plugin owns
+
+Frontend contributions (loaded dynamically):
+- **Panel** — a new nav rail entry + panel component
+- **Settings tab** — a tab in SettingsModal
+- **Dashboard widget** — a card/section on DashboardHome
+- **Checklist source** — a source type that can push items to the focus list
+
+### Plugin Registry
+
+`config.py` gains a `DISABLED_PLUGINS: list[str]` field. The plugin loader skips disabled plugins at startup. Enabled/disabled state is toggled from a new "Plugins" tab in Settings, styled like the Obsidian plugin list (name, description, version, toggle).
+
+### Implementation Phases
+
+1. **Phase A — Extract & formalize boundaries** *(refactor, no new features)*
+   - Define the plugin manifest interface
+   - Move `email`, `automations`, `checklist`, `notifications` into `plugins/` subdirectories
+   - Wire a plugin loader in `main.py` startup that reads manifests and calls hooks
+   - Add `DISABLED_PLUGINS` to config and enforce it in loader
+   - No user-visible change; purely internal restructure
+
+2. **Phase B — Settings UI**
+   - Add "Plugins" tab to SettingsModal
+   - List all plugins with name, description, core badge, enable/disable toggle
+   - Disabling a core plugin hides its nav panel and unregisters its routes (requires restart or hot-reload)
+
+3. **Phase C — Community plugins**
+   - Define plugin directory (`~/.shrimp/plugins/` or `plugins/community/`)
+   - Plugin loader discovers and loads plugins from that directory
+   - Plugins can ship as a single directory dropped in; no install command needed
+   - Sandboxing / trust model TBD (at minimum: user must explicitly enable each plugin)
+
+### Open Questions
+
+- **Frontend plugin loading** — panels are currently static imports in `App.tsx`. Dynamic loading would require lazy imports keyed by plugin ID, or a plugin registry that `App.tsx` reads at render time.
+- **Hot reload vs restart** — disabling a plugin likely requires backend restart; frontend can conditionally render based on a fetched plugin list without a full reload.
+- **Tool sandboxing** — community plugins can register LLM tools. Should there be a permission model (e.g., "this plugin requests file read access")?
+- **Config ownership** — each plugin owns its config keys; need to avoid collisions and handle missing keys gracefully when a plugin is disabled.
+
+**Decision:** Not imminent — current codebase is manageable. Revisit when the number of first-party features makes the monolith feel unwieldy, or when there's a clear community plugin use-case.
+
+---
+
 ## Under Consideration
 
 ### Project Templates
