@@ -170,6 +170,7 @@ EMBED_MODEL = "nomic-embed-text"
 
 - [distrobox](https://github.com/89luca89/distrobox) with an Arch Linux container named `arch-dev`
 - A GPU or CPU capable of running Ollama models (7B models work well on most modern hardware)
+- Node.js 20+ and npm (for building the Electron app)
 
 ---
 
@@ -206,32 +207,36 @@ You can also add, edit, and delete scopes from the UI after starting the app —
 
 ### 3. Start the stack
 
+**Browser dev mode** (Vite dev server at port 5173):
 ```sh
 distrobox enter arch-dev -- bash start.sh
 ```
 
 On first run this will:
-- Pull `qwen2.5-coder:7b` and `nomic-embed-text` into Ollama (takes a few minutes)
 - Create a Python venv and install all backend dependencies
 - Install frontend npm packages
-- Start Ollama, the FastAPI backend (port 8000), and the Vite dev server
+- Pull `qwen2.5-coder:7b` and `nomic-embed-text` into Ollama (takes a few minutes)
+- Start Ollama, the FastAPI backend (port 8000), and the UI
 
-When everything is ready you'll see:
+When everything is ready the terminal will show a banner with service URLs.
 
+### 4. Build for distribution (optional)
+
+To produce a distributable AppImage / .deb:
+
+```sh
+# Install root-level Electron deps first (only needed once)
+npm install
+
+# Build everything and package
+bash build.sh
 ```
-┌─────────────────────────────────────────┐
-│           SHRIMP* is running            │
-│                                         │
-│  Ollama   →  http://127.0.0.1:11434     │
-│  API      →  http://127.0.0.1:8000      │
-│  API docs →  http://127.0.0.1:8000/docs │
-│  UI       →  http://localhost:5173      │
-└─────────────────────────────────────────┘
-```
 
-Open the UI URL in your browser.
+Output lands in `dist-electron/`. Pass `--mac` or `--win` to target other platforms.
 
-### 4. Index your files
+> **Note on Python bundling**: `electron-builder` copies `backend/` and `backend/.venv/` into the app as extra resources. The bundled `.venv` must be built on the same OS and architecture as the target machine. Cross-compiling Python extensions is not supported.
+
+### 5. Index your files
 
 Open the ⚙ settings drawer and click **↻** next to a scope to index it, or **↻ index all** to index everything at once. Indexing embeds your files into ChromaDB — this only needs to happen once per scope (or when files change significantly).
 
@@ -519,6 +524,9 @@ shrimp/
 │   ├── rag.py           # LlamaIndex indexing and querying
 │   ├── config.py        # Your local configuration (not committed)
 │   └── config.example.py
+├── electron/
+│   ├── main.js          # Electron main process (dev + packaged mode)
+│   └── preload.js       # Context bridge for window controls
 ├── frontend/
 │   └── src/
 │       ├── App.tsx
