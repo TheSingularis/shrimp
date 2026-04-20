@@ -715,6 +715,22 @@ export async function saveRssFeeds(feeds: { url: string; name: string; enabled: 
     if (!res.ok) throw new Error("Failed to save RSS feeds");
 }
 
+export async function getNewsInterests(): Promise<string> {
+    const res = await fetch(`${BASE}/settings/news-interests`);
+    if (!res.ok) throw new Error("Failed to get news interests");
+    const data = await res.json();
+    return data.interests || "";
+}
+
+export async function saveNewsInterests(interests: string): Promise<void> {
+    const res = await fetch(`${BASE}/settings/news-interests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interests }),
+    });
+    if (!res.ok) throw new Error("Failed to save news interests");
+}
+
 export interface TriageStatus { active: boolean; done: number; total: number; }
 
 export async function getTriageStatus(): Promise<TriageStatus> {
@@ -780,6 +796,7 @@ export interface Automation {
     enabled: boolean;
     last_run: string | null;
     last_result: "ok" | "error" | null;
+    running: boolean;
 }
 
 export async function listAutomations(): Promise<Automation[]> {
@@ -832,11 +849,14 @@ export interface ChecklistItem {
     source: "email_digest" | "news_digest" | "calendar" | "manual";
     source_ref: string | null;
     priority: "urgent" | "high" | "normal" | "low";
+    triage_done?: boolean;
     context: {
         from?: string;
         subject?: string;
         email_id?: string;
         rolled_from?: string;
+        feed?: string;
+        url?: string;
     };
     rolled_over?: boolean;
 }
@@ -879,6 +899,12 @@ export async function deleteChecklistItem(id: string): Promise<void> {
 export async function clearCompletedItems(): Promise<{ cleared: number }> {
     const res = await fetch(`${BASE}/checklist/clear-completed`, { method: "POST" });
     if (!res.ok) throw new Error("Failed to clear completed items");
+    return res.json();
+}
+
+export async function triageChecklist(): Promise<{ triaged: number }> {
+    const res = await fetch(`${BASE}/checklist/triage`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to triage checklist");
     return res.json();
 }
 

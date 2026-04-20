@@ -22,3 +22,6 @@ EMAIL_CONFIG: dict ={'enabled': True, 'imap_host': 'imap.mail.me.com', 'imap_por
 
 WATCHED_DIRS: list[dict] =[{'name': 'obsidian', 'path': '~/Documents/Personal', 'enabled': True, 'description': ''}, {'name': 'shrimp', 'path': '~/Documents/Code Projects/shrimp', 'enabled': True, 'description': 'This codebase contains a Python backend with RESTful APIs and a React/TypeScript frontend for conversational interfaces and multi-file editing functionalities, along with extensive documentation and settings configurations.'}, {'name': 'Ash', 'path': '~/Documents/Code Projects/Sluiter-Lefter', 'enabled': True, 'description': ''}]
 RSS_FEEDS: list[dict] = [{"url": "https://feedx.net/rss/ap.xml", "name": "Associated Press", "enabled": True}, {"url": "http://feeds.bbci.co.uk/news/rss.xml", "name": "BBC Top Stories", "enabled": True}]
+NEWS_INTERESTS: str = """- US/World Politics
+- Tech/AI developments"""
+AUTOMATION_CONFIG: dict = {}
