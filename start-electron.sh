@@ -55,6 +55,7 @@ if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
 fi
 
 # ── 4. python venv ────────────────────────────────────────────────────────────
+# Check if venv exists and is valid (symlinks work)
 if [ ! -d "$SHRIMP_DIR/backend/.venv" ] || [ ! -x "$SHRIMP_DIR/backend/.venv/bin/python" ]; then
   info "Creating Python venv..."
   rm -rf "$SHRIMP_DIR/backend/.venv"
@@ -126,7 +127,7 @@ BACKEND_PID=$!
 
 # Wait for backend to be ready
 for i in $(seq 1 30); do
-  curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1 && break
+  curl -sf http://127.0.0.1:8000/automations > /dev/null 2>&1 && break
   sleep 0.5
 done
 
@@ -139,9 +140,11 @@ ELECTRON_PID=$!
 cleanup() {
   echo ""
   info "Shutting down..."
+  # Kill process groups to catch all children
   kill $ELECTRON_PID 2>/dev/null
   kill $BACKEND_PID 2>/dev/null
   kill $OLLAMA_PID 2>/dev/null
+  # Also kill any stragglers by port
   fuser -k 8000/tcp 2>/dev/null || true
   fuser -k 11434/tcp 2>/dev/null || true
   wait 2>/dev/null

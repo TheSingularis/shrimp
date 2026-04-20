@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Mobile Debug Info</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<style>
+body { font-family: monospace; padding: 20px; font-size: 14px; position: fixed; width: 100%; height: 100%; overflow: hidden; }
+.metric { margin: 10px 0; padding: 10px; background: #f0f0f0; }
+#info { overflow-y: auto; max-height: 60vh; }
+</style>
+</head>
+<body>
+<h2>Viewport Debug Info</h2>
+<div id="info"></div>
+<script>
+let initialHeight = window.innerHeight;
+function updateInfo() {
+  const info = document.getElementById('info');
+  const vv = window.visualViewport;
+  const windowHeight = window.innerHeight;
+  const viewportHeight = vv ? vv.height : windowHeight;
+  const keyboardHeight = Math.max(0, windowHeight - viewportHeight);
+
+  const diff = windowHeight - initialHeight;
+  const diffText = diff === 0 ? 'no change' : `${diff > 0 ? '+' : ''}${diff}px`;
+
+  info.innerHTML = `
+    <div class="metric" style="background: ${keyboardHeight > 0 ? '#ffeb3b' : '#f0f0f0'}; font-weight: ${keyboardHeight > 0 ? 'bold' : 'normal'}">
+      Keyboard Height: ${keyboardHeight}px ${keyboardHeight > 0 ? '⌨️ KEYBOARD OPEN' : '✓ No keyboard'}
+    </div>
+    <div class="metric">window.innerHeight: ${windowHeight}px (${diffText})</div>
+    <div class="metric">visualViewport.height: ${viewportHeight}px</div>
+    <div class="metric">Computed app height: ${viewportHeight}px</div>
+    <div class="metric">window.innerWidth: ${window.innerWidth}px</div>
+    <div class="metric">Initial height: ${initialHeight}px</div>
+    <div class="metric">100dvh supported: ${CSS.supports('height', '100dvh')}</div>
+    <div class="metric">Orientation: ${screen.orientation?.type || 'unknown'}</div>
+    <div class="metric">CSS --app-height: ${getComputedStyle(document.documentElement).getPropertyValue('--app-height') || 'not set'}</div>
+    <div class="metric">CSS --keyboard-height: ${getComputedStyle(document.documentElement).getPropertyValue('--keyboard-height') || 'not set'}</div>
+  `;
+}
+updateInfo();
+window.addEventListener('resize', updateInfo);
+window.visualViewport?.addEventListener('resize', updateInfo);
+setInterval(updateInfo, 100); // Update continuously
+</script>
+<p><strong>Tap the input below:</strong></p>
+<input type="text" placeholder="Tap here to open keyboard" style="padding: 15px; font-size: 16px; width: 90%;">
+</body>
+</html>
