@@ -1,42 +1,43 @@
-# python
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .venv/
 backend/.venv/
-**/__pycache__/
-backend/chroma_db/
-*.pyc
+*.egg-info/
+dist/
+build/
 
-# config has local paths in it
+# ── Local config (contains personal paths, credentials, API keys) ─────────────
 backend/config.py
+
+# ── Runtime data (local-only, not part of the codebase) ──────────────────────
+backend/chroma_db/
 emails/
 notifications/
-
-# conversations are local
 conversations/
-
-# claude instructions
-.claude/
-
-# ollama logs
 .ollama/
-.ollama/bin/
-.ollama/*.log
 
-# syncthing conflict files
-*.sync-conflict-*
-
-# vite dev-server artifact dump (SHRIMP__files gets created when
-# the browser fetches /SHRIMP__files/* and something writes to disk)
-SHRIMP__files/
-
-# root-level node / package files (uuid was accidentally installed here)
+# ── Node / frontend ───────────────────────────────────────────────────────────
 node_modules/
-package.json
-package-lock.json
-
-# node
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-
-# electron
 frontend/out/
+package-lock.json
+
+# ── Electron build output ─────────────────────────────────────────────────────
+dist-electron/
+
+# ── Claude Code internals ─────────────────────────────────────────────────────
+.claude/
+
+# ── OS / editor noise ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.sync-conflict-*
+
+# ── Scratch files ─────────────────────────────────────────────────────────────
+checkbox-designs.html
+SHRIMP__files/
