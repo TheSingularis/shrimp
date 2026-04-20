@@ -1,4 +1,5 @@
 import { type Scope } from "../api";
+import "./ScopeSelector.css";
 
 interface Props {
     scopes: Scope[];
@@ -17,16 +18,17 @@ export function ScopeSelector({ scopes, selected, onChange }: Props) {
 
     return (
         <div className="scope-selector">
-            {scopes.map((s) => (
-                <button
-                    key={s.name}
-                    className={`scope-pill ${selected.includes(s.name) ? "active" : ""}`}
-                    onClick={() => toggle(s.name)}
-                    disabled={!s.enabled}
-                >
-                    {s.name}
-                </button>
-            ))}
+            {scopes
+                .filter((s) => s.enabled)
+                .map((s) => (
+                    <button
+                        key={s.name}
+                        className={`scope-pill ${selected.includes(s.name) ? "active" : ""}`}
+                        onClick={() => toggle(s.name)}
+                    >
+                        {s.name}
+                    </button>
+                ))}
         </div>
     );
 }

@@ -1,0 +1,219 @@
+/* ── multi-file diff panel ───────────────────────────────────────────────── */
+
+.multi-diff-panel {
+    display: flex;
+    flex-direction: column;
+    width: 60vw;
+    min-width: 500px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.multi-diff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.multi-diff-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.multi-diff-icon {
+    color: var(--color-blue-primary);
+    font-size: 1rem;
+}
+
+.multi-diff-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.multi-diff-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px 6px 0 0;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.multi-diff-tab:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.multi-diff-tab.active {
+    background: var(--bg);
+    color: var(--text);
+    border-bottom-color: var(--bg);
+}
+
+.multi-diff-tab.approved {
+    border-color: var(--color-blue-primary);
+}
+
+.multi-diff-tab.rejected {
+    border-color: var(--border);
+    opacity: 0.5;
+}
+
+.multi-diff-tab.applied {
+    border-color: var(--color-blue-primary);
+    opacity: 0.6;
+}
+
+.tab-status-icon {
+    color: var(--color-blue-primary);
+    font-size: 0.9rem;
+}
+
+.tab-filename {
+    font-family: monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.new-file-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    background: var(--color-blue-dim);
+    color: var(--color-blue-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.multi-diff-editor {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.multi-diff-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.multi-diff-file-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.approve-btn {
+    background: transparent;
+    border: 1px solid var(--color-blue-primary);
+    border-radius: 4px;
+    color: var(--color-blue-primary);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+    transition: all 0.15s;
+}
+
+.approve-btn:hover:not(:disabled) {
+    background: var(--color-blue-dim);
+}
+
+.approve-btn.active {
+    background: var(--color-blue-dim);
+    font-weight: 600;
+}
+
+.reject-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+    transition: all 0.15s;
+}
+
+.reject-btn:hover:not(:disabled) {
+    border-color: #f87171;
+    color: #f87171;
+}
+
+.rejected-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.applied-label {
+    font-size: 0.8rem;
+    color: var(--color-blue-primary);
+    font-family: monospace;
+}
+
+.apply-all-btn {
+    background: var(--color-blue-dim);
+    border: 1px solid var(--color-blue-primary);
+    border-radius: 6px;
+    color: var(--color-blue-primary);
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 0.4rem 1rem;
+    transition: all 0.15s;
+}
+
+.apply-all-btn:hover:not(:disabled) {
+    background: var(--color-blue-primary);
+    color: #fff;
+}
+
+.apply-all-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── mobile responsive ───────────────────────────────────────────────────── */
+
+/* Touch devices (tablets and phones) */
+@media (max-width: 1024px) {
+    /* Diff panels take full screen */
+    .multi-diff-panel {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        z-index: 100;
+        border-left: none;
+    }
+}
