@@ -139,6 +139,8 @@ body {
     flex-shrink: 0;
     -webkit-app-region: drag;
     user-select: none;
+    position: relative;
+    z-index: 1200;
 }
 .titlebar-drag {
     flex: 1;
@@ -396,21 +398,37 @@ button.btn-ghost.flagged { color: #f59e0b; }
 button.btn-ghost.flagged:hover:not(:disabled) { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 button.btn-ghost:disabled { opacity: 0.4; cursor: default; }
 
-/* Checklist checkbox — 16×16 square, overrides global button padding/radius */
+/* Checklist checkbox — icon-btn aesthetic, fixed 16×16 */
 button.btn-checkbox {
     width: 16px;
     height: 16px;
     min-width: 16px;
     padding: 0;
-    border-radius: 3px;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    background: transparent;
-    transition: background 0.1s, border-color 0.1s;
+    cursor: pointer;
     font-family: inherit;
     line-height: 0;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+
+button.btn-checkbox:hover {
+    background: color-mix(in srgb, var(--accent) 25%, var(--accent-dim));
+}
+
+button.btn-checkbox.checked {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+button.btn-checkbox.checked:hover {
+    background: color-mix(in srgb, #fff 12%, var(--accent));
 }
 
 /* Dashboard card button — icon + label, lifts with accent tint on hover.

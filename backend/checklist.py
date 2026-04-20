@@ -256,3 +256,30 @@ def get_item(item_id: str) -> dict | None:
         if item.get("id") == item_id:
             return item
     return None
+
+
+def update_item(item_id: str, **fields) -> dict | None:
+    """Update arbitrary fields on an item. Returns updated item or None if not found."""
+    items = _read_all()
+    found = None
+    for item in items:
+        if item.get("id") == item_id:
+            item.update(fields)
+            found = item
+            break
+    if found:
+        _write_all(items)
+    return found
+
+
+def list_untriaged() -> list[dict]:
+    """Return today's incomplete items that haven't been AI-triaged yet."""
+    today = _today()
+    result = []
+    for item in _read_all():
+        if item.get("archived") or item.get("completed") or item.get("triage_done"):
+            continue
+        item_date = item.get("due_date", today)
+        if item_date <= today:
+            result.append(item)
+    return result

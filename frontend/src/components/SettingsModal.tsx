@@ -6,7 +6,7 @@ import { getCustomInstructions, setCustomInstructions, generateScopeDescription,
 import { getTheme, setTheme, getLanguage, setLanguage, getOllamaHostSetting, setOllamaHostSetting } from "../api";
 import { getEmailConfig, saveEmailConfig, testEmailConfig, type EmailConfig,
          getSmtpConfig, saveSmtpConfig, testSmtpConfig, type SmtpConfig } from "../api";
-import { getRssFeeds, saveRssFeeds } from "../api";
+import { getRssFeeds, saveRssFeeds, getNewsInterests, saveNewsInterests } from "../api";
 import { X, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import "./SettingsModal.css";
 
@@ -146,6 +146,8 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
     const [newFeedUrl, setNewFeedUrl] = useState("");
     const [newFeedName, setNewFeedName] = useState("");
     const [rssSaving, setRssSaving] = useState(false);
+    const [newsInterests, setNewsInterests] = useState("");
+    const [interestsSaving, setInterestsSaving] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -182,6 +184,7 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
     useEffect(() => {
         if (activeTab === "automations") {
             getRssFeeds().then(setRssFeeds).catch(() => {});
+            getNewsInterests().then(setNewsInterests).catch(() => {});
         }
     }, [activeTab]);
 
@@ -1202,6 +1205,33 @@ export function SettingsModal({ open, onClose, onScopesChanged }: Props) {
                                     }}
                                 >
                                     Add Feed
+                                </button>
+                            </div>
+
+                            <div style={{ marginTop: "1.25rem" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                                    Your Interests
+                                </label>
+                                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0.35rem 0 0.5rem" }}>
+                                    Describe what topics you care about. The AI will filter articles to only add relevant ones.
+                                </p>
+                                <textarea
+                                    value={newsInterests}
+                                    onChange={e => setNewsInterests(e.target.value)}
+                                    placeholder="e.g. technology, AI, climate change, local politics, indie games..."
+                                    rows={3}
+                                    style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
+                                />
+                                <button
+                                    disabled={interestsSaving}
+                                    onClick={async () => {
+                                        setInterestsSaving(true);
+                                        try { await saveNewsInterests(newsInterests); }
+                                        finally { setInterestsSaving(false); }
+                                    }}
+                                    style={{ marginTop: "0.5rem" }}
+                                >
+                                    {interestsSaving ? "Saving…" : "Save Interests"}
                                 </button>
                             </div>
                         </section>

@@ -213,47 +213,42 @@ async def startup():
     # that occur when asyncio.run() creates a new loop in a thread).
     scheduler.set_main_loop(asyncio.get_event_loop())
 
-    # Register background automations
+    # Register background automations — defaults may be overridden by AUTOMATION_CONFIG
+    def _auto_cfg(name: str, default_cron: str, default_enabled: bool) -> tuple[str, bool]:
+        """Return (cron, enabled) applying any saved overrides from config.AUTOMATION_CONFIG."""
+        overrides = getattr(config, "AUTOMATION_CONFIG", {}).get(name, {})
+        return overrides.get("cron", default_cron), overrides.get("enabled", default_enabled)
+
     from automations.email_triage import run as email_triage_run
     from automations.daily_digest import run as daily_digest_run
     poll_mins = config.EMAIL_CONFIG.get("poll_interval_minutes", 15)
+    _cron, _en = _auto_cfg("email_triage", f"*/{poll_mins} * * * *", config.EMAIL_CONFIG.get("enabled", False))
     scheduler.register_automation(
-        "email_triage",
-        email_triage_run,
-        cron=f"*/{poll_mins} * * * *",
-        description="Polling fallback: fetch new emails and triage each one",
-        enabled=config.EMAIL_CONFIG.get("enabled", False),
+        "email_triage", email_triage_run, cron=_cron,
+        description="Polling fallback: fetch new emails and triage each one", enabled=_en,
     )
+    _cron, _en = _auto_cfg("daily_digest", "0 8 * * *", True)
     scheduler.register_automation(
-        "daily_digest",
-        daily_digest_run,
-        cron="0 8 * * *",
-        description="Today's focus: action items from triaged emails",
-        enabled=True,
+        "daily_digest", daily_digest_run, cron=_cron,
+        description="Today's focus: action items from triaged emails", enabled=_en,
     )
     from automations.news_digest import run as news_digest_run
     from automations.obsidian_maintenance import run as obsidian_maintenance_run
+    _cron, _en = _auto_cfg("news_digest", "0 9 * * *", bool(getattr(config, "RSS_FEEDS", [])))
     scheduler.register_automation(
-        "news_digest",
-        news_digest_run,
-        cron="0 9 * * *",
-        description="Fetch RSS feeds and add new articles to checklist",
-        enabled=bool(getattr(config, "RSS_FEEDS", [])),
+        "news_digest", news_digest_run, cron=_cron,
+        description="Fetch RSS feeds and add new articles to checklist", enabled=_en,
     )
+    _cron, _en = _auto_cfg("obsidian_maintenance", "0 7 * * 1", True)
     scheduler.register_automation(
-        "obsidian_maintenance",
-        obsidian_maintenance_run,
-        cron="0 7 * * 1",  # Monday 7am
-        description="Scan Obsidian vault for broken links and orphaned notes",
-        enabled=True,
+        "obsidian_maintenance", obsidian_maintenance_run, cron=_cron,
+        description="Scan Obsidian vault for broken links and orphaned notes", enabled=_en,
     )
     import checklist as _checklist
+    _cron, _en = _auto_cfg("checklist_rollover", "0 0 * * *", True)
     scheduler.register_automation(
-        "checklist_rollover",
-        _checklist.rollover_items,
-        cron="0 0 * * *",
-        description="Roll overdue checklist items forward to today",
-        enabled=True,
+        "checklist_rollover", _checklist.rollover_items, cron=_cron,
+        description="Roll overdue checklist items forward to today", enabled=_en,
     )
     scheduler.start()
 
@@ -2304,6 +2299,35 @@ async def set_rss_feeds(update: RssFeedsUpdate):
     return {"feeds": config.RSS_FEEDS}
 
 
+@app.get("/settings/news-interests")
+async def get_news_interests():
+    return {"interests": getattr(config, "NEWS_INTERESTS", "")}
+
+
+class NewsInterestsUpdate(BaseModel):
+    interests: str
+
+
+@app.post("/settings/news-interests")
+async def set_news_interests(update: NewsInterestsUpdate):
+    import re as _re
+    config.NEWS_INTERESTS = update.interests
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    # Use triple-quoted strings so multiline values are stored correctly.
+    # Escape any triple-quote sequences in the value itself.
+    safe = update.interests.replace('"""', '\\"\\"\\"')
+    replacement = f'NEWS_INTERESTS: str = """{safe}"""'
+    if _re.search(r'NEWS_INTERESTS: str = """.*?"""', current, _re.DOTALL):
+        current = _re.sub(r'NEWS_INTERESTS: str = """.*?"""', replacement, current, flags=_re.DOTALL)
+    elif _re.search(r'NEWS_INTERESTS: str = ".*?"', current, _re.DOTALL):
+        current = _re.sub(r'NEWS_INTERESTS: str = ".*?"', replacement, current, flags=_re.DOTALL)
+    else:
+        current += f'\n{replacement}\n'
+    config_path.write_text(current)
+    return {"interests": config.NEWS_INTERESTS}
+
+
 # ── routes: notifications ──────────────────────────────────────────────────────
 
 
@@ -2381,6 +2405,22 @@ async def run_automation(automation_name: str):
     return {"status": "triggered", "automation": automation_name}
 
 
+def _persist_automation_config(name: str, **updates: object) -> None:
+    """Save automation overrides to config.AUTOMATION_CONFIG and write config.py."""
+    import re as _re
+    cfg: dict = dict(getattr(config, "AUTOMATION_CONFIG", {}))
+    cfg.setdefault(name, {}).update(updates)
+    config.AUTOMATION_CONFIG = cfg
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+    new_val = json.dumps(cfg)
+    if _re.search(r"AUTOMATION_CONFIG: dict = \{.*?\}", current, _re.DOTALL):
+        current = _re.sub(r"AUTOMATION_CONFIG: dict = \{.*?\}", f"AUTOMATION_CONFIG: dict = {new_val}", current, flags=_re.DOTALL)
+    else:
+        current += f"\nAUTOMATION_CONFIG: dict = {new_val}\n"
+    config_path.write_text(current)
+
+
 @app.put("/automations/{automation_name}")
 async def update_automation(automation_name: str, req: AutomationUpdateRequest):
     automation = scheduler.get_automation(automation_name)
@@ -2388,6 +2428,10 @@ async def update_automation(automation_name: str, req: AutomationUpdateRequest):
         raise HTTPException(status_code=404, detail=f"Automation '{automation_name}' not found")
     if req.enabled is not None:
         scheduler.set_automation_enabled(automation_name, req.enabled)
+        _persist_automation_config(automation_name, enabled=req.enabled)
+    if req.cron is not None:
+        scheduler.set_automation_cron(automation_name, req.cron)
+        _persist_automation_config(automation_name, cron=req.cron)
     return scheduler.get_automation(automation_name)
 
 
@@ -2865,6 +2909,106 @@ async def trigger_rollover():
     """Manually trigger rollover of overdue items to today."""
     count = checklist.rollover_items()
     return {"rolled_over": count}
+
+
+class ChecklistItemUpdate(BaseModel):
+    priority: str | None = None
+    triage_done: bool | None = None
+
+
+@app.put("/checklist/{item_id}")
+async def update_checklist_item(item_id: str, req: ChecklistItemUpdate):
+    """Update fields on a checklist item."""
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    result = checklist.update_item(item_id, **updates)
+    if result is None:
+        raise HTTPException(404, "Checklist item not found")
+    return result
+
+
+@app.post("/checklist/triage")
+async def triage_checklist():
+    """Use the LLM to assess priority of all untriaged checklist items."""
+    import re as _re
+
+    items = checklist.list_untriaged()
+    if not items:
+        return {"triaged": 0}
+
+    # Build prompt
+    lines = []
+    for i, item in enumerate(items):
+        ctx = item.get("context", {})
+        detail = ""
+        if ctx.get("from"):
+            detail = f" (from: {ctx['from']}"
+            if ctx.get("subject"):
+                detail += f", re: {ctx['subject']}"
+            detail += ")"
+        elif ctx.get("feed"):
+            detail = f" (feed: {ctx['feed']})"
+        lines.append(f'{i+1}. [id:{item["id"]}] "{item["text"]}"{detail}')
+
+    prompt = (
+        "You are triaging a daily to-do list. Classify each item's priority as exactly one of: urgent, high, normal, low.\n"
+        "urgent = time-sensitive or high-stakes action needed today.\n"
+        "high = important but not on-fire.\n"
+        "normal = routine tasks.\n"
+        "low = nice-to-do, low stakes (e.g. reading articles).\n\n"
+        "Respond with ONLY a JSON array: [{\"id\": \"...\", \"priority\": \"...\"}, ...]\n\n"
+        "Items:\n" + "\n".join(lines)
+    )
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        parts: list[str] = []
+        async with client.stream(
+            "POST",
+            f"{config.OLLAMA_HOST}/api/generate",
+            json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": True,
+                  "options": {"num_ctx": min(config.NUM_CTX, 4096)}},
+        ) as resp:
+            async for line in resp.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    obj = json.loads(line)
+                    parts.append(obj.get("response", ""))
+                    if obj.get("done"):
+                        break
+                except json.JSONDecodeError:
+                    pass
+    raw = "".join(parts).strip()
+
+    # Parse JSON from response (may be wrapped in markdown code fences)
+    match = _re.search(r"\[.*\]", raw, _re.DOTALL)
+    if not match:
+        log.warning("Checklist triage: could not parse LLM response: %s", raw[:200])
+        return {"triaged": 0, "error": "Could not parse response"}
+
+    try:
+        results = json.loads(match.group())
+    except json.JSONDecodeError:
+        return {"triaged": 0, "error": "Invalid JSON in response"}
+
+    valid_priorities = {"urgent", "high", "normal", "low"}
+    triaged = 0
+    for entry in results:
+        item_id = entry.get("id", "")
+        priority = entry.get("priority", "normal")
+        if priority not in valid_priorities:
+            priority = "normal"
+        updated = checklist.update_item(item_id, priority=priority, triage_done=True)
+        if updated:
+            triaged += 1
+
+    # Mark any remaining items triage_done even if LLM skipped them
+    triaged_ids = {e.get("id") for e in results}
+    for item in items:
+        if item["id"] not in triaged_ids:
+            checklist.update_item(item["id"], triage_done=True)
+
+    log.info("Checklist triage: triaged %d items", triaged)
+    return {"triaged": triaged}
 
 
 # ── Electron: serve built frontend ────────────────────────────────────────────

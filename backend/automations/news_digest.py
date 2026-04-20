@@ -3,10 +3,13 @@ News digest job — runs at 9am daily (and on demand).
 
 Fetches RSS/Atom feeds configured in config.RSS_FEEDS, filters to entries
 published in the last 48 hours, deduplicates by URL, and pushes each article
-as a low-priority checklist item. Sends one notification summarising results.
+as a low-priority checklist item. If NEWS_INTERESTS is set, uses the LLM to
+filter articles to only those relevant to the user's interests. Sends one
+notification summarising results.
 """
 from __future__ import annotations
 
+import json
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
@@ -114,6 +117,66 @@ def _fetch_entries(feed_url: str) -> list[dict]:
     return entries
 
 
+async def _call_llm(prompt: str) -> str:
+    parts: list[str] = []
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream(
+            "POST",
+            f"{config.OLLAMA_HOST}/api/generate",
+            json={
+                "model": config.OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": True,
+                "options": {"num_ctx": min(getattr(config, "NUM_CTX", 4096), 4096)},
+            },
+        ) as resp:
+            async for line in resp.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    obj = json.loads(line)
+                    parts.append(obj.get("response", ""))
+                    if obj.get("done"):
+                        break
+                except json.JSONDecodeError:
+                    pass
+    return "".join(parts).strip()
+
+
+def _filter_by_interests(entries: list[tuple[dict, str]], interests: str) -> list[tuple[dict, str]]:
+    """Use the LLM to keep only entries relevant to the user's interests."""
+    if not entries:
+        return entries
+
+    numbered = "\n".join(
+        f"{i+1}. {e['title']} — {e['description'][:150]}"
+        for i, (e, _) in enumerate(entries)
+    )
+    prompt = (
+        f"The user is interested in: {interests}\n\n"
+        f"Below is a numbered list of news article headlines and summaries.\n"
+        f"Return ONLY the numbers of articles that are relevant to the user's interests, "
+        f"as a comma-separated list (e.g. 1,3,7). If none are relevant, return an empty response.\n\n"
+        f"{numbered}"
+    )
+
+    try:
+        raw = _scheduler.run_async(_call_llm(prompt))
+        kept_indices: set[int] = set()
+        for token in raw.replace(" ", "").split(","):
+            token = token.strip()
+            if token.isdigit():
+                idx = int(token) - 1
+                if 0 <= idx < len(entries):
+                    kept_indices.add(idx)
+        filtered = [entries[i] for i in sorted(kept_indices)]
+        log.info("News digest: interest filter kept %d/%d articles", len(filtered), len(entries))
+        return filtered
+    except Exception:
+        log.exception("News digest: interest filtering failed, returning all entries")
+        return entries
+
+
 def run() -> None:
     """Entry point called by the scheduler (sync)."""
     try:
@@ -156,6 +219,15 @@ def run() -> None:
             log.info("News digest: no new entries in the last 48 hours")
             return
 
+        # Filter by interests if configured
+        interests: str = getattr(config, "NEWS_INTERESTS", "").strip()
+        if interests:
+            log.info("News digest: filtering %d articles by interests", len(all_new_entries))
+            all_new_entries = _filter_by_interests(all_new_entries, interests)
+            if not all_new_entries:
+                log.info("News digest: no articles matched interests")
+                return
+
         added = 0
         feed_names_seen: set[str] = set()
 
@@ -163,7 +235,6 @@ def run() -> None:
             title = entry.get("title") or entry.get("url", "Untitled")
             url = entry["url"]
             description = entry.get("description", "")
-            # Truncate description to a useful snippet
             snippet = description[:300] if description else ""
 
             checklist.append_item(
@@ -171,11 +242,7 @@ def run() -> None:
                 source="news_digest",
                 source_ref=url,
                 priority="low",
-                context={
-                    "feed": feed_name,
-                    "url": url,
-                    "summary": snippet,
-                },
+                context={"feed": feed_name, "url": url, "summary": snippet},
             )
             added += 1
             feed_names_seen.add(feed_name)

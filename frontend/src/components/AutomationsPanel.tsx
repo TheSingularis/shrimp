@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, CheckCircle, XCircle, Clock, Play, ToggleLeft, ToggleRight } from "lucide-react";
 import { listAutomations, triggerAutomation, updateAutomation, type Automation } from "../api";
 import { formatDate as formatDateShort } from "../utils/email";
@@ -8,25 +8,32 @@ function formatDate(iso: string | null) {
     return formatDateShort(iso);
 }
 
-function StatusIcon({ result }: { result: Automation["last_result"] }) {
+function StatusIcon({ result, running }: { result: Automation["last_result"]; running: boolean }) {
+    if (running) return <Clock size={16} className="animate-spin" style={{ color: 'var(--accent)' }} />;
     if (result === "ok") return <CheckCircle size={16} style={{ color: 'var(--color-success, #22c55e)' }} />;
     if (result === "error") return <XCircle size={16} style={{ color: 'var(--color-error, #ef4444)' }} />;
     return <Clock size={16} style={{ color: 'var(--color-text-muted)' }} />;
 }
 
 function AutomationCard({ automation, onRefresh }: { automation: Automation; onRefresh: () => void }) {
-    const [running, setRunning] = useState(false);
     const [toggling, setToggling] = useState(false);
+    const wasRunningRef = useRef(false);
+
+    // When automation transitions from running → done, refresh checklist
+    useEffect(() => {
+        if (wasRunningRef.current && !automation.running) {
+            window.dispatchEvent(new CustomEvent("checklist-refresh"));
+        }
+        wasRunningRef.current = automation.running;
+    }, [automation.running]);
 
     async function handleRun() {
-        setRunning(true);
         try {
             await triggerAutomation(automation.name);
-            setTimeout(onRefresh, 2000);
+            // Kick off polling by refreshing parent immediately
+            onRefresh();
         } catch (e) {
             console.error(e);
-        } finally {
-            setTimeout(() => setRunning(false), 1500);
         }
     }
 
@@ -47,11 +54,16 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
             <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                        <StatusIcon result={automation.last_result} />
+                        <StatusIcon result={automation.last_result} running={automation.running} />
                         <h3 className="font-semibold text-sm truncate">{automation.name}</h3>
                         {!automation.enabled && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded border border-shrimp-border" style={{ color: 'var(--color-text-muted)' }}>
                                 disabled
+                            </span>
+                        )}
+                        {automation.running && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--accent)', background: 'rgba(var(--accent-rgb, 91,79,207),0.12)' }}>
+                                running
                             </span>
                         )}
                     </div>
@@ -73,9 +85,9 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
             </div>
 
             <div className="flex gap-2">
-                <button onClick={handleRun} disabled={running} className="btn-secondary">
-                    <Play size={12} className={running ? "opacity-50" : ""} />
-                    {running ? "Running…" : "Run now"}
+                <button onClick={handleRun} disabled={automation.running} className="btn-secondary">
+                    <Play size={12} className={automation.running ? "opacity-50" : ""} />
+                    {automation.running ? "Running…" : "Run now"}
                 </button>
                 <button onClick={handleToggle} disabled={toggling} className="btn-secondary">
                     {automation.enabled
@@ -84,7 +96,7 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
                     }
                 </button>
             </div>
-            {(running || toggling) && <div className="indeterminate-bar" />}
+            {(automation.running || toggling) && <div className="indeterminate-bar" />}
         </div>
     );
 }
@@ -92,19 +104,38 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
 export function AutomationsPanel() {
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [loading, setLoading] = useState(true);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     async function refresh() {
         try {
             const data = await listAutomations();
             setAutomations(data);
+            return data;
         } catch (e) {
             console.error(e);
+            return null;
         } finally {
             setLoading(false);
         }
     }
 
-    useEffect(() => { refresh(); }, []);
+    // Start/stop polling based on whether any automation is running
+    useEffect(() => {
+        const anyRunning = automations.some(a => a.running);
+        if (anyRunning && !pollRef.current) {
+            pollRef.current = setInterval(refresh, 1500);
+        } else if (!anyRunning && pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, [automations]);
+
+    useEffect(() => {
+        refresh();
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+        };
+    }, []);
 
     return (
         <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl mx-auto w-full">

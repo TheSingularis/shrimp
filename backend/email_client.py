@@ -837,8 +837,9 @@ def _fetch_from_mailbox(
 
             body_plain, body_html = _extract_body(msg)
 
+            email_id = str(uuid.uuid4())
             record: dict = {
-                "id": str(uuid.uuid4()),
+                "id": email_id,
                 "message_id": message_id,
                 "imap_uid": num.decode() if isinstance(num, bytes) else str(num),
                 "imap_mailbox": imap_mailbox,
@@ -854,7 +855,7 @@ def _fetch_from_mailbox(
                 "folder": canonical_folder,
                 "triage_result": None,
                 "triage_actions": [],
-                "attachments": _extract_attachments(msg, record["id"]),
+                "attachments": _extract_attachments(msg, email_id),
             }
             _save_email(record)
             existing_message_ids.add(message_id)

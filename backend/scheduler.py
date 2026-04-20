@@ -16,7 +16,7 @@ except ImportError:
     log.warning("APScheduler not installed — background automations disabled. Install with: pip install apscheduler")
 
 _scheduler: Any = None
-_automation_registry: dict[str, dict] = {}  # name → {fn, cron, description, last_run, last_result, enabled}
+_automation_registry: dict[str, dict] = {}  # name → {fn, cron, description, last_run, last_result, enabled, running}
 _main_loop: Any = None  # FastAPI event loop, set at startup
 
 
@@ -76,6 +76,7 @@ def register_automation(
         "enabled": enabled,
         "last_run": None,
         "last_result": None,
+        "running": False,
     }
     if _scheduler is not None and enabled:
         _add_to_scheduler(name, _automation_registry[name])
@@ -92,6 +93,7 @@ def _add_to_scheduler(name: str, meta: dict) -> None:
 
     def _wrapper():
         log.info("Running automation: %s", name)
+        meta["running"] = True
         meta["last_run"] = datetime.now(timezone.utc).isoformat()
         try:
             meta["fn"]()
@@ -100,6 +102,8 @@ def _add_to_scheduler(name: str, meta: dict) -> None:
         except Exception:
             meta["last_result"] = "error"
             log.exception("Automation %s failed", name)
+        finally:
+            meta["running"] = False
 
     minute, hour, dom, month, dow = parts
     trigger = CronTrigger(minute=minute, hour=hour, day=dom, month=month, day_of_week=dow, timezone="UTC")
@@ -115,6 +119,7 @@ def trigger_automation(name: str) -> bool:
 
     def _run():
         log.info("Manually triggering automation: %s", name)
+        meta["running"] = True
         meta["last_run"] = datetime.now(timezone.utc).isoformat()
         try:
             meta["fn"]()
@@ -122,8 +127,21 @@ def trigger_automation(name: str) -> bool:
         except Exception:
             meta["last_result"] = "error"
             log.exception("Manual automation %s failed", name)
+        finally:
+            meta["running"] = False
 
     threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
+def set_automation_cron(name: str, cron: str) -> bool:
+    """Update the cron schedule for an automation and reschedule it."""
+    if name not in _automation_registry:
+        return False
+    meta = _automation_registry[name]
+    meta["cron"] = cron
+    if meta.get("enabled", True) and _scheduler is not None and _HAS_APSCHEDULER:
+        _add_to_scheduler(name, meta)
     return True
 
 
@@ -152,6 +170,7 @@ def get_automations() -> list[dict]:
             "enabled": meta.get("enabled", True),
             "last_run": meta.get("last_run"),
             "last_result": meta.get("last_result"),
+            "running": meta.get("running", False),
         }
         for name, meta in _automation_registry.items()
     ]
@@ -168,4 +187,5 @@ def get_automation(name: str) -> dict | None:
         "enabled": meta.get("enabled", True),
         "last_run": meta.get("last_run"),
         "last_result": meta.get("last_result"),
+        "running": meta.get("running", False),
     }
