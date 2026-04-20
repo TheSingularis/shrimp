@@ -1,0 +1,73 @@
+{
+  "name": "shrimp",
+  "version": "0.1.0",
+  "description": "Self-Hosted RAG Intelligence Model Project",
+  "author": {
+    "name": "TheSingularis",
+    "email": "jordan.sluiter@icloud.com"
+  },
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "electron:dev": "npm run build:frontend && electron .",
+    "electron:start": "electron .",
+    "build:frontend": "cd frontend && ELECTRON=1 npm run build",
+    "build": "npm run build:frontend && electron-builder --linux",
+    "build:linux": "npm run build:frontend && electron-builder --linux AppImage deb",
+    "build:mac": "npm run build:frontend && electron-builder --mac",
+    "build:win": "npm run build:frontend && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.shrimp.app",
+    "productName": "SHRIMP",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "assets"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "frontend/public/icons/**/*",
+      "backend/**/*",
+      "!backend/.venv/**/*",
+      "!backend/__pycache__/**/*",
+      "!backend/**/__pycache__/**/*",
+      "!**/node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!.venv/**/*",
+          "!__pycache__/**/*",
+          "!**/__pycache__/**/*"
+        ]
+      },
+      {
+        "from": "backend/.venv",
+        "to": "backend/.venv",
+        "filter": ["**/*"]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "frontend/public/icons/shrimp(1).png",
+      "category": "Utility"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "frontend/public/icons/shrimp(1).png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "frontend/public/icons/shrimp(1).png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

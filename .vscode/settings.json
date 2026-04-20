@@ -3,12 +3,20 @@
         "reloadButton": "↻",
         "commands": [
             {
-                "name": "$(play) Run Nix-Shell",
-                "color": "lightblue",
-                "command": "echo \"Running Nix-Shell...\" && sleep 0.5 && nix-shell",
-                "singleInstance": false
+                "name": "$(play) Run SHRIMP webui",
+                "color": "orange",
+                "command": "bash start.sh",
+                "singleInstance": true
+            },
+            {
+                "name": "$(window) Run SHRIMP electron",
+                "color": "#8B5CF6",
+                "command": "bash start-electron.sh",
+                "singleInstance": true
             }
         ]
     },
-    "python.REPL.enableREPLSmartSend": false
+    "python.REPL.enableREPLSmartSend": false,
+    "python.terminal.activateEnvironment": false,
+    "python.terminal.activateEnvInCurrentTerminal": false
 }
