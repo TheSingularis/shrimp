@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import re
+import threading
 import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -29,6 +30,11 @@ _CACHE_DIR = Path(__file__).parent.parent / "emails"
 _CACHE_DIR.mkdir(exist_ok=True)
 _ATTACH_DIR = _CACHE_DIR / "attachments"
 _ATTACH_DIR.mkdir(exist_ok=True)
+
+# Serialize all fetch_emails() calls so concurrent callers (IDLE thread,
+# triage scheduler, manual fetch) cannot both write the same email before
+# either has updated the dedup set.
+_fetch_lock = threading.Lock()
 
 
 # ── HTML → plain text ─────────────────────────────────────────────────────────
@@ -346,6 +352,7 @@ def list_emails(limit: int = 50) -> list[dict]:
         except Exception:
             pass
     items.sort(key=lambda e: e.get("date") or "", reverse=True)
+    return items[:limit]
 
 
 def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]:
@@ -361,7 +368,6 @@ def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]
         except Exception:
             pass
     items.sort(key=lambda e: e.get("date") or "", reverse=True)
-    return items[:limit]
     return items[:limit]
 
 
@@ -544,6 +550,51 @@ def refresh_email_body(email_id: str) -> dict | None:
     except Exception:
         log.exception("refresh_email_body failed for %s", email_id)
         return None
+
+
+def deduplicate_cache() -> dict:
+    """
+    Scan the email cache and remove duplicate files with the same message_id.
+    Keeps the copy that has triage data; if both/neither do, keeps the older
+    file (earlier mtime). Returns a summary dict.
+    """
+    from collections import defaultdict
+
+    by_mid: dict[str, list[Path]] = defaultdict(list)
+    for p in _CACHE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            mid = data.get("message_id") or ""
+            if mid:
+                by_mid[mid].append(p)
+        except Exception:
+            pass
+
+    removed = 0
+    for mid, paths in by_mid.items():
+        if len(paths) <= 1:
+            continue
+        # Prefer the copy with a triage_note or triage_priority, then oldest mtime
+        def score(p: Path) -> tuple[int, float]:
+            try:
+                d = json.loads(p.read_text())
+                has_triage = bool(d.get("triage_note") or d.get("triage_priority"))
+                return (0 if has_triage else 1, p.stat().st_mtime)
+            except Exception:
+                return (2, 0.0)
+
+        paths_sorted = sorted(paths, key=score)
+        keep = paths_sorted[0]
+        for dup in paths_sorted[1:]:
+            try:
+                dup.unlink()
+                log.info("deduplicate_cache: removed duplicate %s (kept %s)", dup.name, keep.name)
+                removed += 1
+            except Exception:
+                log.exception("deduplicate_cache: failed to remove %s", dup)
+
+    log.info("deduplicate_cache: removed %d duplicate file(s)", removed)
+    return {"removed": removed}
 
 
 def list_flagged(limit: int = 200) -> list[dict]:
@@ -877,41 +928,45 @@ def fetch_emails(max_count: int | None = None) -> list[dict]:
     Fetch recent emails from IMAP (inbox + sent) and cache locally.
     Returns list of newly fetched email metadata dicts.
     Returns empty list if email is disabled or credentials missing.
+
+    Serialized via _fetch_lock so concurrent callers (IDLE thread, triage
+    scheduler, manual button) cannot race and write the same email twice.
     """
     cfg = config.EMAIL_CONFIG
     if not cfg.get("enabled") or not cfg.get("imap_host") or not cfg.get("username"):
         log.debug("Email not configured or disabled, skipping fetch")
         return []
 
-    limit = max_count or cfg.get("fetch_max", 50)
-    fetched: list[dict] = []
-    special = _discover_special_folders()
+    with _fetch_lock:
+        limit = max_count or cfg.get("fetch_max", 50)
+        fetched: list[dict] = []
+        special = _discover_special_folders()
 
-    try:
-        conn = _imap_connect()
+        try:
+            conn = _imap_connect()
 
-        # Fetch inbox
-        inbox_mailbox = cfg.get("mailbox", "INBOX")
-        fetched += _fetch_from_mailbox(conn, inbox_mailbox, "INBOX", limit, cfg)
+            # Fetch inbox
+            inbox_mailbox = cfg.get("mailbox", "INBOX")
+            fetched += _fetch_from_mailbox(conn, inbox_mailbox, "INBOX", limit, cfg)
 
-        # Fetch sent (if discoverable)
-        sent_mailbox = special.get("sent")
-        if sent_mailbox:
-            try:
-                fetched += _fetch_from_mailbox(
-                    conn, sent_mailbox, "Sent", limit, cfg,
-                    mark_read=True, skip_triage=True,
-                )
-            except Exception:
-                log.warning("Could not fetch sent folder '%s'", sent_mailbox)
+            # Fetch sent (if discoverable)
+            sent_mailbox = special.get("sent")
+            if sent_mailbox:
+                try:
+                    fetched += _fetch_from_mailbox(
+                        conn, sent_mailbox, "Sent", limit, cfg,
+                        mark_read=True, skip_triage=True,
+                    )
+                except Exception:
+                    log.warning("Could not fetch sent folder '%s'", sent_mailbox)
 
-        conn.logout()
-        log.info("Fetched %d new emails total", len(fetched))
+            conn.logout()
+            log.info("Fetched %d new emails total", len(fetched))
 
-    except Exception:
-        log.exception("IMAP fetch failed")
+        except Exception:
+            log.exception("IMAP fetch failed")
 
-    return fetched
+        return fetched
 
 
 def list_imap_folders() -> list[dict]:

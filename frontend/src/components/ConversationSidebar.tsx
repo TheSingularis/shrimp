@@ -12,7 +12,7 @@ import {
     deleteProject,
     listProjects,
 } from "../api";
-import { X, ChevronRight, ChevronDown, ChevronLeft, FolderPlus, Folder, Settings } from "lucide-react";
+import { X, ChevronRight, ChevronDown, ChevronLeft, FolderPlus, Folder, Settings, Plus } from "lucide-react";
 import "./ConversationSidebar.css";
 
 function calculateProjectStats(conversations: ConversationMetadata[], projectId: string) {
@@ -295,21 +295,15 @@ export function ConversationSidebar({
 
     return (
         <>
-            {/* Toggle button */}
-            <button
-                onClick={onToggle}
-                className="sidebar-toggle"
-                title={open ? "Close sidebar" : "Open sidebar"}
-            >
-                {open ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
-
             {/* Sidebar */}
             <div className={`conversation-sidebar ${open ? "open" : ""}`}>
                 <div className="sidebar-header">
                     <h2>Conversations</h2>
-                    <button onClick={onNewConversation} className="new-conversation-btn">
-                        + New
+                    <button onClick={onNewConversation} className="new-conversation-btn" title="New conversation">
+                        <Plus size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> New
+                    </button>
+                    <button onClick={onToggle} className="btn-ghost" title="Close" style={{ flexShrink: 0 }}>
+                        <ChevronLeft size={15} />
                     </button>
                 </div>
 
@@ -393,8 +387,6 @@ export function ConversationSidebar({
                 />
             )}
 
-            {/* Overlay for mobile */}
-            {open && <div className="sidebar-overlay" onClick={onToggle} />}
         </>
     );
 }

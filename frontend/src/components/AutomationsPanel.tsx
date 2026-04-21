@@ -1,25 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, CheckCircle, XCircle, Clock, Play, ToggleLeft, ToggleRight } from "lucide-react";
+import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import { listAutomations, triggerAutomation, updateAutomation, type Automation } from "../api";
 import { formatDate as formatDateShort } from "../utils/email";
 
-function formatDate(iso: string | null) {
+function formatLastRun(iso: string | null) {
     if (!iso) return "Never";
     return formatDateShort(iso);
 }
 
-function StatusIcon({ result, running }: { result: Automation["last_result"]; running: boolean }) {
-    if (running) return <Clock size={16} className="animate-spin" style={{ color: 'var(--accent)' }} />;
-    if (result === "ok") return <CheckCircle size={16} style={{ color: 'var(--color-success, #22c55e)' }} />;
-    if (result === "error") return <XCircle size={16} style={{ color: 'var(--color-error, #ef4444)' }} />;
-    return <Clock size={16} style={{ color: 'var(--color-text-muted)' }} />;
+function accentColor(automation: Automation): string {
+    if (!automation.enabled) return "rgba(255,255,255,0.12)";
+    if (automation.last_result === "error") return "var(--color-error, #ef4444)";
+    if (automation.last_result === "ok") return "#10b981";
+    return "rgba(255,255,255,0.12)";
 }
 
-function AutomationCard({ automation, onRefresh }: { automation: Automation; onRefresh: () => void }) {
+function AutomationRow({ automation, onRefresh }: { automation: Automation; onRefresh: () => void }) {
     const [toggling, setToggling] = useState(false);
     const wasRunningRef = useRef(false);
 
-    // When automation transitions from running → done, refresh checklist
     useEffect(() => {
         if (wasRunningRef.current && !automation.running) {
             window.dispatchEvent(new CustomEvent("checklist-refresh"));
@@ -30,7 +29,6 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
     async function handleRun() {
         try {
             await triggerAutomation(automation.name);
-            // Kick off polling by refreshing parent immediately
             onRefresh();
         } catch (e) {
             console.error(e);
@@ -49,54 +47,94 @@ function AutomationCard({ automation, onRefresh }: { automation: Automation; onR
         }
     }
 
+    const accent = accentColor(automation);
+
     return (
-        <div className="rounded-xl border border-shrimp-border bg-shrimp-surface p-4 flex flex-col gap-3" style={{ position: 'relative', overflow: 'hidden' }}>
-            <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                        <StatusIcon result={automation.last_result} running={automation.running} />
-                        <h3 className="font-semibold text-sm truncate">{automation.name}</h3>
-                        {!automation.enabled && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-shrimp-border" style={{ color: 'var(--color-text-muted)' }}>
-                                disabled
-                            </span>
-                        )}
-                        {automation.running && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--accent)', background: 'rgba(var(--accent-rgb, 91,79,207),0.12)' }}>
-                                running
-                            </span>
-                        )}
-                    </div>
-                    {automation.description && (
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{automation.description}</p>
+        <div
+            style={{
+                border: "1px solid var(--border)",
+                borderLeft: `3px solid ${accent}`,
+                borderRadius: "0 8px 8px 0",
+                padding: "10px 14px",
+                background: "var(--surface)",
+                marginBottom: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                opacity: automation.enabled ? 1 : 0.65,
+            }}
+        >
+            {/* Left: 3-line info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                    <span style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: "var(--text)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                    }}>
+                        {automation.name}
+                    </span>
+                    {!automation.enabled && (
+                        <span style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                            textTransform: "uppercase", color: "var(--text-muted)",
+                            border: "1px solid var(--border)", borderRadius: 3,
+                            padding: "1px 5px",
+                        }}>disabled</span>
+                    )}
+                    {automation.running && (
+                        <span style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                            textTransform: "uppercase", color: "var(--accent)",
+                            background: "var(--accent-dim)", borderRadius: 3,
+                            padding: "1px 5px",
+                        }}>running</span>
                     )}
                 </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Schedule</span>
-                    <p className="font-mono mt-0.5">{automation.cron || "—"}</p>
-                </div>
-                <div>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Last run</span>
-                    <p className="mt-0.5">{formatDate(automation.last_run)}</p>
-                </div>
-            </div>
+                {automation.description && (
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {automation.description}
+                    </p>
+                )}
 
-            <div className="flex gap-2">
-                <button onClick={handleRun} disabled={automation.running} className="btn-secondary">
-                    <Play size={12} className={automation.running ? "opacity-50" : ""} />
-                    {automation.running ? "Running…" : "Run now"}
-                </button>
-                <button onClick={handleToggle} disabled={toggling} className="btn-secondary">
-                    {automation.enabled
-                        ? <><ToggleRight size={14} style={{ color: 'var(--accent)' }} /> Disable</>
-                        : <><ToggleLeft size={14} /> Enable</>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                    {automation.running
+                        ? <Clock size={11} className="animate-spin" style={{ color: "var(--accent)" }} />
+                        : automation.last_result === "ok"
+                            ? <CheckCircle size={11} style={{ color: "#10b981" }} />
+                            : automation.last_result === "error"
+                                ? <XCircle size={11} style={{ color: "var(--color-error, #ef4444)" }} />
+                                : <Clock size={11} />
                     }
+                    <span>{formatLastRun(automation.last_run)}</span>
+                    {automation.cron && <span style={{ color: "var(--text-dim)" }}>· {automation.cron}</span>}
+                </div>
+            </div>
+
+            {/* Right: action buttons */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <button
+                    onClick={handleRun}
+                    disabled={automation.running || !automation.enabled}
+                    className="btn-secondary"
+                    title="Run now"
+                >
+                    <RefreshCw size={12} className={automation.running ? "animate-spin" : ""} />
+                    {automation.running ? "Running…" : "Run"}
+                </button>
+                <button
+                    onClick={handleToggle}
+                    disabled={toggling}
+                    className="btn-secondary"
+                >
+                    {automation.enabled ? "Disable" : "Enable"}
                 </button>
             </div>
-            {(automation.running || toggling) && <div className="indeterminate-bar" />}
         </div>
     );
 }
@@ -119,7 +157,6 @@ export function AutomationsPanel() {
         }
     }
 
-    // Start/stop polling based on whether any automation is running
     useEffect(() => {
         const anyRunning = automations.some(a => a.running);
         if (anyRunning && !pollRef.current) {
@@ -138,36 +175,43 @@ export function AutomationsPanel() {
     }, []);
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl mx-auto w-full">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-xl font-bold">Automations</h2>
-                    <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                        Scheduled automation tasks
-                    </p>
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+            <div style={{ maxWidth: 680, margin: "0 auto" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                    <div>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>Tasks</h2>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Scheduled automation tasks</p>
+                    </div>
+                    <button onClick={refresh} className="btn-ghost" title="Refresh">
+                        <RefreshCw size={15} />
+                    </button>
                 </div>
-                <button onClick={refresh} className="btn-ghost" title="Refresh">
-                    <RefreshCw size={16} />
-                </button>
-            </div>
 
-            {loading ? (
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>
-            ) : automations.length === 0 ? (
-                <div className="rounded-xl border border-shrimp-border bg-shrimp-surface p-8 text-center">
-                    <Clock size={32} className="mx-auto mb-3" style={{ color: 'var(--color-text-muted)' }} />
-                    <p className="text-sm font-medium">No automations configured</p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                        Automations will appear here as they are added.
-                    </p>
-                </div>
-            ) : (
-                <div className="grid gap-3">
-                    {automations.map(automation => (
-                        <AutomationCard key={automation.name} automation={automation} onRefresh={refresh} />
-                    ))}
-                </div>
-            )}
+                {loading ? (
+                    <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading…</p>
+                ) : automations.length === 0 ? (
+                    <div style={{
+                        border: "1px solid var(--border)",
+                        borderLeft: "3px solid rgba(255,255,255,0.12)",
+                        borderRadius: "0 8px 8px 0",
+                        padding: "32px 24px",
+                        background: "var(--surface)",
+                        textAlign: "center",
+                    }}>
+                        <Clock size={28} style={{ color: "var(--text-muted)", margin: "0 auto 10px" }} />
+                        <p style={{ fontSize: 13, fontWeight: 500 }}>No tasks configured</p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                            Tasks will appear here as they are added.
+                        </p>
+                    </div>
+                ) : (
+                    <div>
+                        {automations.map(a => (
+                            <AutomationRow key={a.name} automation={a} onRefresh={refresh} />
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

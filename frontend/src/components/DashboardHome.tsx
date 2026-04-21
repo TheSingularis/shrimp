@@ -33,50 +33,59 @@ function AutomationRow({ automation, onTrigger }: { automation: Automation; onTr
         }
     }
 
-    function formatLastRun(iso: string | null) {
-        if (!iso) return "Never";
-        return formatDate(iso);
-    }
-
-    const borderColor = automation.last_result === "error"
-        ? "var(--color-error, #ef4444)"
-        : automation.last_result === "ok"
-        ? "rgba(255,255,255,0.07)"
-        : "rgba(255,255,255,0.07)";
+    const borderColor = !automation.enabled
+        ? "rgba(255,255,255,0.12)"
+        : automation.last_result === "error"
+            ? "var(--color-error, #ef4444)"
+            : automation.last_result === "ok"
+                ? "#10b981"
+                : "rgba(255,255,255,0.12)";
 
     return (
         <div
-            className="flex items-center gap-3"
             style={{
-                borderLeft: `2px solid ${borderColor}`,
-                borderRadius: "0 6px 6px 0",
+                border: "1px solid var(--border)",
+                borderLeft: `3px solid ${borderColor}`,
+                borderRadius: "0 8px 8px 0",
                 padding: "10px 14px",
-                background: "rgba(255,255,255,0.02)",
+                background: "var(--surface)",
+                marginBottom: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                opacity: automation.enabled ? 1 : 0.65,
             }}
         >
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{automation.name}</p>
-                <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                    {automation.description || automation.cron || "Manual"}
+            {/* 3-line content */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {automation.name}
                 </p>
+                {automation.description && (
+                    <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)', marginTop: 1 }}>
+                        {automation.description}
+                    </p>
+                )}
+                <div className="flex items-center gap-1.5" style={{ marginTop: 3, fontSize: 11, color: 'var(--color-text-muted)' }}>
+                    {automation.last_result === "ok"
+                        ? <CheckCircle size={11} style={{ color: '#10b981' }} />
+                        : automation.last_result === "error"
+                            ? <XCircle size={11} style={{ color: 'var(--color-error, #ef4444)' }} />
+                            : <Clock size={11} />
+                    }
+                    <span>{automation.last_run ? formatDate(automation.last_run) : "Never"}</span>
+                    {automation.cron && <span style={{ color: "var(--text-dim, #404669)" }}>· {automation.cron}</span>}
+                </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-                {automation.last_result === "ok" && <CheckCircle size={14} style={{ color: 'var(--color-success, #22c55e)' }} />}
-                {automation.last_result === "error" && <XCircle size={14} style={{ color: 'var(--color-error, #ef4444)' }} />}
-                {!automation.last_result && <Clock size={14} style={{ color: 'var(--color-text-muted)' }} />}
-                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {formatLastRun(automation.last_run)}
-                </span>
-                <button
-                    onClick={handleTrigger}
-                    disabled={triggering || !automation.enabled}
-                    className="icon-btn"
-                    title="Run now"
-                    style={{ color: 'var(--accent)' }}
-                >
-                    <RefreshCw size={13} className={triggering ? "animate-spin" : ""} />
-                </button>
-            </div>
+            {/* Run button */}
+            <button
+                onClick={handleTrigger}
+                disabled={triggering || !automation.enabled}
+                className="icon-btn shrink-0"
+                title="Run now"
+            >
+                <RefreshCw size={13} className={triggering ? "animate-spin" : ""} />
+            </button>
         </div>
     );
 }
@@ -85,6 +94,14 @@ const URGENCY_DOT: Record<string, string> = {
     urgent: "#ef4444",
     high:   "#f97316",
 };
+
+/** Strip redundant "The email / This email" opener from AI triage notes. */
+function cleanTriageNote(note: string | undefined, maxLen = 90): string | undefined {
+    if (!note) return undefined;
+    let clean = note.replace(/^(the email|this email)\s*/i, "").trim();
+    clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+    return clean.length > maxLen ? clean.slice(0, maxLen - 1) + "…" : clean;
+}
 
 function isToday(iso: string): boolean {
     return new Date(iso).toDateString() === new Date().toDateString();
@@ -185,10 +202,12 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                     {!freshDigest && (
                         <div
                             style={{
-                                borderLeft: "2px solid rgba(255,255,255,0.07)",
-                                borderRadius: "0 6px 6px 0",
+                                border: "1px solid var(--border)",
+                                borderLeft: "3px solid rgba(255,255,255,0.12)",
+                                borderRadius: "0 8px 8px 0",
                                 padding: "10px 14px",
-                                background: "rgba(255,255,255,0.02)",
+                                background: "var(--surface)",
+                                marginBottom: 6,
                             }}
                         >
                             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -202,12 +221,14 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                             disabled={digestRefreshing}
                             className="btn-row w-full flex items-center justify-center gap-2"
                             style={{
-                                borderLeft: "2px solid var(--accent)",
-                                borderRadius: "0 6px 6px 0",
+                                border: "1px solid var(--border)",
+                                borderLeft: "3px solid var(--accent)",
+                                borderRadius: "0 8px 8px 0",
                                 padding: "10px 14px",
-                                background: "color-mix(in srgb, var(--accent) 6%, transparent)",
+                                background: "color-mix(in srgb, var(--accent) 6%, var(--surface))",
                                 color: "var(--accent)",
                                 fontSize: 13,
+                                marginBottom: 6,
                             }}
                         >
                             <Sparkles size={13} className={digestRefreshing ? "animate-pulse" : ""} />
@@ -225,12 +246,14 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                             <button
                                 key={email.id}
                                 onClick={() => onNavigate("email", email.id)}
-                                className="btn-row w-full flex items-start gap-3 hover:bg-white/[0.03] cursor-pointer"
+                                className="btn-row w-full flex items-start gap-3 cursor-pointer"
                                 style={{
-                                    borderLeft: `2px solid ${leftBorderColor}`,
-                                    borderRadius: "0 6px 6px 0",
-                                    padding: "12px 14px",
-                                    background: "rgba(255,255,255,0.02)",
+                                    border: "1px solid var(--border)",
+                                    borderLeft: `3px solid ${leftBorderColor}`,
+                                    borderRadius: "0 8px 8px 0",
+                                    padding: "10px 14px",
+                                    background: "var(--surface)",
+                                    marginBottom: 6,
                                 }}
                             >
                                 <div className="flex-1 min-w-0">
@@ -248,13 +271,13 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                                             <UrgencyBadge urgency={toUrgencyLevel(urgency)} />
                                         )}
                                     </div>
-                                    {email.triage_note ? (
-                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}>
-                                            {email.triage_note}
+                                    {cleanTriageNote(email.triage_note) ? (
+                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)', opacity: 0.65 }}>
+                                            {cleanTriageNote(email.triage_note)}
                                         </p>
                                     ) : !email.triaged ? (
                                         <p className="text-xs italic" style={{ color: 'var(--color-text-muted)', opacity: 0.4 }}>
-                                            Pending triage...
+                                            Pending triage…
                                         </p>
                                     ) : null}
                                 </div>
@@ -331,9 +354,11 @@ function FlaggedSection({ onNavigate }: { onNavigate: (panel: Panel, emailId?: s
                                 key={email.id}
                                 className="flex items-start"
                                 style={{
-                                    borderLeft: `2px solid ${leftBorderColor}`,
-                                    borderRadius: "0 6px 6px 0",
-                                    background: "rgba(255,255,255,0.02)",
+                                    border: "1px solid var(--border)",
+                                    borderLeft: `3px solid ${leftBorderColor}`,
+                                    borderRadius: "0 8px 8px 0",
+                                    background: "var(--surface)",
+                                    marginBottom: 6,
                                 }}
                             >
                                 <button
@@ -355,9 +380,9 @@ function FlaggedSection({ onNavigate }: { onNavigate: (panel: Panel, emailId?: s
                                             <UrgencyBadge urgency={toUrgencyLevel(urgency)} />
                                         )}
                                     </div>
-                                    {email.triage_note && (
-                                        <p className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}>
-                                            {email.triage_note}
+                                    {cleanTriageNote(email.triage_note) && (
+                                        <p className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: 0.65 }}>
+                                            {cleanTriageNote(email.triage_note)}
                                         </p>
                                     )}
                                     {email.triage_actions && email.triage_actions.length > 0 && (
@@ -454,10 +479,12 @@ export function DashboardHome({ onNavigate }: Props) {
                                         onClick={() => onNavigate("chat", undefined, c.conversation_id)}
                                         className="btn-row w-full flex items-center gap-3"
                                         style={{
-                                            borderLeft: "2px solid rgba(255,255,255,0.07)",
-                                            borderRadius: "0 6px 6px 0",
+                                            border: "1px solid var(--border)",
+                                            borderLeft: "3px solid var(--theme-primary)",
+                                            borderRadius: "0 8px 8px 0",
                                             padding: "10px 14px",
-                                            background: "rgba(255,255,255,0.02)",
+                                            background: "var(--surface)",
+                                            marginBottom: 6,
                                         }}
                                     >
                                         <MessageSquare size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />

@@ -256,6 +256,9 @@ async def startup():
     import email_idle
     email_idle.start()
 
+    # Clean up any duplicate emails left by the previous race condition
+    threading.Thread(target=email_client.deduplicate_cache, daemon=True, name="email-dedup").start()
+
     # Backfill semantic embeddings for any cached emails missing them
     threading.Thread(target=email_client.embed_all_emails, daemon=True, name="email-embed-backfill").start()
 

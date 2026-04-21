@@ -199,13 +199,15 @@ export function DailyChecklist({ onNavigate }: Props) {
                     {addingTask && (
                         <div
                             style={{
-                                borderLeft: "2px solid var(--accent)",
-                                borderRadius: "0 6px 6px 0",
-                                background: "rgba(255,255,255,0.02)",
+                                border: "1px solid var(--border)",
+                                borderLeft: "3px solid var(--accent)",
+                                borderRadius: "0 8px 8px 0",
+                                background: "var(--surface)",
                                 padding: "9px 10px 9px 12px",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "8px",
+                                marginBottom: 6,
                             }}
                         >
                             <div
@@ -280,9 +282,11 @@ function ChecklistItemRow({
         <div
             className="flex items-stretch"
             style={{
-                borderLeft: `2px solid ${borderColor}`,
-                borderRadius: "0 6px 6px 0",
-                background: "rgba(255,255,255,0.02)",
+                border: "1px solid var(--border)",
+                borderLeft: `3px solid ${borderColor}`,
+                borderRadius: "0 8px 8px 0",
+                background: "var(--surface)",
+                marginBottom: 6,
                 opacity: item.completed ? 0.55 : 1,
             }}
             onMouseEnter={() => setHovering(true)}

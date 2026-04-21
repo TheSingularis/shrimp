@@ -2,42 +2,43 @@
 
 .conversation-tabs {
     display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.5rem 1rem 0 1rem;
+    align-items: stretch;
+    gap: 0;
+    padding: 0 4px;
     border-bottom: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--surface);
     overflow-x: auto;
     flex-shrink: 0;
+    scrollbar-width: none;
 }
+
+.conversation-tabs::-webkit-scrollbar { display: none; }
 
 .conversation-tab {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--border);
-    border-bottom: 1px solid var(--surface);
-    border-radius: 6px 6px 0 0;
-    background: var(--surface);
+    gap: 5px;
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    font-family: monospace;
-    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 11px;
     white-space: nowrap;
-    transition: all 0.15s;
-    max-width: 200px;
+    transition: color 0.15s, border-color 0.15s;
+    max-width: 180px;
+    flex-shrink: 0;
 }
 
 .conversation-tab:hover {
-    background: var(--bg);
     color: var(--text);
 }
 
 .conversation-tab.active {
-    background: var(--bg);
     color: var(--text);
-    border-bottom: 2px solid var(--accent);
+    border-bottom-color: var(--theme-primary);
 }
 
 .conversation-tab-title {
@@ -51,41 +52,31 @@
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 0.9rem;
-    padding: 0;
+    padding: 0 2px;
     line-height: 1;
     transition: color 0.15s;
     flex-shrink: 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
 }
 
-.conversation-tab-close:hover {
-    color: var(--text);
-}
+.conversation-tab-close:hover { color: var(--text); }
 
 .new-tab-btn {
     background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 1rem;
-    padding: 0.2rem 0.6rem;
-    transition: all 0.15s;
+    padding: 8px 10px;
+    font-size: 18px;
+    line-height: 1;
+    transition: color 0.15s;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
 }
 
 .new-tab-btn:hover {
-    background: var(--surface);
-    color: var(--text);
-    border-color: var(--accent);
-}
-
-/* ── mobile responsive ───────────────────────────────────────────────────── */
-
-/* Touch devices (tablets and phones) */
-@media (max-width: 1024px) {
-    /* Tabs stay below header */
-    .conversation-tabs {
-        flex-shrink: 0;
-    }
+    color: var(--theme-primary);
 }

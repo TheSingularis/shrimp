@@ -1290,14 +1290,14 @@ export function ChatPanel({ scopes, messages, onMessagesChange, conversationId }
                                     {/* Message Content */}
                                     {isUser ? (
                                         <div className="max-w-3xl">
-                                            <div className="border-r-2 pr-8 pl-6 bg-bg-elevated/40 rounded-l-lg py-3" style={{ borderColor: 'var(--theme-primary)' }}>
+                                            <div className="pr-8 pl-6 py-3" style={{ borderRight: '3px solid var(--theme-primary)' }}>
                                                 <pre className="text-base whitespace-pre-wrap break-words text-text">{msg.content}</pre>
                                             </div>
                                         </div>
                                     ) : (
                                         <>
                                             <div className="max-w-3xl">
-                                                <div className="border-l-2 pl-8 pr-6" style={{ borderColor: 'var(--theme-primary)' }}>
+                                                <div className="pl-8 pr-6" style={{ borderLeft: '3px solid var(--theme-primary)' }}>
                                                     {renderAssistantContent(msg, streaming && i === messages.length - 1)}
                                                 </div>
                                             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project } from "./api";
+import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project, getInbox } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ScopeSelector } from "./components/ScopeSelector";
 import { SettingsModal } from "./components/SettingsModal";
@@ -12,10 +12,10 @@ import { NotificationFeed, NotificationBadge } from "./components/NotificationFe
 import { useVisualViewport } from "./hooks/useVisualViewport";
 import { useNotifications } from "./hooks/useNotifications";
 import { TitleBar } from "./components/TitleBar";
-import { Settings, LayoutDashboard, MessageSquare, Mail, BriefcaseBusiness } from "lucide-react";
+import { Settings, House, MessageSquare, Mail, BriefcaseBusiness } from "lucide-react";
 import "./index.css";
 
-type Panel = "dashboard" | "chat" | "email" | "automations";
+type Panel = "dashboard" | "chat" | "email" | "automations" | "notifications";
 
 interface ConversationTab {
     id: string;
@@ -43,17 +43,18 @@ function getDefaultTitle(messages: Message[]): string {
 
 // ── Nav rail item ─────────────────────────────────────────────────────────────
 
-function NavItem({ icon, label, active, onClick }: {
+function NavItem({ icon, label, active, onClick, badge }: {
     icon: React.ReactNode;
     label: string;
     active: boolean;
     onClick: () => void;
+    badge?: number;
 }) {
     return (
         <button
             onClick={onClick}
             title={label}
-            className="nav-btn flex flex-col items-center justify-center gap-1"
+            className="nav-btn relative flex flex-col items-center justify-center gap-1"
             style={{
                 width: '44px',
                 height: '44px',
@@ -63,6 +64,14 @@ function NavItem({ icon, label, active, onClick }: {
         >
             {icon}
             <span style={{ fontSize: '9px', fontWeight: 500, lineHeight: 1 }} className="hidden sm:block">{label}</span>
+            {badge != null && badge > 0 && (
+                <span
+                    className="absolute top-1.5 right-1.5 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[9px] font-bold leading-none px-[3px]"
+                    style={{ background: 'var(--accent)', color: '#fff' }}
+                >
+                    {badge > 99 ? '99+' : badge}
+                </span>
+            )}
         </button>
     );
 }
@@ -89,10 +98,10 @@ export default function App() {
     const [scopes, setScopes] = useState<Scope[]>([]);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [notifOpen, setNotifOpen] = useState(false);
     const [projects, setProjects] = useState<Project[]>([]);
 
     const { notifications, unreadCount, connected, dismiss: dismissNotif, remove: removeNotif } = useNotifications();
+    const [emailUnread, setEmailUnread] = useState(0);
 
     // Tab state
     const [tabs, setTabs] = useState<ConversationTab[]>([]);
@@ -101,6 +110,10 @@ export default function App() {
 
     const appContainerRef = useRef<HTMLDivElement>(null);
     useVisualViewport(appContainerRef);
+
+    function refreshEmailUnread() {
+        getInbox(200).then(emails => setEmailUnread(emails.filter(e => !e.read).length)).catch(() => {});
+    }
 
     useEffect(() => {
         getTheme().then((theme) => {
@@ -128,6 +141,13 @@ export default function App() {
             setTabs([initialTab]);
             setActiveTabId(initialTab.id);
         });
+    }, []);
+
+    // Poll unread email count every 5 minutes
+    useEffect(() => {
+        refreshEmailUnread();
+        const emailPoll = setInterval(refreshEmailUnread, 5 * 60 * 1000);
+        return () => clearInterval(emailPoll);
     }, []);
 
     const getActiveTab = (): ConversationTab | undefined => tabs.find(t => t.id === activeTabId);
@@ -321,11 +341,11 @@ export default function App() {
 
     const activeTab = getActiveTab();
 
-    const navItems: { panel: Panel; icon: React.ReactNode; label: string }[] = [
-        { panel: "dashboard", icon: <LayoutDashboard size={18} />, label: "Home" },
-        { panel: "chat",      icon: <MessageSquare size={18} />,   label: "Chat" },
-        { panel: "email",     icon: <Mail size={18} />,            label: "Email" },
-        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Automations" },
+    const navItems: { panel: Panel; icon: React.ReactNode; label: string; badge?: number }[] = [
+        { panel: "dashboard",   icon: <House size={18} />,            label: "Home" },
+        { panel: "chat",        icon: <MessageSquare size={18} />,    label: "Chat" },
+        { panel: "email",       icon: <Mail size={18} />,             label: "Email",  badge: emailUnread },
+        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Tasks" },
     ];
 
     const isElectron = !!(window as any).__shrimp__?.isElectron;
@@ -349,11 +369,15 @@ export default function App() {
                         label={item.label}
                         active={activePanel === item.panel}
                         onClick={() => setActivePanel(item.panel)}
+                        badge={item.badge}
                     />
                 ))}
                 {/* Spacer pushes remaining items to the bottom */}
                 <div className="flex-1" />
-                <NotificationBadge count={unreadCount} onClick={() => setNotifOpen(true)} />
+                <NotificationBadge
+                    count={unreadCount}
+                    onClick={() => setActivePanel(activePanel === "notifications" ? "dashboard" : "notifications")}
+                />
                 <button
                     onClick={() => setSettingsOpen(true)}
                     className="nav-btn flex flex-col items-center justify-center gap-1"
@@ -365,27 +389,37 @@ export default function App() {
                 </button>
             </nav>
 
+            {/* ── Conversation sidebar (chat only) — flex sibling, pushes content ── */}
+            {activePanel === "chat" && (
+                <ConversationSidebar
+                    open={sidebarOpen}
+                    onToggle={() => setSidebarOpen(!sidebarOpen)}
+                    currentConversationId={activeTab?.conversationId ?? null}
+                    onSelectConversation={handleLoadConversation}
+                    onNewConversation={handleNewConversation}
+                    projects={projects}
+                    onProjectsChange={setProjects}
+                    scopes={scopes}
+                    onConversationMoved={handleConversationMoved}
+                />
+            )}
+
             {/* ── Main content area ── */}
             <div className="flex flex-col flex-1 overflow-hidden min-w-0">
 
-                {/* Chat-specific chrome: sidebar + header + tabs */}
+                {/* Chat-specific chrome: header + tabs */}
                 {activePanel === "chat" && (
                     <>
-                        <ConversationSidebar
-                            open={sidebarOpen}
-                            onToggle={() => setSidebarOpen(!sidebarOpen)}
-                            currentConversationId={activeTab?.conversationId ?? null}
-                            onSelectConversation={handleLoadConversation}
-                            onNewConversation={handleNewConversation}
-                            projects={projects}
-                            onProjectsChange={setProjects}
-                            scopes={scopes}
-                            onConversationMoved={handleConversationMoved}
-                        />
-
-                        <header className="shrink-0 flex items-center pl-3 md:pl-4 pr-2 md:pr-3 py-3 border-b border-shrimp-border bg-shrimp-surface/50 backdrop-blur-sm">
+                        <header className="shrink-0 flex items-center pl-3 md:pl-4 pr-2 md:pr-3 py-2.5 border-b border-shrimp-border bg-shrimp-surface/50 backdrop-blur-sm">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <h1 className="text-base font-bold tracking-tight shrink-0">
+                                <button
+                                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                                    className="btn-ghost shrink-0"
+                                    title={sidebarOpen ? "Close conversations" : "Open conversations"}
+                                >
+                                    <MessageSquare size={16} />
+                                </button>
+                                <h1 className="text-sm font-bold tracking-tight shrink-0">
                                     SHRIMP<span style={{ color: 'var(--theme-primary)' }}>*</span>
                                 </h1>
                                 <ScopeSelector
@@ -430,24 +464,20 @@ export default function App() {
                         <EmailPanel initialEmailId={selectedEmailId} onEmailOpened={() => setSelectedEmailId(null)} />
                     )}
                     {activePanel === "automations" && <AutomationsPanel />}
+                    {activePanel === "notifications" && (
+                        <NotificationFeed
+                            open={true}
+                            onClose={() => setActivePanel("dashboard")}
+                            onNavigate={(panel) => setActivePanel(panel as Panel)}
+                            notifications={notifications}
+                            unreadCount={unreadCount}
+                            connected={connected}
+                            onDismiss={dismissNotif}
+                            onDelete={removeNotif}
+                        />
+                    )}
                 </main>
             </div>
-
-            {/* ── Overlays ── */}
-            <NotificationFeed
-                open={notifOpen}
-                onClose={() => setNotifOpen(false)}
-                onNavigate={(panel) => {
-                    setActivePanel(panel as Panel);
-                    setNotifOpen(false);
-                }}
-                notifications={notifications}
-                unreadCount={unreadCount}
-                connected={connected}
-                onDismiss={dismissNotif}
-                onDelete={removeNotif}
-                topOffset={isElectron ? 32 : 0}
-            />
 
             <SettingsModal
                 open={settingsOpen}

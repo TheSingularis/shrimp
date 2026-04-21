@@ -19,20 +19,19 @@
 
 .settings-modal {
     position: fixed;
-    /* Center using inset and margin auto to avoid transform conflict */
     inset: 0;
     margin: auto;
-    max-width: 900px;
+    max-width: 680px;
     width: 90%;
-    max-height: 85vh;
+    max-height: 80vh;
     height: fit-content;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     z-index: 1101;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
     animation: modalSlideIn 0.2s ease;
 }
 
@@ -92,17 +91,17 @@
 }
 
 .modal-tabs .tab {
-    padding: 0.75rem 1.25rem;
+    padding: 10px 14px;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    border-radius: 0; /* No rounding on tabs - they have bottom border */
-    transition: all 0.2s;
-    position: relative;
+    border-radius: 0;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
 }
 
 .modal-tabs .tab:hover {
@@ -147,9 +146,10 @@
 }
 
 .drawer-section h2 {
-    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     color: var(--text-muted);
     display: flex;
     align-items: center;

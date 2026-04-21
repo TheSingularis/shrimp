@@ -3,6 +3,7 @@
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
 @import '@fontsource/inter/700.css';
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @theme {
   /* Primary blues/purples */
@@ -21,9 +22,11 @@
   /* Legacy shrimp- prefix (for compatibility) */
   --color-shrimp-bg: #0D0F17;
   --color-shrimp-surface: #161925;
+  --color-shrimp-surface2: #1E2231;
   --color-shrimp-border: #252838;
   --color-shrimp-text: #E8EAF0;
   --color-shrimp-text-muted: #8891A8;
+  --color-shrimp-text-dim: #404669;
   --color-shrimp-accent: #5B7FFF;
   --color-shrimp-accent-dim: #1E2337;
 }
@@ -41,12 +44,18 @@ body {
 }
 
 :root {
-    /* Base colors (shared across all themes) */
-    --bg: #0D0F17;
-    --surface: #161925;
-    --border: #252838;
-    --text: #E8EAF0;
-    --text-muted: #8891A8;
+    /* Base colors */
+    --bg:        #0D0F17;
+    --surface:   #161925;
+    --surface2:  #1E2231;
+    --border:    #252838;
+    --text:      #E8EAF0;
+    --text-muted:#8891A8;
+    --text-dim:  #404669;
+
+    /* Fonts */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
 
     /* Status colors */
     --color-success: #10b981;
@@ -64,11 +73,11 @@ body {
     --theme-gradient-from: #8B5CF6;
     --theme-gradient-to: #A78BFA;
 
-    /* Legacy compatibility - map to theme variables */
+    /* Legacy compatibility */
     --accent: var(--theme-primary);
     --accent-dim: var(--theme-accent-dim);
 
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    font-family: var(--font-sans);
 }
 
 /* Theme: Blue/Purple (default) */
@@ -105,8 +114,9 @@ body {
     background: var(--bg);
     color: var(--text);
     height: 100dvh;
-    font-size: 17px;
-    line-height: 1.6;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* Global scrollbar styling */
@@ -172,8 +182,8 @@ body {
     color: var(--text);
 }
 .titlebar-btn-close:hover {
-    background: #c42b1c;
-    color: #fff;
+    background: var(--theme-accent-dim);
+    color: var(--theme-primary);
 }
 
 /* Dashboard masonry columns */
@@ -193,7 +203,19 @@ body {
     width: 100%;
 }
 
-/* Header logo styling */
+/* ── Utility: mono uppercase section labels ───────────────────────────────── */
+.section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 10px;
+}
+
+/* Header logo styling
 .header-logo {
     display: flex;
     align-items: center;

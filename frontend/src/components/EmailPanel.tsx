@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Mail, MailOpen, Star, Search, X, Pencil, ChevronDown, CheckSquare, Archive, Trash2, ShieldAlert } from "lucide-react";
+
+/** Strip "The email / This email" opener from AI triage notes. */
+function cleanTriageNote(note: string | undefined, maxLen = 90): string | undefined {
+    if (!note) return undefined;
+    let clean = note.replace(/^(the email|this email)\s*/i, "").trim();
+    clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+    return clean.length > maxLen ? clean.slice(0, maxLen - 1) + "…" : clean;
+}
 import { getInbox, fetchInbox, fetchFolder, getFolders, searchEmails, getEmail, setEmailFlag, setEmailRead, archiveEmail, trashEmail, junkEmail, getTriageStatus, type EmailMeta, type EmailFull, type TriageStatus, type EmailFolder } from "../api";
 import { EmailDetail } from "./EmailDetail";
 import { ComposeModal } from "./ComposeModal";
@@ -125,20 +133,21 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                 : (!em.read ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.07)");
 
     const bgColor = selected
-        ? "color-mix(in srgb, var(--accent) 14%, transparent)"
+        ? "color-mix(in srgb, var(--accent) 14%, var(--surface))"
         : active
-            ? "color-mix(in srgb, var(--theme-primary) 10%, transparent)"
-            : urgencyAccent && !em.read
-                ? `color-mix(in srgb, ${urgencyAccent} 8%, transparent)`
-                : "transparent";
+            ? "color-mix(in srgb, var(--theme-primary) 10%, var(--surface))"
+            : "var(--surface)";
 
     return (
         <div
             className="flex items-start"
             style={{
-                borderLeft: `2px solid ${leftBorderColor}`,
-                borderRadius: "0 6px 6px 0",
+                border: "1px solid var(--border)",
+                borderLeft: `3px solid ${leftBorderColor}`,
+                borderRadius: "0 8px 8px 0",
                 background: bgColor,
+                marginBottom: 4,
+                transition: "background 0.12s",
             }}
             onContextMenu={e => onContextMenu(e, em)}
         >
@@ -163,10 +172,10 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                     }}>
                         {em.subject || "(no subject)"}
                     </p>
-                    {/* Triage note */}
-                    {em.triage_note ? (
-                        <p className="text-[11px] truncate" style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}>
-                            {em.triage_note}
+                    {/* Triage note — cleaned of "The email / This email" prefix */}
+                    {cleanTriageNote(em.triage_note) ? (
+                        <p className="text-[11px] truncate" style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}>
+                            {cleanTriageNote(em.triage_note)}
                         </p>
                     ) : !em.triaged ? (
                         <p className="text-[11px] italic triage-label" style={{ color: 'var(--color-text-muted)' }}>
@@ -626,40 +635,37 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
             <div className={`flex flex-1 overflow-hidden ${mobileDetail ? "hidden md:flex" : "flex"}`}>
                 {/* Left pane: inbox list */}
                 <div className="flex flex-col w-full md:w-72 lg:w-80 shrink-0 border-r border-shrimp-border overflow-hidden">
-                    {/* Header */}
+                    {/* Header — simplified */}
                     <div className="flex flex-col border-b border-shrimp-border shrink-0">
-                        <div className="flex items-center justify-between px-4 py-3">
-                            <div className="flex items-center gap-2">
-                                <Mail size={14} style={{ color: 'var(--accent)' }} />
-                                <span className="font-semibold text-sm">Email</span>
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                            <span className="font-semibold text-sm flex-1">
+                                {activeFolder}
                                 {!searchResults && folders.find(f => f.display_name === activeFolder)?.role === "inbox" && unreadCount > 0 && (
-                                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                                        {unreadCount} unread
+                                    <span className="font-normal text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
+                                        {unreadCount}
                                     </span>
                                 )}
                                 {searchResults && (
-                                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                                    <span className="font-normal text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
                                         {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
                                     </span>
                                 )}
-                            </div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                                <button
-                                    onClick={() => { setComposeInitial({}); setComposing(true); }}
-                                    className="icon-btn"
-                                    title="Compose new email"
-                                >
-                                    <Pencil size={13} />
-                                </button>
-                                <button
-                                    onClick={handleFetch}
-                                    disabled={fetching}
-                                    className="icon-btn"
-                                    title="Fetch new emails"
-                                >
-                                    <RefreshCw size={13} className={fetching ? "animate-spin" : ""} />
-                                </button>
-                            </div>
+                            </span>
+                            <button
+                                onClick={() => { setComposeInitial({}); setComposing(true); }}
+                                className="btn-ghost"
+                                title="Compose"
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button
+                                onClick={handleFetch}
+                                disabled={fetching}
+                                className="btn-ghost"
+                                title="Fetch new emails"
+                            >
+                                <RefreshCw size={14} className={fetching ? "animate-spin" : ""} />
+                            </button>
                         </div>
                         {/* Folder tabs — Inbox + grouped dropdowns */}
                         {(() => {
@@ -830,7 +836,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                     )}
 
                     {/* List */}
-                    <div className="flex-1 overflow-y-auto p-2">
+                    <div className="flex-1 overflow-y-auto" style={{ padding: "6px 8px" }}>
                         {(loading || searching) ? (
                             <p className="text-sm p-3" style={{ color: 'var(--color-text-muted)' }}>
                                 {searching ? "Searching…" : "Loading…"}
@@ -852,7 +858,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                                 )}
                             </div>
                         ) : (
-                            <div className="flex flex-col gap-1">
+                            <div>
                                 {displayedEmails.map((em, index) => (
                                     <EmailRow
                                         key={em.id}

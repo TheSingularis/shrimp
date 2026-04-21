@@ -24,155 +24,175 @@ function sourceIcon(source: string) {
     }
 }
 
-function priorityColor(priority: string) {
+function accentColor(priority: string) {
     switch (priority) {
         case "high": return "var(--color-error, #ef4444)";
         case "low": return "var(--color-text-muted)";
-        default: return "var(--accent)";
+        default: return "var(--theme-primary)";
     }
 }
 
-
-function NotifCard({ n, onDismiss, onDelete, onNavigate }: {
+function NotifRow({ n, onDismiss, onDelete, onNavigate }: {
     n: Notification;
     onDismiss: (id: string) => void;
     onDelete: (id: string) => void;
     onNavigate?: (panel: string) => void;
 }) {
+    const accent = accentColor(n.priority);
+
+    function handleClick() {
+        if (onNavigate && n.actions.length > 0) {
+            const route = n.actions[0].route;
+            if (route.startsWith("/")) {
+                onNavigate(route.split("/")[1] || "dashboard");
+            }
+        }
+        onDismiss(n.id);
+    }
+
     return (
         <div
-            className={`relative flex flex-col gap-1 px-3 py-2.5 rounded-lg border transition-colors ${
-                n.read
-                    ? "border-shrimp-border bg-shrimp-bg/40 opacity-60"
-                    : "border-shrimp-border bg-shrimp-surface"
-            }`}
+            onClick={handleClick}
+            style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                border: "1px solid var(--border)",
+                borderLeft: `3px solid ${accent}`,
+                borderRadius: "0 8px 8px 0",
+                padding: "10px 14px",
+                background: n.read ? "transparent" : "var(--surface)",
+                marginBottom: 6,
+                width: "100%",
+                opacity: n.read ? 0.5 : 1,
+                cursor: n.actions.length > 0 ? "pointer" : "default",
+                transition: "background 0.12s",
+            }}
         >
-            <div className="flex items-start gap-2">
-                <span style={{ color: priorityColor(n.priority), marginTop: 2 }}>
-                    {sourceIcon(n.source)}
-                </span>
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium leading-snug truncate">{n.title}</p>
-                    <p className="text-xs text-shrimp-muted mt-0.5">{n.body}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                    {!n.read && (
-                        <button
-                            onClick={() => onDismiss(n.id)}
-                            className="btn-ghost"
-                            title="Mark read"
-                            style={{ color: 'var(--color-text-muted)' }}
-                        >
-                            <Check size={12} />
-                        </button>
-                    )}
-                    <button
-                        onClick={() => onDelete(n.id)}
-                        className="btn-ghost"
-                        title="Delete"
-                        style={{ color: 'var(--color-text-muted)' }}
-                    >
-                        <X size={12} />
-                    </button>
-                </div>
-            </div>
-
-            {n.actions.length > 0 && (
-                <div className="flex gap-1.5 flex-wrap mt-1 ml-5">
-                    {n.actions.map((a, i) => (
-                        <button
-                            key={i}
-                            className="btn-secondary"
-                            onClick={() => {
-                                if (onNavigate && a.route.startsWith("/")) {
-                                    const panel = a.route.split("/")[1] || "dashboard";
-                                    onNavigate(panel);
-                                }
-                            }}
-                        >
-                            {a.label}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            <span className="text-[10px] ml-5" style={{ color: 'var(--color-text-muted)' }}>
-                {relativeTime(n.created_at)}
+            <span style={{ color: accent, marginTop: 2, flexShrink: 0 }}>
+                {sourceIcon(n.source)}
             </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text)", marginBottom: 2 }}>{n.title}</p>
+                <p style={{ fontSize: 12, color: "var(--color-text-muted)" }}>{n.body}</p>
+                <span style={{ fontSize: 11, color: "var(--color-text-muted)", display: "block", marginTop: 4 }}>
+                    {relativeTime(n.created_at)}
+                </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                {!n.read && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDismiss(n.id); }}
+                        className="btn-ghost"
+                        title="Mark read"
+                    >
+                        <Check size={12} />
+                    </button>
+                )}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(n.id); }}
+                    className="btn-ghost"
+                    title="Delete"
+                >
+                    <X size={12} />
+                </button>
+            </div>
         </div>
     );
 }
 
-export function NotificationFeed({ open, onClose, onNavigate, notifications, unreadCount, connected, onDismiss, onDelete, topOffset = 0 }: Props) {
+export function NotificationFeed({ open, onClose, onNavigate, notifications, unreadCount, connected, onDismiss, onDelete }: Props) {
     if (!open) return null;
 
+    const urgent = notifications.filter(n => n.priority === "high");
+    const today = notifications.filter(n => n.priority !== "high");
+
+    function markAllRead() {
+        notifications.filter(n => !n.read).forEach(n => onDismiss(n.id));
+    }
+
     const unread = notifications.filter(n => !n.read);
-    const read = notifications.filter(n => n.read);
 
     return (
-        <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 z-40"
-                style={{ top: topOffset }}
-                onClick={onClose}
-            />
-
-            {/* Drawer */}
-            <div className="fixed right-0 bottom-0 z-50 w-80 max-w-[90vw] flex flex-col bg-shrimp-surface border-l border-shrimp-border shadow-xl" style={{ top: topOffset }}>
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-shrimp-border shrink-0">
-                    <div className="flex items-center gap-2">
-                        <Bell size={16} style={{ color: 'var(--accent)' }} />
-                        <span className="font-semibold text-sm">Notifications</span>
-                        {unreadCount > 0 && (
-                            <span
-                                className="text-xs rounded-full px-1.5 py-0.5 font-bold"
-                                style={{ background: 'var(--accent)', color: '#fff' }}
-                            >
-                                {unreadCount}
-                            </span>
-                        )}
-                        {!connected && (
-                            <AlertCircle size={12} style={{ color: 'var(--color-error, #ef4444)' }} title="Disconnected" />
-                        )}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="btn-ghost"
-                        style={{ color: 'var(--color-text-muted)' }}
-                    >
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 24px",
+                borderBottom: "1px solid var(--border)",
+                flexShrink: 0,
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Bell size={16} style={{ color: "var(--theme-primary)" }} />
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>Notifications</span>
+                    {unreadCount > 0 && (
+                        <span style={{
+                            fontSize: 11, fontWeight: 700,
+                            background: "var(--theme-primary)", color: "#fff",
+                            borderRadius: 999, padding: "1px 7px",
+                        }}>
+                            {unreadCount}
+                        </span>
+                    )}
+                    {!connected && (
+                        <span title="Disconnected"><AlertCircle size={12} style={{ color: "var(--color-error, #ef4444)" }} /></span>
+                    )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                    {unread.length > 0 && (
+                        <button className="btn-secondary" onClick={markAllRead}>
+                            Mark all read
+                        </button>
+                    )}
+                    <button className="btn-ghost" onClick={onClose} title="Close">
                         <X size={16} />
                     </button>
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
-                    {notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-32 gap-2">
-                            <Bell size={24} style={{ color: 'var(--color-text-muted)' }} />
-                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No notifications yet</p>
-                        </div>
-                    ) : (
-                        <>
-                            {unread.map(n => (
-                                <NotifCard key={n.id} n={n} onDismiss={onDismiss} onDelete={onDelete} onNavigate={onNavigate} />
-                            ))}
-                            {unread.length > 0 && read.length > 0 && (
-                                <div className="flex items-center gap-2 py-1">
-                                    <div className="flex-1 border-t border-shrimp-border" />
-                                    <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Read</span>
-                                    <div className="flex-1 border-t border-shrimp-border" />
-                                </div>
-                            )}
-                            {read.map(n => (
-                                <NotifCard key={n.id} n={n} onDismiss={onDismiss} onDelete={onDelete} onNavigate={onNavigate} />
-                            ))}
-                        </>
-                    )}
-                </div>
             </div>
-        </>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+                {notifications.length === 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 12 }}>
+                        <Bell size={32} style={{ color: "var(--color-text-muted)" }} />
+                        <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>All clear</p>
+                    </div>
+                ) : (
+                    <div style={{ maxWidth: 680, margin: "0 auto" }}>
+                        {urgent.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                                <p style={{
+                                    fontSize: 10, fontWeight: 600, letterSpacing: "0.12em",
+                                    textTransform: "uppercase", color: "var(--color-text-muted)",
+                                    fontFamily: "var(--font-mono, monospace)", marginBottom: 10,
+                                }}>
+                                    Urgent
+                                </p>
+                                {urgent.map(n => (
+                                    <NotifRow key={n.id} n={n} onDismiss={onDismiss} onDelete={onDelete} onNavigate={onNavigate} />
+                                ))}
+                            </div>
+                        )}
+                        {today.length > 0 && (
+                            <div>
+                                <p style={{
+                                    fontSize: 10, fontWeight: 600, letterSpacing: "0.12em",
+                                    textTransform: "uppercase", color: "var(--color-text-muted)",
+                                    fontFamily: "var(--font-mono, monospace)", marginBottom: 10,
+                                }}>
+                                    Today
+                                </p>
+                                {today.map(n => (
+                                    <NotifRow key={n.id} n={n} onDismiss={onDismiss} onDelete={onDelete} onNavigate={onNavigate} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
 
