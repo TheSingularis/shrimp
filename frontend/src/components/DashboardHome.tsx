@@ -41,17 +41,16 @@ function AutomationRow({ automation, onTrigger }: { automation: Automation; onTr
     const borderColor = automation.last_result === "error"
         ? "var(--color-error, #ef4444)"
         : automation.last_result === "ok"
-        ? "rgba(255,255,255,0.07)"
+        ? "var(--color-success, #10b981)"
         : "rgba(255,255,255,0.07)";
 
     return (
         <div
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 dashboard-item"
             style={{
                 borderLeft: `2px solid ${borderColor}`,
-                borderRadius: "0 6px 6px 0",
                 padding: "10px 14px",
-                background: "rgba(255,255,255,0.02)",
+                background: "var(--surface)",
             }}
         >
             <div className="flex-1 min-w-0">
@@ -59,14 +58,14 @@ function AutomationRow({ automation, onTrigger }: { automation: Automation; onTr
                 <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
                     {automation.description || automation.cron || "Manual"}
                 </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: 0.4 }}>
+                    {formatLastRun(automation.last_run)}
+                </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
                 {automation.last_result === "ok" && <CheckCircle size={14} style={{ color: 'var(--color-success, #22c55e)' }} />}
                 {automation.last_result === "error" && <XCircle size={14} style={{ color: 'var(--color-error, #ef4444)' }} />}
                 {!automation.last_result && <Clock size={14} style={{ color: 'var(--color-text-muted)' }} />}
-                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {formatLastRun(automation.last_run)}
-                </span>
                 <button
                     onClick={handleTrigger}
                     disabled={triggering || !automation.enabled}
@@ -225,12 +224,10 @@ function EmailSection({ onNavigate, onTriggerDigest }: {
                             <button
                                 key={email.id}
                                 onClick={() => onNavigate("email", email.id)}
-                                className="btn-row w-full flex items-start gap-3 hover:bg-white/[0.03] cursor-pointer"
+                                className="btn-row w-full flex items-start gap-3 hover:bg-white/[0.03] cursor-pointer dashboard-item"
                                 style={{
                                     borderLeft: `2px solid ${leftBorderColor}`,
-                                    borderRadius: "0 6px 6px 0",
                                     padding: "12px 14px",
-                                    background: "rgba(255,255,255,0.02)",
                                 }}
                             >
                                 <div className="flex-1 min-w-0">
@@ -329,11 +326,9 @@ function FlaggedSection({ onNavigate }: { onNavigate: (panel: Panel, emailId?: s
                         return (
                             <div
                                 key={email.id}
-                                className="flex items-start"
+                                className="flex items-start dashboard-item flagged-email"
                                 style={{
                                     borderLeft: `2px solid ${leftBorderColor}`,
-                                    borderRadius: "0 6px 6px 0",
-                                    background: "rgba(255,255,255,0.02)",
                                 }}
                             >
                                 <button
@@ -452,12 +447,10 @@ export function DashboardHome({ onNavigate }: Props) {
                                     <button
                                         key={c.conversation_id}
                                         onClick={() => onNavigate("chat", undefined, c.conversation_id)}
-                                        className="btn-row w-full flex items-center gap-3"
+                                        className="btn-row w-full flex items-center gap-3 dashboard-item"
                                         style={{
-                                            borderLeft: "2px solid rgba(255,255,255,0.07)",
-                                            borderRadius: "0 6px 6px 0",
+                                            borderLeft: "2px solid var(--theme-primary)",
                                             padding: "10px 14px",
-                                            background: "rgba(255,255,255,0.02)",
                                         }}
                                     >
                                         <MessageSquare size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />

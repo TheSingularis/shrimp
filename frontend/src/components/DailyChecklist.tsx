@@ -268,7 +268,7 @@ function ChecklistItemRow({
     const borderColor = (() => {
         if (item.priority === "urgent") return "#ef4444";
         if (item.priority === "high") return "#f97316";
-        return "rgba(255,255,255,0.07)";
+        return "var(--theme-primary)";
     })();
 
     let displayText = item.text;
@@ -278,11 +278,9 @@ function ChecklistItemRow({
 
     return (
         <div
-            className="flex items-stretch"
+            className="flex items-stretch dashboard-item"
             style={{
                 borderLeft: `2px solid ${borderColor}`,
-                borderRadius: "0 6px 6px 0",
-                background: "rgba(255,255,255,0.02)",
                 opacity: item.completed ? 0.55 : 1,
             }}
             onMouseEnter={() => setHovering(true)}
@@ -349,7 +347,7 @@ function ChecklistItemRow({
             <button
                 onClick={onDelete}
                 className="btn-ghost shrink-0 self-center"
-                style={{ padding: "4px 10px", color: "var(--color-text-muted)", opacity: hovering ? 1 : 0, transition: "opacity 0.1s" }}
+                style={{ padding: "8px 8px", color: "var(--color-text-muted)", opacity: hovering ? 1 : 0, transition: "opacity 0.1s" }}
                 title="Delete"
             >
                 <X size={12} />

@@ -17,6 +17,7 @@
   --color-border: #252838;
   --color-text: #E8EAF0;
   --color-text-muted: #8891A8;
+  --color-text-faint: #5A6270;
 
   /* Legacy shrimp- prefix (for compatibility) */
   --color-shrimp-bg: #0D0F17;
@@ -26,6 +27,7 @@
   --color-shrimp-text-muted: #8891A8;
   --color-shrimp-accent: #5B7FFF;
   --color-shrimp-accent-dim: #1E2337;
+
 }
 
 *,
@@ -235,7 +237,7 @@ textarea:focus {
 }
 
 button {
-    background: var(--accent-dim);
+    /* background: var(--accent-dim); */
     border: 1px solid var(--accent);
     border-radius: 6px;
     color: var(--accent);
@@ -480,7 +482,7 @@ button.btn-bare:hover:not(:disabled) {
 
 /* Reset for buttons used as plain list/row items in panels */
 button.btn-row {
-    background: transparent;
+    /* background: transparent; */
     border: none;
     border-radius: 0;
     color: inherit;
@@ -489,10 +491,10 @@ button.btn-row {
     font-size: inherit;
     line-height: inherit;
     text-align: left;
-    transition: background 0.15s, color 0.15s;
+    /* transition: background 0.15s, color 0.15s; */
 }
 
-button.btn-row:hover:not(:disabled) {
+/* button.btn-row:hover:not(:disabled) {
     background: color-mix(in srgb, var(--theme-primary) 8%, transparent);
     color: var(--theme-primary);
 }
@@ -500,7 +502,7 @@ button.btn-row:hover:not(:disabled) {
 button:hover:not(:disabled) {
     background: var(--accent);
     color: #fff;
-}
+} */
 
 button:disabled {
     opacity: 0.4;
@@ -930,4 +932,22 @@ button:disabled {
     height: 100%;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
     animation: shimmer-slide 1.4s ease-in-out infinite;
+}
+
+/* Checklist item row — static borders and radius, dynamic border-left, background, opacity */
+.dashboard-item {
+    border-top: 1px solid var(--border) !important;
+    border-right: 1px solid var(--border) !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 0 6px 6px 0 !important;
+
+    background: var(--surface);
+}
+
+.dashboard-item:hover {
+    background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.flagged-email:hover {
+    background: color-mix(in srgb, var(--color-warning) 5%, var(--surface)) !important;
 }
