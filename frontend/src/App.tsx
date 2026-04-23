@@ -325,7 +325,7 @@ export default function App() {
         { panel: "dashboard", icon: <LayoutDashboard size={18} />, label: "Home" },
         { panel: "chat",      icon: <MessageSquare size={18} />,   label: "Chat" },
         { panel: "email",     icon: <Mail size={18} />,            label: "Email" },
-        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Automations" },
+        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Tasks" },
     ];
 
     const isElectron = !!(window as any).__shrimp__?.isElectron;
