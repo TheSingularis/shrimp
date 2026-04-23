@@ -358,7 +358,7 @@ export default function App() {
                 className="flex flex-1 bg-shrimp-bg text-shrimp-text antialiased overflow-hidden"
             >
             {/* ── Left nav rail ── */}
-            <nav className="flex flex-col items-center gap-1 px-1.5 py-3 border-r border-shrimp-border bg-shrimp-surface/60 shrink-0 w-14 sm:w-16">
+            <nav className="flex flex-col items-center gap-1 px-0 py-3 border-r border-shrimp-border bg-shrimp-surface shrink-0 w-12 sm:w-14">
                 <div className="mb-2">
                     <img src="./icons/shrimp(1).png" alt="SHRIMP" className="w-7 h-7" />
                 </div>
