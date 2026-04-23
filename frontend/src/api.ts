@@ -810,6 +810,7 @@ export async function triggerAutomation(name: string): Promise<void> {
     if (!res.ok) throw new Error(`Failed to trigger automation: ${name}`);
 }
 
+//TODO: persist cron changes, last_result, and last_run
 export async function updateAutomation(name: string, updates: { enabled?: boolean; cron?: string }): Promise<Automation> {
     const res = await fetch(`${BASE}/automations/${encodeURIComponent(name)}`, {
         method: "PUT",
