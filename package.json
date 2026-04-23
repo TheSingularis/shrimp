@@ -49,11 +49,16 @@
       {
         "from": "backend/.venv",
         "to": "backend/.venv",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "frontend/public/icons/shrimp(1).png",
       "category": "Utility"
     },

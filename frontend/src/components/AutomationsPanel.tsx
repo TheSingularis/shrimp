@@ -3,6 +3,8 @@ import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import { listAutomations, triggerAutomation, updateAutomation, type Automation } from "../api";
 import { formatDate as formatDateShort } from "../utils/email";
 
+import cronstrue from "cronstrue"
+
 function formatLastRun(iso: string | null) {
     if (!iso) return "Never";
     return formatDateShort(iso);
@@ -112,7 +114,7 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                                 : <Clock size={11} />
                     }
                     <span>{formatLastRun(automation.last_run)}</span>
-                    {automation.cron && <span style={{ color: "var(--text-dim)" }}>· {automation.cron}</span>}
+                    {automation.cron && <span style={{ color: "var(--text-dim)" }}>{cronstrue.toString(automation.cron)}</span>}
                 </div>
             </div>
 
