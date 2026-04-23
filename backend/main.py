@@ -1,3 +1,5 @@
+import checklist
+import email_smtp
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -73,6 +75,7 @@ class ApplyEditRequest(BaseModel):
     scope: str
     path: str
     content: str
+
 
 class CtxUpdate(BaseModel):
     num_ctx: int
@@ -222,7 +225,8 @@ async def startup():
     from automations.email_triage import run as email_triage_run
     from automations.daily_digest import run as daily_digest_run
     poll_mins = config.EMAIL_CONFIG.get("poll_interval_minutes", 15)
-    _cron, _en = _auto_cfg("email_triage", f"*/{poll_mins} * * * *", config.EMAIL_CONFIG.get("enabled", False))
+    _cron, _en = _auto_cfg(
+        "email_triage", f"*/{poll_mins} * * * *", config.EMAIL_CONFIG.get("enabled", False))
     scheduler.register_automation(
         "email_triage", email_triage_run, cron=_cron,
         description="Polling fallback: fetch new emails and triage each one", enabled=_en,
@@ -234,7 +238,8 @@ async def startup():
     )
     from automations.news_digest import run as news_digest_run
     from automations.obsidian_maintenance import run as obsidian_maintenance_run
-    _cron, _en = _auto_cfg("news_digest", "0 9 * * *", bool(getattr(config, "RSS_FEEDS", [])))
+    _cron, _en = _auto_cfg("news_digest", "0 9 * * *",
+                           bool(getattr(config, "RSS_FEEDS", [])))
     scheduler.register_automation(
         "news_digest", news_digest_run, cron=_cron,
         description="Fetch RSS feeds and add new articles to checklist", enabled=_en,
@@ -257,7 +262,8 @@ async def startup():
     email_idle.start()
 
     # Backfill semantic embeddings for any cached emails missing them
-    threading.Thread(target=email_client.embed_all_emails, daemon=True, name="email-embed-backfill").start()
+    threading.Thread(target=email_client.embed_all_emails,
+                     daemon=True, name="email-embed-backfill").start()
 
     log.info("Startup complete - structural maps and index status ready")
 
@@ -302,7 +308,8 @@ async def debug_find(filename: str, scope: str):
 async def debug_prompt(req: ChatRequest):
     """Debug endpoint to see the system prompt and augmented message without calling the model."""
     enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
-    active = [s for s in enabled if s["name"] in req.scopes] if req.scopes else enabled
+    active = [s for s in enabled if s["name"]
+              in req.scopes] if req.scopes else enabled
 
     if not active:
         return {"error": "No active scopes selected"}
@@ -354,13 +361,16 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
     Feature flag: config.USE_TOOL_CALLING must be True
     """
     enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
-    active = [s for s in enabled if s["name"] in req.scopes] if req.scopes else enabled
+    active = [s for s in enabled if s["name"]
+              in req.scopes] if req.scopes else enabled
 
     if not active:
-        raise HTTPException(status_code=400, detail="No active scopes selected")
+        raise HTTPException(
+            status_code=400, detail="No active scopes selected")
 
     scope_names = [s["name"] for s in active]
-    log.info("chat_with_tools: scopes=%s  message=%r", scope_names, req.message[:80])
+    log.info("chat_with_tools: scopes=%s  message=%r",
+             scope_names, req.message[:80])
 
     # Build system prompt
     scope_names_str = ", ".join(f"'{s}'" for s in scope_names)
@@ -448,7 +458,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
             conv = Conversation.load(req.conversation_id)
             if conv.project_id:
                 project_data = Project.load_all()
-                project = next((p for p in project_data["projects"] if p["project_id"] == conv.project_id), None)
+                project = next(
+                    (p for p in project_data["projects"] if p["project_id"] == conv.project_id), None)
                 if project and project["settings"].get("custom_instructions", "").strip():
                     system_prompt += f"\n\n## Project Instructions\n{project['settings']['custom_instructions']}"
         except Exception as e:
@@ -490,7 +501,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                 yield "\n\n[Timeout: operation took too long]"
                 break
 
-            log.info(f"chat_with_tools: iteration {iteration}/{max_iterations}")
+            log.info(
+                f"chat_with_tools: iteration {iteration}/{max_iterations}")
 
             try:
                 # Call Ollama with tools
@@ -507,7 +519,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     )
 
                     if resp.status_code != 200:
-                        log.error(f"chat_with_tools: Ollama error {resp.status_code}: {resp.text}")
+                        log.error(
+                            f"chat_with_tools: Ollama error {resp.status_code}: {resp.text}")
                         yield f"\n\n[Error: Ollama returned {resp.status_code}]"
                         break
 
@@ -526,7 +539,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         json_pattern = r'\{"name":\s*"([^"]+)",\s*"parameters":\s*(\{[^\}]*\})\}'
                         matches = re.findall(json_pattern, content, re.DOTALL)
                         if matches:
-                            log.info(f"chat_with_tools: parsing {len(matches)} tool calls from content")
+                            log.info(
+                                f"chat_with_tools: parsing {len(matches)} tool calls from content")
                             tool_calls = []
                             for tool_name, params_str in matches:
                                 try:
@@ -540,9 +554,11 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                                             "arguments": params
                                         }
                                     })
-                                    log.info(f"chat_with_tools: parsed tool call - {tool_name}({params})")
+                                    log.info(
+                                        f"chat_with_tools: parsed tool call - {tool_name}({params})")
                                 except json.JSONDecodeError as e:
-                                    log.warning(f"Failed to parse tool call parameters: {params_str} - {e}")
+                                    log.warning(
+                                        f"Failed to parse tool call parameters: {params_str} - {e}")
 
                             # Don't stream content that's just tool call JSON
                             if tool_calls:
@@ -600,7 +616,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
 
                         # Skip if we've already executed this exact tool call
                         if tool_key in executed_tools:
-                            log.info(f"chat_with_tools: skipping duplicate {tool_name} ({idx+1}/{len(tool_calls)})")
+                            log.info(
+                                f"chat_with_tools: skipping duplicate {tool_name} ({idx+1}/{len(tool_calls)})")
                             # Still append a success message so the LLM knows we handled it
                             messages.append({
                                 "role": "tool",
@@ -608,7 +625,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                             })
                             continue
 
-                        log.info(f"chat_with_tools: executing {tool_name} ({idx+1}/{len(tool_calls)})")
+                        log.info(
+                            f"chat_with_tools: executing {tool_name} ({idx+1}/{len(tool_calls)})")
                         executed_tools.add(tool_key)
 
                         # Extract detail for this specific tool call
@@ -639,7 +657,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         try:
                             result = executor.execute(tool_name, arguments)
                         except Exception as e:
-                            log.exception(f"chat_with_tools: tool execution failed")
+                            log.exception(
+                                f"chat_with_tools: tool execution failed")
                             result = f"Error: {str(e)}"
 
                         # Append tool result to messages
@@ -659,7 +678,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                         stage_history.append(tool_marker)
                         marker_sentinel = json.dumps(tool_marker)
                         yield f"__STAGE_MARKER__{marker_sentinel}"
-                        log.info(f"chat_with_tools: emitted incremental marker for {tool_name}: {detail}")
+                        log.info(
+                            f"chat_with_tools: emitted incremental marker for {tool_name}: {detail}")
 
             except Exception as e:
                 log.exception("chat_with_tools: iteration failed")
@@ -705,7 +725,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     }
                 )
                 yield f"\n\n__SHRIMP_EDIT__{sentinel}"
-                log.info(f"chat_with_tools: emitted single edit sentinel for {edit['scope']}/{edit['path']}")
+                log.info(
+                    f"chat_with_tools: emitted single edit sentinel for {edit['scope']}/{edit['path']}")
 
             else:
                 # Multi-file edit - use async I/O to prevent blocking
@@ -738,7 +759,8 @@ async def chat_with_tools(req: ChatRequest, request: Request) -> StreamingRespon
                     {"type": "multi_file_edit", "files": file_diffs}
                 )
                 yield f"\n\n__SHRIMP_MULTI_EDIT__{sentinel}"
-                log.info(f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
+                log.info(
+                    f"chat_with_tools: emitted multi-edit sentinel for {len(edits)} files")
 
         yield "__STAGE__done"
         log.info(f"chat_with_tools: completed in {iteration} iterations")
@@ -845,7 +867,8 @@ async def chat(req: ChatRequest, request: Request):
             intent = parsed.get("intent", "question")
             # Validate intent value
             if intent not in ["general", "question", "single_file_edit", "multi_file_edit", "unclear"]:
-                log.warning("chat: invalid intent '%s', defaulting to unclear", intent)
+                log.warning(
+                    "chat: invalid intent '%s', defaulting to unclear", intent)
                 intent = "unclear"
             log.info("chat: intent detection — intent=%s", intent)
     except Exception as e:
@@ -1081,7 +1104,8 @@ async def chat(req: ChatRequest, request: Request):
                         chunks.append(f"# {path}\n{content}")
                         log.info("chat: loaded file for context: %s", path)
                     except Exception as e:
-                        log.warning("chat: could not read file %s: %s", path, e)
+                        log.warning(
+                            "chat: could not read file %s: %s", path, e)
                 if len(chunks) > 1:  # Has content beyond the header
                     context_chunks.append("\n\n".join(chunks))
     else:
@@ -1221,7 +1245,8 @@ async def chat(req: ChatRequest, request: Request):
 
     # ── step 3a.5: multi-file edit path ───────────────────────────────────────
     elif intent == "multi_file_edit" and full_file_contents:
-        log.info("chat: multi-file edit mode — processing %d files", len(full_file_contents))
+        log.info("chat: multi-file edit mode — processing %d files",
+                 len(full_file_contents))
 
         # Build list of files with their scopes
         file_list = []
@@ -1248,7 +1273,8 @@ async def chat(req: ChatRequest, request: Request):
 
         # Limit to 5 files maximum
         if len(file_list) > 5:
-            log.warning("chat: multi-file edit requested %d files, limiting to 5", len(file_list))
+            log.warning(
+                "chat: multi-file edit requested %d files, limiting to 5", len(file_list))
             file_list = file_list[:5]
 
         edit_system_prompt = (
@@ -1286,7 +1312,8 @@ async def chat(req: ChatRequest, request: Request):
 
                 # ── Step 1: Generate initial edit ─────────────────────────────
                 yield f"__STAGE__editing_{idx}_of_{total_files}"
-                log.info("chat: generating initial edit for %s (%d/%d)", file_path, idx, total_files)
+                log.info("chat: generating initial edit for %s (%d/%d)",
+                         file_path, idx, total_files)
 
                 edit_user_prompt = (
                     f"File: {file_path}\n\n"
@@ -1316,7 +1343,8 @@ async def chat(req: ChatRequest, request: Request):
                     ) as resp:
                         async for line in resp.aiter_lines():
                             if await request.is_disconnected():
-                                log.info("chat: client disconnected during multi-file edit")
+                                log.info(
+                                    "chat: client disconnected during multi-file edit")
                                 return
                             if line:
                                 data = json.loads(line)
@@ -1326,7 +1354,8 @@ async def chat(req: ChatRequest, request: Request):
                                     break
 
                 initial_edit = "".join(initial_edit_parts).strip()
-                log.info("chat: generated initial edit (%d chars) for %s", len(initial_edit), file_path)
+                log.info("chat: generated initial edit (%d chars) for %s", len(
+                    initial_edit), file_path)
 
                 # ── Step 2: Critique the edit ─────────────────────────────────
                 yield f"__STAGE__reviewing_{idx}_of_{total_files}"
@@ -1340,7 +1369,8 @@ async def chat(req: ChatRequest, request: Request):
 
                 if size_ratio < 0.6 and original_size > 500:  # Significant shrinkage on non-trivial file
                     size_issue_detected = True
-                    removed_lines = working.count('\n') - initial_edit.count('\n')
+                    removed_lines = working.count(
+                        '\n') - initial_edit.count('\n')
                     log.warning("chat: size check flagged %s — removed %d%% of content (%d→%d chars, ~%d lines)",
                                 file_path, int((1 - size_ratio) * 100), original_size, new_size, removed_lines)
 
@@ -1378,21 +1408,27 @@ async def chat(req: ChatRequest, request: Request):
                         # Add size warning to issues if detected
                         if size_issue_detected:
                             has_issues = True
-                            issues.insert(0, f"The edit removes {int((1-size_ratio)*100)}% of the original content — verify this is intentional")
-                            suggestions.insert(0, "Preserve all important content unless explicitly asked to remove it")
+                            issues.insert(
+                                0, f"The edit removes {int((1-size_ratio)*100)}% of the original content — verify this is intentional")
+                            suggestions.insert(
+                                0, "Preserve all important content unless explicitly asked to remove it")
 
                         log.info("chat: critique for %s — has_issues=%s, issues=%s",
                                  file_path, has_issues, issues)
                     except Exception as e:
-                        log.warning("chat: critique parsing failed for %s: %s", file_path, e)
+                        log.warning(
+                            "chat: critique parsing failed for %s: %s", file_path, e)
                         has_issues = size_issue_detected  # At least flag the size issue
-                        issues = [f"The edit removes {int((1-size_ratio)*100)}% of content"] if size_issue_detected else []
-                        suggestions = ["Preserve all important content unless explicitly asked to remove it"] if size_issue_detected else []
+                        issues = [
+                            f"The edit removes {int((1-size_ratio)*100)}% of content"] if size_issue_detected else []
+                        suggestions = [
+                            "Preserve all important content unless explicitly asked to remove it"] if size_issue_detected else []
 
                 # ── Step 3: Refine based on critique ──────────────────────────
                 if has_issues and suggestions:
                     yield f"__STAGE__refining_{idx}_of_{total_files}"
-                    log.info("chat: refining edit for %s based on critique", file_path)
+                    log.info(
+                        "chat: refining edit for %s based on critique", file_path)
 
                     refine_prompt = (
                         f"File: {file_path}\n\n"
@@ -1433,11 +1469,13 @@ async def chat(req: ChatRequest, request: Request):
                                         break
 
                     new_content = "".join(refined_parts).strip()
-                    log.info("chat: refined edit (%d chars) for %s", len(new_content), file_path)
+                    log.info("chat: refined edit (%d chars) for %s",
+                             len(new_content), file_path)
                 else:
                     # No issues found, use initial edit
                     new_content = initial_edit
-                    log.info("chat: no issues found, using initial edit for %s", file_path)
+                    log.info(
+                        "chat: no issues found, using initial edit for %s", file_path)
 
                 file_diffs.append({
                     "scope": file_info["scope"],
@@ -1506,12 +1544,15 @@ async def chat(req: ChatRequest, request: Request):
     # Inject active scope descriptions
     scope_descriptions = []
     for scope_name in req.scopes:
-        scope = next((s for s in config.WATCHED_DIRS if s["name"] == scope_name), None)
+        scope = next(
+            (s for s in config.WATCHED_DIRS if s["name"] == scope_name), None)
         if scope and scope.get("description"):
-            scope_descriptions.append(f"**{scope_name}**: {scope['description']}")
+            scope_descriptions.append(
+                f"**{scope_name}**: {scope['description']}")
 
     if scope_descriptions:
-        system_prompt += "\n\n## Active Scope Context\n" + "\n".join(scope_descriptions)
+        system_prompt += "\n\n## Active Scope Context\n" + \
+            "\n".join(scope_descriptions)
 
     # Inject global custom instructions
     if config.CUSTOM_INSTRUCTIONS.strip():
@@ -1603,7 +1644,8 @@ async def generate_scope_description(name: str):
     """Generate a description for a scope using LLM based on structural map."""
     scope = next((s for s in config.WATCHED_DIRS if s["name"] == name), None)
     if not scope:
-        raise HTTPException(status_code=404, detail=f"Scope '{name}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Scope '{name}' not found")
 
     # Get structural map
     files = rag.structural_maps.get(name, [])
@@ -1618,7 +1660,8 @@ async def generate_scope_description(name: str):
         )
 
     # Create a summary of the structure
-    file_summary = "\n".join([f"- {f['path']}" for f in files[:50]])  # First 50 files
+    file_summary = "\n".join(
+        [f"- {f['path']}" for f in files[:50]])  # First 50 files
     if len(files) > 50:
         file_summary += f"\n... and {len(files) - 50} more files"
 
@@ -1793,7 +1836,8 @@ async def delete_project(project_id: str):
         convs = conversations.Conversation.list_all()
         for conv in convs:
             if conv.get("project_id") == project_id:
-                full_conv = conversations.Conversation.load(conv["conversation_id"])
+                full_conv = conversations.Conversation.load(
+                    conv["conversation_id"])
                 full_conv.project_id = None
                 full_conv.save()
 
@@ -1826,7 +1870,8 @@ async def get_models():
         # Filter out embedding models (they're not for chat)
         chat_models = [
             m["name"] for m in data.get("models", [])
-            if "embed" not in m["name"].lower()  # Exclude nomic-embed-text, etc.
+            # Exclude nomic-embed-text, etc.
+            if "embed" not in m["name"].lower()
         ]
         return {
             "models": chat_models,
@@ -1905,7 +1950,8 @@ async def delete_model(model: str):
             if resp.status_code == 200:
                 data = resp.json()
                 available = [m["name"] for m in data.get("models", [])
-                           if not m["name"].startswith("nomic-embed")]  # Exclude embed models
+                             # Exclude embed models
+                             if not m["name"].startswith("nomic-embed")]
                 if available:
                     new_model = available[0]
                     config.OLLAMA_MODEL = new_model
@@ -1913,7 +1959,8 @@ async def delete_model(model: str):
                         model=new_model, request_timeout=120.0
                     )
                     write_config(config.WATCHED_DIRS, config.OLLAMA_MODEL)
-                    log.info(f"Active model was deleted, switched to: {new_model}")
+                    log.info(
+                        f"Active model was deleted, switched to: {new_model}")
 
     return {"ok": True}
 
@@ -1951,7 +1998,8 @@ async def index_one(name: str):
     log.info("index_one: %s", name)
     decoded_name = unquote(name)
     log.info("index_one_decoded: %s", decoded_name)
-    scope = next((s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
+    scope = next(
+        (s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
     if not scope:
         raise HTTPException(
             status_code=404, detail=f"Scope '{decoded_name}' not found")
@@ -1967,7 +2015,8 @@ async def index_stream(name: str):
     log.info("index_stream: %s", name)
     decoded_name = unquote(name)
     log.info("index_stream_decoded: %s", decoded_name)
-    scope = next((s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
+    scope = next(
+        (s for s in config.WATCHED_DIRS if s["name"] == decoded_name), None)
     if not scope:
         raise HTTPException(
             status_code=404, detail=f"Scope '{decoded_name}' not found")
@@ -1977,7 +2026,8 @@ async def index_stream(name: str):
     def callback(current: int, total: int, filename: str):
         progress = {"current": current, "total": total,
                     "file": filename, "done": False}
-        log.info("[%s] Progress: %d/%d - %s", decoded_name, current, total, filename)
+        log.info("[%s] Progress: %d/%d - %s",
+                 decoded_name, current, total, filename)
         q.put(progress)
 
     def run_index():
@@ -2052,9 +2102,11 @@ async def apply_edit(req: ApplyEditRequest):
 
 # ── routes: ctx ────────────────────────────────────────────────
 
+
 @app.get("/settings/ctx")
 async def get_ctx():
     return {"num_ctx": config.NUM_CTX}
+
 
 @app.post("/settings/ctx")
 async def set_ctx_setting(update: CtxUpdate):
@@ -2064,7 +2116,8 @@ async def set_ctx_setting(update: CtxUpdate):
     current = config_path.read_text()
     import re as _re
     if _re.search(r"NUM_CTX: int = \d+", current):
-        current = _re.sub(r"NUM_CTX: int = \d+", f"NUM_CTX: int = {update.num_ctx}", current)
+        current = _re.sub(r"NUM_CTX: int = \d+",
+                          f"NUM_CTX: int = {update.num_ctx}", current)
         config_path.write_text(current)
         log.info("settings: NUM_CTX set to %d", update.num_ctx)
         return {"num_ctx": config.NUM_CTX}
@@ -2083,7 +2136,8 @@ async def set_custom_instructions(update: CustomInstructionsUpdate):
     current = config_path.read_text()
     import re as _re
     # Escape special regex characters in the value for safe replacement
-    escaped_value = update.custom_instructions.replace("\\", "\\\\").replace('"', '\\"')
+    escaped_value = update.custom_instructions.replace(
+        "\\", "\\\\").replace('"', '\\"')
     if _re.search(r'CUSTOM_INSTRUCTIONS: str = ".*?"', current, _re.DOTALL):
         current = _re.sub(
             r'CUSTOM_INSTRUCTIONS: str = ".*?"',
@@ -2132,7 +2186,8 @@ async def set_theme(update: ThemeUpdate):
     # Validate theme value
     valid_themes = ["blue-purple", "shrimp", "refined-blue"]
     if update.theme not in valid_themes:
-        raise HTTPException(status_code=400, detail=f"Invalid theme. Must be one of: {valid_themes}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid theme. Must be one of: {valid_themes}")
 
     config.UI_THEME = update.theme
     # persist to config.py
@@ -2219,7 +2274,8 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
     else:
         # Validate external URL
         if not req.external_url:
-            raise HTTPException(400, "External URL required when mode is 'external'")
+            raise HTTPException(
+                400, "External URL required when mode is 'external'")
 
         # Normalize URL - accept with or without http:// prefix
         url = req.external_url.strip()
@@ -2229,11 +2285,13 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
             url = f"http://{url}"
 
         # Extract host:port for validation
-        url_without_protocol = url.replace("http://", "").replace("https://", "")
+        url_without_protocol = url.replace(
+            "http://", "").replace("https://", "")
 
         # Validate format: host:port
         if not _re.match(r'^[a-zA-Z0-9.-]+:\d+$', url_without_protocol):
-            raise HTTPException(400, "Invalid URL format. Expected host:port (e.g., 192.168.1.100:11434)")
+            raise HTTPException(
+                400, "Invalid URL format. Expected host:port (e.g., 192.168.1.100:11434)")
 
         # Test connection before saving
         test_url = f"{url}/api/tags"
@@ -2241,7 +2299,8 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(test_url)
                 if response.status_code != 200:
-                    raise HTTPException(400, f"Cannot connect to Ollama at {url}")
+                    raise HTTPException(
+                        400, f"Cannot connect to Ollama at {url}")
         except httpx.TimeoutException:
             raise HTTPException(400, f"Connection timeout to Ollama at {url}")
         except httpx.ConnectError:
@@ -2292,7 +2351,8 @@ async def set_rss_feeds(update: RssFeedsUpdate):
     import re as _re
     new_val = json.dumps(update.feeds)
     if _re.search(r"RSS_FEEDS: list\[dict\] = \[.*?\]", current, _re.DOTALL):
-        current = _re.sub(r"RSS_FEEDS: list\[dict\] = \[.*?\]", f"RSS_FEEDS: list[dict] = {new_val}", current, flags=_re.DOTALL)
+        current = _re.sub(r"RSS_FEEDS: list\[dict\] = \[.*?\]",
+                          f"RSS_FEEDS: list[dict] = {new_val}", current, flags=_re.DOTALL)
     else:
         current += f"\nRSS_FEEDS: list[dict] = {new_val}\n"
     config_path.write_text(current)
@@ -2319,9 +2379,11 @@ async def set_news_interests(update: NewsInterestsUpdate):
     safe = update.interests.replace('"""', '\\"\\"\\"')
     replacement = f'NEWS_INTERESTS: str = """{safe}"""'
     if _re.search(r'NEWS_INTERESTS: str = """.*?"""', current, _re.DOTALL):
-        current = _re.sub(r'NEWS_INTERESTS: str = """.*?"""', replacement, current, flags=_re.DOTALL)
+        current = _re.sub(r'NEWS_INTERESTS: str = """.*?"""',
+                          replacement, current, flags=_re.DOTALL)
     elif _re.search(r'NEWS_INTERESTS: str = ".*?"', current, _re.DOTALL):
-        current = _re.sub(r'NEWS_INTERESTS: str = ".*?"', replacement, current, flags=_re.DOTALL)
+        current = _re.sub(r'NEWS_INTERESTS: str = ".*?"',
+                          replacement, current, flags=_re.DOTALL)
     else:
         current += f'\n{replacement}\n'
     config_path.write_text(current)
@@ -2401,31 +2463,52 @@ async def list_automations():
 async def run_automation(automation_name: str):
     triggered = scheduler.trigger_automation(automation_name)
     if not triggered:
-        raise HTTPException(status_code=404, detail=f"Automation '{automation_name}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Automation '{automation_name}' not found")
     return {"status": "triggered", "automation": automation_name}
 
 
 def _persist_automation_config(name: str, **updates: object) -> None:
     """Save automation overrides to config.AUTOMATION_CONFIG and write config.py."""
     import re as _re
-    cfg: dict = dict(getattr(config, "AUTOMATION_CONFIG", {}))
-    cfg.setdefault(name, {}).update(updates)
-    config.AUTOMATION_CONFIG = cfg
+    import ast
+
     config_path = Path(__file__).parent / "config.py"
     current = config_path.read_text()
-    new_val = json.dumps(cfg)
-    if _re.search(r"AUTOMATION_CONFIG: dict = \{.*?\}", current, _re.DOTALL):
-        current = _re.sub(r"AUTOMATION_CONFIG: dict = \{.*?\}", f"AUTOMATION_CONFIG: dict = {new_val}", current, flags=_re.DOTALL)
+
+    # Parse the current AUTOMATION_CONFIG from the file using a greedy match for nested dicts
+    match = _re.search(
+        r"AUTOMATION_CONFIG: dict = (\{.*\})\s*(?=\n[A-Z_]|\Z)", current, _re.DOTALL)
+    if match:
+        try:
+            cfg = ast.literal_eval(match.group(1))
+        except (ValueError, SyntaxError):
+            cfg = {}
     else:
-        current += f"\nAUTOMATION_CONFIG: dict = {new_val}\n"
+        cfg = {}
+
+    # Upsert the specific automation entry
+    cfg.setdefault(name, {}).update(updates)
+    config.AUTOMATION_CONFIG = cfg
+
+    # Write back the updated config
+    new_block = f"AUTOMATION_CONFIG: dict = {repr(cfg)}"
+    current = _re.sub(
+        r"AUTOMATION_CONFIG: dict = \{.*\}(?=\s*\n[A-Z_]|\s*\Z)",
+        new_block,
+        current,
+        flags=_re.DOTALL,
+    )
     config_path.write_text(current)
+    log.info("AUTOMATION_CONFIG written")
 
 
 @app.put("/automations/{automation_name}")
 async def update_automation(automation_name: str, req: AutomationUpdateRequest):
     automation = scheduler.get_automation(automation_name)
     if automation is None:
-        raise HTTPException(status_code=404, detail=f"Automation '{automation_name}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Automation '{automation_name}' not found")
     if req.enabled is not None:
         scheduler.set_automation_enabled(automation_name, req.enabled)
         _persist_automation_config(automation_name, enabled=req.enabled)
@@ -2436,8 +2519,6 @@ async def update_automation(automation_name: str, req: AutomationUpdateRequest):
 
 
 # ── routes: email ───────────────────────────────────────────────────────────────
-
-import email_smtp
 
 
 class EmailConfigRequest(BaseModel):
@@ -2641,7 +2722,8 @@ async def refresh_email_body(email_id: str):
     loop = asyncio.get_event_loop()
     updated = await loop.run_in_executor(None, email_client.refresh_email_body, email_id)
     if updated is None:
-        raise HTTPException(status_code=404, detail="Email not found or IMAP not configured")
+        raise HTTPException(
+            status_code=404, detail="Email not found or IMAP not configured")
     return updated
 
 
@@ -2835,7 +2917,8 @@ async def search_obsidian(req: ObsidianSearchRequest):
 
 # ── routes: digest ────────────────────────────────────────────────────────────
 
-_DIGEST_FILE = Path(__file__).parent.parent / "notifications" / "digest_latest.json"
+_DIGEST_FILE = Path(__file__).parent.parent / \
+    "notifications" / "digest_latest.json"
 
 
 @app.get("/digest/latest")
@@ -2849,8 +2932,6 @@ async def get_latest_digest():
 
 
 # ── routes: checklist ──────────────────────────────────────────────────────────
-
-import checklist
 
 
 class ChecklistItemCreate(BaseModel):
@@ -2982,7 +3063,8 @@ async def triage_checklist():
     # Parse JSON from response (may be wrapped in markdown code fences)
     match = _re.search(r"\[.*\]", raw, _re.DOTALL)
     if not match:
-        log.warning("Checklist triage: could not parse LLM response: %s", raw[:200])
+        log.warning(
+            "Checklist triage: could not parse LLM response: %s", raw[:200])
         return {"triaged": 0, "error": "Could not parse response"}
 
     try:
@@ -2997,7 +3079,8 @@ async def triage_checklist():
         priority = entry.get("priority", "normal")
         if priority not in valid_priorities:
             priority = "normal"
-        updated = checklist.update_item(item_id, priority=priority, triage_done=True)
+        updated = checklist.update_item(
+            item_id, priority=priority, triage_done=True)
         if updated:
             triaged += 1
 
@@ -3019,8 +3102,10 @@ _DIST_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 if _DIST_DIR.exists():
     # Serve static assets (JS, CSS, icons, etc.)
-    app.mount("/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets")
-    app.mount("/icons", StaticFiles(directory=str(_DIST_DIR / "icons")), name="icons")
+    app.mount(
+        "/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets")
+    app.mount(
+        "/icons", StaticFiles(directory=str(_DIST_DIR / "icons")), name="icons")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
