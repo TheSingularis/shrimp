@@ -480,7 +480,7 @@ export function DashboardHome({ onNavigate }: Props) {
                                 Automations
                             </h3>
                             <div className="flex flex-col gap-1.5">
-                                {automations.map(automation => (
+                                {automations.filter(a => a.enabled).map(automation => (
                                     <AutomationRow key={automation.name} automation={automation} onTrigger={handleTrigger} />
                                 ))}
                             </div>
