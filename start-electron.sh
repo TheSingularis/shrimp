@@ -10,16 +10,16 @@ info()  { echo -e "${G}[shrimp]${N} $*"; }
 warn()  { echo -e "${Y}[shrimp]${N} $*"; }
 error() { echo -e "${R}[shrimp]${N} $*"; }
 
-# ── bootstrap: create distrobox if not inside one ─────────────────────────────
-if [ ! -f /run/.containerenv ] && [ -z "$DISTROBOX_ENTER_PATH" ]; then
-  if ! distrobox list 2>/dev/null | grep -q "$DISTROBOX_NAME"; then
-    info "Creating distrobox '$DISTROBOX_NAME'..."
-    distrobox create --name "$DISTROBOX_NAME" --image archlinux:latest --yes
-    info "Distrobox created. First run may take a moment to initialize."
-  fi
-  info "Entering distrobox '$DISTROBOX_NAME'..."
-  exec distrobox enter "$DISTROBOX_NAME" -- bash "$SHRIMP_DIR/start-electron.sh"
-fi
+# # ── bootstrap: create distrobox if not inside one ─────────────────────────────
+# if [ ! -f /run/.containerenv ] && [ -z "$DISTROBOX_ENTER_PATH" ]; then
+#   if ! distrobox list 2>/dev/null | grep -q "$DISTROBOX_NAME"; then
+#     info "Creating distrobox '$DISTROBOX_NAME'..."
+#     distrobox create --name "$DISTROBOX_NAME" --image archlinux:latest --yes
+#     info "Distrobox created. First run may take a moment to initialize."
+#   fi
+#   info "Entering distrobox '$DISTROBOX_NAME'..."
+#   exec distrobox enter "$DISTROBOX_NAME" -- bash "$SHRIMP_DIR/start-electron.sh"
+# fi
 
 # ── 1. system deps (idempotent) ───────────────────────────────────────────────
 info "Checking system dependencies..."
@@ -136,6 +136,9 @@ info "Starting Electron..."
 GTK_MODULES= DISPLAY=:0 npx electron "$SHRIMP_DIR" --no-sandbox &> "$SHRIMP_DIR/.ollama/electron.log" &
 ELECTRON_PID=$!
 
+# Give Electron time to spawn the window
+sleep 1
+
 # ── 11. cleanup on exit ───────────────────────────────────────────────────────
 cleanup() {
   echo ""
@@ -147,7 +150,6 @@ cleanup() {
   # Also kill any stragglers by port
   fuser -k 8000/tcp 2>/dev/null || true
   fuser -k 11434/tcp 2>/dev/null || true
-  wait 2>/dev/null
   info "Stopped."
 }
 trap cleanup EXIT INT TERM

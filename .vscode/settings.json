@@ -1,21 +1,21 @@
 {
-    "actionButtons": {
-        "reloadButton": "↻",
-        "commands": [
-            {
-                "name": "$(play) Run SHRIMP webui",
-                "color": "orange",
-                "command": "bash start.sh",
-                "singleInstance": true
-            },
-            {
-                "name": "$(window) Run SHRIMP electron",
-                "color": "#8B5CF6",
-                "command": "bash start-electron.sh",
-                "singleInstance": true
-            }
-        ]
-    },
+    // "actionButtons": {
+    //     "reloadButton": "↻",
+    //     "commands": [
+    //         {
+    //             "name": "$(play) Run SHRIMP webui",
+    //             "color": "orange",
+    //             "command": "bash start.sh",
+    //             "singleInstance": true
+    //         },
+    //         {
+    //             "name": "$(window) Run SHRIMP electron",
+    //             "color": "#8B5CF6",
+    //             "command": "bash start-electron.sh",
+    //             "singleInstance": true
+    //         }
+    //     ]
+    // },
     "python.REPL.enableREPLSmartSend": false,
     "python.terminal.activateEnvironment": false,
     "python.terminal.activateEnvInCurrentTerminal": false
