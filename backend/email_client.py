@@ -173,6 +173,30 @@ def _extract_body(msg: email_lib.message.Message) -> tuple[str, str]:
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
 
+_SYNC_STATE_FILE = _CACHE_DIR / "sync_state.json"
+_sync_state_lock = threading.Lock()
+
+
+def _load_sync_state() -> dict:
+    with _sync_state_lock:
+        try:
+            if _SYNC_STATE_FILE.exists():
+                return json.loads(_SYNC_STATE_FILE.read_text())
+        except Exception:
+            pass
+        return {}
+
+
+def _save_sync_state(state: dict) -> None:
+    with _sync_state_lock:
+        _SYNC_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def get_sync_state() -> dict:
+    """Public accessor for the sync state (last_synced per folder, etc.)."""
+    return _load_sync_state()
+
+
 def _email_path(email_id: str) -> Path:
     return _CACHE_DIR / f"{email_id}.json"
 
@@ -817,6 +841,288 @@ def junk_email(email_id: str) -> tuple[bool, str]:
     folders = _discover_special_folders()
     imap_folder = folders.get("junk") or cfg.get("junk_folder", "Junk")
     return move_email(email_id, imap_folder)
+
+
+# ── Sync helpers ──────────────────────────────────────────────────────────────
+
+def _clear_folder_cache(canonical_folder: str) -> int:
+    """Remove all cached emails for a folder. Used on UIDVALIDITY change."""
+    norm = canonical_folder.upper()
+    removed = 0
+    for p in _CACHE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            if (data.get("folder") or "INBOX").upper() == norm:
+                p.unlink()
+                removed += 1
+        except Exception:
+            pass
+    log.info("_clear_folder_cache: removed %d email(s) from %s", removed, canonical_folder)
+    return removed
+
+
+def get_cached_uids_for_folder(imap_mailbox: str) -> dict[str, str]:
+    """Return {imap_uid: email_id} for all cached emails in a given IMAP mailbox."""
+    result: dict[str, str] = {}
+    for p in _CACHE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            if data.get("imap_mailbox") == imap_mailbox and data.get("imap_uid"):
+                result[str(data["imap_uid"])] = data["id"]
+        except Exception:
+            pass
+    return result
+
+
+def incremental_fetch(
+    conn: imaplib.IMAP4 | imaplib.IMAP4_SSL,
+    imap_mailbox: str,
+    canonical_folder: str,
+    cfg: dict,
+    *,
+    mark_read: bool = False,
+    skip_triage: bool = False,
+) -> list[dict]:
+    """
+    Fetch only emails with UIDs greater than the last known UID for this mailbox.
+    Updates sync state on success. Returns list of newly-cached email metadata dicts.
+    If UIDVALIDITY changed, clears the folder cache and re-fetches from scratch.
+
+    Must be called under _fetch_lock to prevent duplicate caching from concurrent callers.
+    """
+    status, select_data = conn.select(_imap_name(imap_mailbox))
+    if status != "OK":
+        raise imaplib.IMAP4.error(f"SELECT '{imap_mailbox}' failed")
+
+    # Parse UIDVALIDITY from SELECT response untagged lines
+    uidvalidity: str | None = None
+    for item in select_data or []:
+        if not item:
+            continue
+        s = item.decode(errors="replace") if isinstance(item, bytes) else str(item)
+        m = re.search(r'\[UIDVALIDITY (\d+)\]', s)
+        if m:
+            uidvalidity = m.group(1)
+            break
+
+    state = _load_sync_state()
+    folder_state = state.get(imap_mailbox, {})
+    stored_uidvalidity = folder_state.get("uidvalidity")
+    highest_uid: int = int(folder_state.get("highest_uid", 0))
+
+    # UIDVALIDITY mismatch → the mailbox was recreated; wipe local cache and full-resync
+    if uidvalidity and stored_uidvalidity and uidvalidity != stored_uidvalidity:
+        log.warning(
+            "UIDVALIDITY changed for %s (%s → %s) — clearing cache and resyncing",
+            imap_mailbox, stored_uidvalidity, uidvalidity,
+        )
+        _clear_folder_cache(canonical_folder)
+        highest_uid = 0
+
+    # Search only for UIDs we haven't seen yet
+    if highest_uid:
+        _, uid_data = conn.uid("search", None, f"UID {highest_uid + 1}:*")
+    else:
+        # First-time sync: fetch last fetch_max messages
+        _, uid_data = conn.uid("search", None, "ALL")
+
+    if not uid_data or not uid_data[0]:
+        _update_sync_state(state, imap_mailbox, uidvalidity, highest_uid)
+        return []
+
+    all_uids = uid_data[0].split()
+    # Filter to only UIDs strictly above our highest known
+    new_uids = [u for u in all_uids if int(u) > highest_uid]
+
+    if not highest_uid:
+        # First-time sync: cap to fetch_max, take most recent
+        limit = cfg.get("fetch_max", 50)
+        new_uids = new_uids[-limit:]
+
+    if not new_uids:
+        _update_sync_state(state, imap_mailbox, uidvalidity, highest_uid)
+        return []
+
+    # Build dedup set from existing cache
+    existing_message_ids: set[str] = {
+        json.loads(p.read_text()).get("message_id", "")
+        for p in _CACHE_DIR.glob("*.json")
+        if p.stat().st_size > 0
+    }
+
+    fetched: list[dict] = []
+    new_highest = highest_uid
+
+    for num in reversed(new_uids):  # process oldest→newest so highest_uid tracks correctly
+        try:
+            uid_int = int(num)
+            _, msg_data = conn.uid("fetch", num, "(FLAGS BODY[])")
+            raw_tuple = next((item for item in msg_data if isinstance(item, tuple)), None)
+            if raw_tuple is None:
+                continue
+
+            # raw_tuple[0] = FETCH header (UID, FLAGS); raw_tuple[1] = raw message bytes
+            fetch_header = raw_tuple[0].decode(errors="replace") if isinstance(raw_tuple[0], bytes) else str(raw_tuple[0])
+            raw_msg = raw_tuple[1]
+
+            is_read = "\\Seen" in fetch_header
+            is_flagged = "\\Flagged" in fetch_header
+
+            msg = email_lib.message_from_bytes(raw_msg)
+            message_id = _decode_header(msg.get("Message-ID", "")).strip()
+            if message_id in existing_message_ids:
+                new_highest = max(new_highest, uid_int)
+                continue
+
+            date_str = msg.get("Date", "")
+            try:
+                dt = parsedate_to_datetime(date_str)
+                date_iso = dt.astimezone(timezone.utc).isoformat()
+            except Exception:
+                date_iso = datetime.now(timezone.utc).isoformat()
+
+            body_plain, body_html = _extract_body(msg)
+            email_id = str(uuid.uuid4())
+            record: dict = {
+                "id": email_id,
+                "message_id": message_id,
+                "imap_uid": str(uid_int),
+                "imap_mailbox": imap_mailbox,
+                "from": _decode_header(msg.get("From", "")),
+                "to": _decode_header(msg.get("To", "")),
+                "subject": _decode_header(msg.get("Subject", "(no subject)")),
+                "date": date_iso,
+                "body": body_plain[:20000],
+                "html_body": body_html[:500000],
+                "read": is_read or mark_read,
+                "triaged": skip_triage,
+                "flagged": is_flagged,
+                "folder": canonical_folder,
+                "triage_result": None,
+                "triage_actions": [],
+                "attachments": _extract_attachments(msg, email_id),
+            }
+            _save_email(record)
+            existing_message_ids.add(message_id)
+            new_highest = max(new_highest, uid_int)
+
+            vec = _get_embedding(_build_embed_text(record))
+            if vec:
+                record["embedding"] = vec
+                _save_email(record)
+
+            fetched.append({k: record.get(k) for k in _EMAIL_META_KEYS})
+            log.info("Synced [%s] uid=%s: %s — %s", canonical_folder, uid_int,
+                     record["from"][:30], record["subject"][:40])
+
+        except Exception:
+            log.exception("incremental_fetch: failed on uid %s in %s", num, imap_mailbox)
+
+    _update_sync_state(state, imap_mailbox, uidvalidity, new_highest)
+    return fetched
+
+
+def _update_sync_state(state: dict, imap_mailbox: str, uidvalidity: str | None, highest_uid: int) -> None:
+    folder_state = state.get(imap_mailbox, {})
+    if uidvalidity:
+        folder_state["uidvalidity"] = uidvalidity
+    if highest_uid:
+        folder_state["highest_uid"] = highest_uid
+    folder_state["last_synced"] = datetime.now(timezone.utc).isoformat()
+    state[imap_mailbox] = folder_state
+    _save_sync_state(state)
+
+
+def expunge_check(
+    conn: imaplib.IMAP4 | imaplib.IMAP4_SSL,
+    imap_mailbox: str,
+    canonical_folder: str,
+) -> int:
+    """
+    Detect emails deleted from the server (by another client) and remove them from local cache.
+    Returns count of removed entries.
+    """
+    try:
+        conn.select(_imap_name(imap_mailbox))
+        _, uid_data = conn.uid("search", None, "ALL")
+        server_uids: set[str] = set()
+        if uid_data and uid_data[0]:
+            server_uids = {
+                u.decode() if isinstance(u, bytes) else str(u)
+                for u in uid_data[0].split()
+            }
+
+        cached = get_cached_uids_for_folder(imap_mailbox)
+        removed = 0
+        for uid, email_id in cached.items():
+            if uid not in server_uids:
+                p = _email_path(email_id)
+                if p.exists():
+                    p.unlink()
+                    log.info("expunge_check: removed %s (uid=%s gone from %s)", email_id, uid, imap_mailbox)
+                    removed += 1
+        return removed
+    except Exception:
+        log.exception("expunge_check failed for %s", imap_mailbox)
+        return 0
+
+
+def flag_sync(
+    conn: imaplib.IMAP4 | imaplib.IMAP4_SSL,
+    imap_mailbox: str,
+    canonical_folder: str,
+) -> int:
+    """
+    Pull current \\Seen and \\Flagged flags from the server for all cached emails in this mailbox.
+    Updates local cache where flags differ (e.g. read on phone, flagged in another client).
+    Returns count of updated emails.
+    """
+    cached = get_cached_uids_for_folder(imap_mailbox)
+    if not cached:
+        return 0
+
+    try:
+        conn.select(_imap_name(imap_mailbox))
+        uid_list = ",".join(cached.keys())
+        _, flag_data = conn.uid("fetch", uid_list, "(FLAGS)")
+
+        server_flags: dict[str, tuple[bool, bool]] = {}  # uid → (read, flagged)
+        for item in flag_data or []:
+            if not isinstance(item, bytes):
+                continue
+            s = item.decode(errors="replace")
+            uid_m = re.search(r'UID (\d+)', s)
+            if not uid_m:
+                continue
+            uid = uid_m.group(1)
+            server_flags[uid] = ("\\Seen" in s, "\\Flagged" in s)
+
+        updated = 0
+        for uid, email_id in cached.items():
+            if uid not in server_flags:
+                continue
+            server_read, server_flagged = server_flags[uid]
+            data = load_email(email_id)
+            if data is None:
+                continue
+            changed = False
+            if data.get("read") != server_read:
+                data["read"] = server_read
+                changed = True
+            if data.get("flagged") != server_flagged:
+                data["flagged"] = server_flagged
+                changed = True
+            if changed:
+                _save_email(data)
+                updated += 1
+
+        if updated:
+            log.info("flag_sync [%s]: updated flags on %d email(s)", imap_mailbox, updated)
+        return updated
+
+    except Exception:
+        log.exception("flag_sync failed for %s", imap_mailbox)
+        return 0
 
 
 # ── IMAP fetch ────────────────────────────────────────────────────────────────

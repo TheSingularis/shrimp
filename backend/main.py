@@ -257,9 +257,9 @@ async def startup():
     )
     scheduler.start()
 
-    # Start IMAP IDLE listener for real-time email push
-    import email_idle
-    email_idle.start()
+    # Start IMAP sync engine (IDLE + periodic multi-folder sync)
+    import email_sync
+    email_sync.start()
 
     # Clean up any duplicate emails left by the previous race condition
     threading.Thread(target=email_client.deduplicate_cache, daemon=True, name="email-dedup").start()
@@ -273,8 +273,8 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    import email_idle
-    email_idle.stop()
+    import email_sync
+    email_sync.stop()
     scheduler.stop()
 
 
@@ -2718,6 +2718,11 @@ async def refresh_all_emails():
 @app.get("/email/triage/status")
 async def email_triage_status():
     return email_processor.get_triage_status()
+
+
+@app.get("/email/sync-state")
+async def email_sync_state():
+    return email_client.get_sync_state()
 
 
 @app.post("/email/{email_id}/refresh-body")

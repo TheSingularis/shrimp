@@ -249,7 +249,25 @@ function createWindow() {
     }
   });
 
-  // Packaged: load built frontend from disk; dev: connect to Vite dev server
+  // Forward all renderer console messages to the terminal
+  if (!app.isPackaged) {
+    const LEVEL = ["verbose", "info", "warn", "error"];
+    mainWindow.webContents.on("console-message", (_e, level, msg, line, src) => {
+      const tag = LEVEL[level] ?? "log";
+      const loc = src ? ` (${src.split("/").pop()}:${line})` : "";
+      console[tag === "verbose" ? "log" : tag](`[renderer:${tag}]${loc} ${msg}`);
+    });
+  }
+
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    console.error(`[electron] Failed to load ${url}: ${code} ${desc}`);
+  });
+
+  mainWindow.webContents.on("render-process-gone", (_e, { reason, exitCode }) => {
+    console.error(`[electron] Renderer process gone: ${reason} (exit ${exitCode})`);
+  });
+
+  // Packaged: load built frontend from disk; dev: load from backend HTTP server
   if (app.isPackaged) {
     mainWindow.loadFile(
       path.join(__dirname, "..", "frontend", "dist", "index.html"),

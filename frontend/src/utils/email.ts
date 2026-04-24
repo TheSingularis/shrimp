@@ -1,13 +1,15 @@
 /** Shared email display helpers used across EmailPanel, EmailDetail, DashboardHome. */
 
-export function senderName(from: string): string {
+export function senderName(from: string | null | undefined): string {
+    if (!from) return "";
     const m = from.match(/^([^<]+)</);
     if (m) return m[1].trim().replace(/^["']|["']$/g, "");
     return from.split("@")[0] || from;
 }
 
 /** Relative time: "5m ago", "3h ago", "2d ago" */
-export function relativeTime(iso: string): string {
+export function relativeTime(iso: string | null | undefined): string {
+    if (!iso) return "";
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "just now";
@@ -18,7 +20,8 @@ export function relativeTime(iso: string): string {
 }
 
 /** Today → time only; older → "Apr 15" style */
-export function formatDate(iso: string): string {
+export function formatDate(iso: string | null | undefined): string {
+    if (!iso) return "";
     const d = new Date(iso);
     const now = new Date();
     if (d.toDateString() === now.toDateString()) {
@@ -28,7 +31,8 @@ export function formatDate(iso: string): string {
 }
 
 /** Full datetime: "Thu, Apr 15, 2026, 09:15 AM" */
-export function formatDateFull(iso: string): string {
+export function formatDateFull(iso: string | null | undefined): string {
+    if (!iso) return "";
     return new Date(iso).toLocaleString(undefined, {
         weekday: "short", year: "numeric", month: "short",
         day: "numeric", hour: "2-digit", minute: "2-digit",

@@ -370,6 +370,14 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         }
     }, [initialEmailId, loading]);
 
+    // Auto-refresh the active folder every 30s to pick up background sync changes
+    useEffect(() => {
+        const id = setInterval(() => {
+            if (!loading && !fetching) refresh(activeFolderRef.current);
+        }, 30_000);
+        return () => clearInterval(id);
+    }, []);
+
     // Close context menu on scroll or click elsewhere
     useEffect(() => {
         if (!contextMenu) return;

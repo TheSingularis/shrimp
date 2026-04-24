@@ -2,24 +2,12 @@
 set -e
 
 SHRIMP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DISTROBOX_NAME="arch-dev"
 
 # ── colours ───────────────────────────────────────────────────────────────────
 G='\033[0;32m'; Y='\033[0;33m'; R='\033[0;31m'; N='\033[0m'
 info()  { echo -e "${G}[shrimp]${N} $*"; }
 warn()  { echo -e "${Y}[shrimp]${N} $*"; }
 error() { echo -e "${R}[shrimp]${N} $*"; }
-
-# # ── bootstrap: create distrobox if not inside one ─────────────────────────────
-# if [ ! -f /run/.containerenv ] && [ -z "$DISTROBOX_ENTER_PATH" ]; then
-#   if ! distrobox list 2>/dev/null | grep -q "$DISTROBOX_NAME"; then
-#     info "Creating distrobox '$DISTROBOX_NAME'..."
-#     distrobox create --name "$DISTROBOX_NAME" --image archlinux:latest --yes
-#     info "Distrobox created. First run may take a moment to initialize."
-#   fi
-#   info "Entering distrobox '$DISTROBOX_NAME'..."
-#   exec distrobox enter "$DISTROBOX_NAME" -- bash "$SHRIMP_DIR/start-electron.sh"
-# fi
 
 # ── 1. system deps (idempotent) ───────────────────────────────────────────────
 info "Checking system dependencies..."
@@ -55,7 +43,6 @@ if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
 fi
 
 # ── 4. python venv ────────────────────────────────────────────────────────────
-# Check if venv exists and is valid (symlinks work)
 if [ ! -d "$SHRIMP_DIR/backend/.venv" ] || [ ! -x "$SHRIMP_DIR/backend/.venv/bin/python" ]; then
   info "Creating Python venv..."
   rm -rf "$SHRIMP_DIR/backend/.venv"
@@ -81,7 +68,6 @@ if [ ! -d "$SHRIMP_DIR/frontend/node_modules" ]; then
   ( cd "$SHRIMP_DIR/frontend" && npm install )
 fi
 
-# Root node_modules for Electron
 if [ ! -d "$SHRIMP_DIR/node_modules" ]; then
   info "Installing Electron..."
   ( cd "$SHRIMP_DIR" && npm install )
@@ -125,37 +111,23 @@ info "Starting backend..."
     &> "$SHRIMP_DIR/.ollama/backend.log" ) &
 BACKEND_PID=$!
 
-# Wait for backend to be ready
+info "Waiting for backend..."
 for i in $(seq 1 30); do
   curl -sf http://127.0.0.1:8000/automations > /dev/null 2>&1 && break
   sleep 0.5
 done
 
-# ── 10. start electron ────────────────────────────────────────────────────────
-info "Starting Electron..."
-GTK_MODULES= DISPLAY=:0 npx electron "$SHRIMP_DIR" --no-sandbox &> "$SHRIMP_DIR/.ollama/electron.log" &
-ELECTRON_PID=$!
-
-# Give Electron time to spawn the window
-sleep 1
-
-# ── 11. cleanup on exit ───────────────────────────────────────────────────────
+# ── 10. launch electron ───────────────────────────────────────────────────────
 cleanup() {
   echo ""
   info "Shutting down..."
-  # Kill process groups to catch all children
-  kill $ELECTRON_PID 2>/dev/null
   kill $BACKEND_PID 2>/dev/null
   kill $OLLAMA_PID 2>/dev/null
-  # Also kill any stragglers by port
   fuser -k 8000/tcp 2>/dev/null || true
   fuser -k 11434/tcp 2>/dev/null || true
   info "Stopped."
 }
 trap cleanup EXIT INT TERM
 
-info "SHRIMP Electron running. Ctrl+C to stop."
-echo ""
-
-# Wait for Electron to exit
-wait $ELECTRON_PID 2>/dev/null
+info "Starting Electron..."
+"$SHRIMP_DIR/node_modules/.bin/electron" "$SHRIMP_DIR" --no-sandbox --disable-gpu
