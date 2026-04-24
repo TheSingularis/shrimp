@@ -9,7 +9,7 @@
   "main": "electron/main.js",
   "private": true,
   "scripts": {
-    "dev": "bash start.sh",
+    "web": "bash start.sh",
     "electron": "bash start-electron.sh",
     "build": "bash build.sh",
     "build:linux": "bash build.sh --linux",
