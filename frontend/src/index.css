@@ -963,3 +963,11 @@ button:disabled {
     border-color: color-mix(in srgb, var(--accent) 50%, var(--border)) !important;
     color: var(--accent) !important;
 }
+
+.email-item {
+    border-bottom: 1px solid var(--border);
+}
+
+.email-item > button {
+    padding: 12px 14px
+}

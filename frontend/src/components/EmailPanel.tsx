@@ -140,13 +140,10 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
 
     return (
         <div
-            className="flex items-start"
+            className="flex items-start email-item"
             style={{
-                border: "1px solid var(--border)",
                 borderLeft: `3px solid ${leftBorderColor}`,
-                borderRadius: "0 8px 8px 0",
                 background: bgColor,
-                marginBottom: 4,
                 transition: "background 0.12s",
             }}
             onContextMenu={e => onContextMenu(e, em)}
@@ -154,7 +151,6 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
             <button
                 onClick={onClick}
                 className="btn-row flex-1 min-w-0 flex items-start gap-3"
-                style={{ padding: "11px 10px 11px 14px" }}
             >
                 <div className="flex-1 min-w-0">
                     {/* Sender + time */}
@@ -166,13 +162,25 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                             {relativeTime(em.date)}
                         </span>
                     </div>
-                    {/* Subject */}
-                    <p className="text-xs truncate mb-0.5" style={{
-                        color: !em.read ? 'var(--color-text)' : 'var(--color-text-muted)'
-                    }}>
-                        {em.subject || "(no subject)"}
-                    </p>
+                    {/* Subject + priority badge on same row */}
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="text-xs truncate flex-1" style={{
+                            color: !em.read ? 'var(--color-text)' : 'var(--color-text-muted)'
+                        }}>
+                            {em.subject || "(no subject)"}
+                        </p>
+                        {/* Priority badge — only for urgent/high */}
+                        {urgencyAccent && urgencyCfg && (
+                            <span
+                                className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                                style={{ color: urgencyAccent, background: urgencyCfg.bg }}
+                            >
+                                {urgencyCfg.label}
+                            </span>
+                        )}
+                    </div>
                     {/* Triage note — cleaned of "The email / This email" prefix */}
+                    {/* TODO: fix the triage prompt to use the correct prefix, just trimming it is still messy, some messages start with  */}
                     {cleanTriageNote(em.triage_note) ? (
                         <p className="text-[11px] truncate" style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}>
                             {cleanTriageNote(em.triage_note)}
@@ -185,20 +193,10 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                         </p>
                     ) : null}
                 </div>
-
-                {/* Priority badge — only for urgent/high */}
-                {urgencyAccent && urgencyCfg && (
-                    <span
-                        className="shrink-0 self-start mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{ color: urgencyAccent, background: urgencyCfg.bg }}
-                    >
-                        {urgencyCfg.label}
-                    </span>
-                )}
             </button>
 
             {/* Flag/star button */}
-            <button
+            {/* <button
                 onClick={(e) => { e.stopPropagation(); onFlag(em.id, !em.flagged); }}
                 className="shrink-0 self-center p-2 rounded transition-colors hover:bg-shrimp-border/50"
                 title={em.flagged ? "Unflag" : "Flag"}
@@ -210,7 +208,7 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                 }}
             >
                 <Star size={13} fill={em.flagged ? "#f59e0b" : "none"} />
-            </button>
+            </button> */}
         </div>
     );
 }
@@ -844,7 +842,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                     )}
 
                     {/* List */}
-                    <div className="flex-1 overflow-y-auto" style={{ padding: "6px 8px" }}>
+                    <div className="flex-1 overflow-y-auto">
                         {(loading || searching) ? (
                             <p className="text-sm p-3" style={{ color: 'var(--color-text-muted)' }}>
                                 {searching ? "Searching…" : "Loading…"}
