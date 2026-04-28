@@ -953,3 +953,21 @@ button:disabled {
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
     animation: shimmer-slide 1.4s ease-in-out infinite;
 }
+
+.automation-toggle {
+    min-width: 4.5rem;
+}
+
+.automation-toggle.active {
+    background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border)) !important;
+    color: var(--accent) !important;
+}
+
+.email-item {
+    border-bottom: 1px solid var(--border);
+}
+
+.email-item > button {
+    padding: 12px 14px
+}

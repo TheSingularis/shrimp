@@ -132,9 +132,9 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                 <button
                     onClick={handleToggle}
                     disabled={toggling}
-                    className="btn-secondary"
+                    className={"btn-secondary automation-toggle" + (automation.enabled ? " active" : "")}
                 >
-                    {automation.enabled ? "Disable" : "Enable"}
+                    {automation.enabled ? "Enabled" : "Disabled"}
                 </button>
             </div>
         </div>

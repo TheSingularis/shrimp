@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Sparkles, X, FileText, Globe, AlertTriangle, ArrowUp, Minus, Copy, Star, RefreshCw, Reply, Forward, Archive, Trash2, ShieldAlert, Paperclip, Download, Eye } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { ArrowLeft, Sparkles, X, FileText, Globe, Copy, Star, RefreshCw, Reply, Forward, Archive, Trash2, ShieldAlert, Paperclip, Download, Eye } from "lucide-react";
 import DOMPurify from "dompurify";
 import { triageEmail, setEmailFlag, refreshEmailBody, archiveEmail, trashEmail, junkEmail, attachmentUrl, type EmailFull, type EmailAttachment } from "../api";
 import { formatDateFull } from "../utils/email";
@@ -167,9 +167,9 @@ function decodeEntities(text: string): string {
 function cleanPlainText(text: string): string {
     return decodeEntities(text)
         .replace(/[\u200b\u200c\u200d\ufeff\u00ad\u2028\u2029]/g, "")
-        .replace(/[ \t]{2,}/g, " ")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .trimEnd();
 }
 
 const URL_RE = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
@@ -254,7 +254,7 @@ function PlainTextBody({ text }: { text: string }) {
     );
 }
 
-// ── HTML email renderer (Shadow DOM + DOMPurify) ──────────────────────────────
+// ── HTML email renderer (sandboxed iframe) ────────────────────────────────────
 
 function looksLikeHtml(text: string): boolean {
     const sample = text.slice(0, 2000).toLowerCase().trimStart();
@@ -264,24 +264,92 @@ function looksLikeHtml(text: string): boolean {
     return tags.filter(t => sample.includes(t)).length >= 2;
 }
 
-/** Newsletters/marketing emails are "rich": they have a designed layout that should be shown as HTML. */
 function isRichHtml(html: string): boolean {
     const imgCount = (html.match(/<img\b/gi) ?? []).length;
     const tableCount = (html.match(/<table\b/gi) ?? []).length;
     return imgCount > 2 || tableCount >= 3;
 }
 
-/** Choose the default view mode for an email.
- *  Prefer plain for text exchanges; prefer HTML for designed newsletters/layouts. */
 function preferredView(e: Pick<EmailFull, "body" | "html_body">): "html" | "plain" {
     const bodyIsHtml = looksLikeHtml(e.body || "");
     const hasPlainBody = !!(e.body && !bodyIsHtml);
-    if (!hasPlainBody) {
-        return (e.html_body || bodyIsHtml) ? "html" : "plain";
-    }
-    // Has plain text: default to HTML only for rich designed layouts, plain otherwise
+    if (!hasPlainBody) return (e.html_body || bodyIsHtml) ? "html" : "plain";
     if (e.html_body && isRichHtml(e.html_body)) return "html";
     return "plain";
+}
+
+// Base CSS injected into every HTML email iframe — resets defaults and constrains width.
+const EMAIL_IFRAME_CSS = `
+  html, body {
+    margin: 0; padding: 16px 20px;
+    background: #ffffff; color: #1a1a1a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.6;
+    word-wrap: break-word; overflow-wrap: break-word;
+  }
+  img { max-width: 100% !important; height: auto !important; }
+  a { color: #0066cc; }
+  table { border-collapse: collapse; max-width: 100% !important; }
+  td, th { word-break: break-word; vertical-align: top; }
+  pre, code { white-space: pre-wrap; font-size: 13px; word-break: break-all; }
+  blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 0 4px 12px; color: #555; }
+  p { margin: 6px 0; }
+  center { width: 100% !important; }
+`;
+
+function HtmlEmailBody({ html }: { html: string }) {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+
+    // Sanitize + wrap in a full HTML document so the email renders in its own context.
+    // allow-same-origin lets us read scrollHeight and patch links after load.
+    // Scripts are blocked (no allow-scripts) — sandbox is the real security layer.
+    const srcdoc = useMemo(() => {
+        const clean = DOMPurify.sanitize(html, {
+            FORBID_TAGS: ["script", "noscript", "object", "embed", "form"],
+            ADD_ATTR: ["bgcolor", "border", "cellpadding", "cellspacing", "height",
+                       "target", "rel", "style"],
+        });
+        return `<!DOCTYPE html><html><head><meta charset="utf-8">` +
+               `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+               `<style>${EMAIL_IFRAME_CSS}</style></head><body>${clean}</body></html>`;
+    }, [html]);
+
+    function resize() {
+        const iframe = iframeRef.current;
+        if (!iframe?.contentDocument?.documentElement) return;
+        const h = iframe.contentDocument.documentElement.scrollHeight;
+        if (h > 0) iframe.style.height = `${h}px`;
+    }
+
+    function handleLoad() {
+        const doc = iframeRef.current?.contentDocument;
+        if (!doc) return;
+        // Patch links to open in new tab
+        doc.querySelectorAll<HTMLAnchorElement>("a[href]").forEach(a => {
+            if (!a.href.startsWith("mailto:")) {
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            }
+        });
+        resize();
+        // Re-resize once images load (they shift content height)
+        doc.querySelectorAll<HTMLImageElement>("img").forEach(img => {
+            if (!img.complete) img.addEventListener("load", resize, { once: true });
+        });
+    }
+
+    return (
+        <div className="h-full overflow-y-auto">
+            <iframe
+                ref={iframeRef}
+                srcDoc={srcdoc}
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                onLoad={handleLoad}
+                title="Email content"
+                style={{ width: "100%", height: "500px", border: "none", display: "block" }}
+            />
+        </div>
+    );
 }
 
 // ── Attachment bar ─────────────────────────────────────────────────────────────
@@ -378,62 +446,6 @@ function AttachmentBar({ emailId, attachments }: { emailId: string; attachments:
     );
 }
 
-// Injected into shadow root — targets raw elements, not html/body selectors
-function buildShadowCss(isDarkReader: boolean) {
-    // Dark Reader emails already have dark-mode colours injected.
-    // All other HTML emails render with their original light-mode colours.
-    // `color-scheme` activates any @media(prefers-color-scheme:dark) blocks the email author included.
-    const bg = isDarkReader ? "#0D0F17" : "#ffffff";
-    const link = isDarkReader ? "#7eb8f7" : "#0066cc";
-    const quote = isDarkReader ? "rgba(255,255,255,0.15)" : "#ccc";
-    const quoteFg = isDarkReader ? "#aaa" : "#555";
-    return `
-  :host {
-    display: block;
-    background: ${bg};
-    color-scheme: ${isDarkReader ? "dark" : "light"};
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-  .email-wrap { padding: 16px; word-wrap: break-word; overflow-wrap: break-word; }
-  * { box-sizing: border-box; }
-  img { max-width: 100% !important; height: auto !important; }
-  a { color: ${link}; }
-  table { max-width: 100% !important; border-collapse: collapse; }
-  td, th { word-break: break-word; vertical-align: top; }
-  pre, code { white-space: pre-wrap; font-size: 13px; }
-  blockquote { border-left: 3px solid ${quote}; margin: 8px 0; padding-left: 12px; color: ${quoteFg}; }
-  h1,h2,h3,h4 { margin: 12px 0 6px; line-height: 1.3; }
-  p { margin: 6px 0; }
-  center { max-width: 100% !important; }
-`;
-}
-
-function HtmlEmailBody({ html }: { html: string }) {
-    const hostRef = useRef<HTMLDivElement>(null);
-    const isDarkReader = html.includes("data-darkreader");
-
-    useEffect(() => {
-        const host = hostRef.current;
-        if (!host) return;
-
-        const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
-        const clean = DOMPurify.sanitize(html, {
-            FORBID_TAGS: ["script", "noscript", "object", "embed", "form", "meta", "link"],
-            ADD_ATTR: ["target", "rel", "data-darkreader-inline-color", "data-darkreader-inline-bgcolor"],
-        });
-
-        shadow.innerHTML = `<style>${buildShadowCss(isDarkReader)}</style><div class="email-wrap">${clean}</div>`;
-
-        shadow.querySelectorAll("a[href]").forEach(el => {
-            (el as HTMLAnchorElement).target = "_blank";
-            (el as HTMLAnchorElement).rel = "noopener noreferrer";
-        });
-    }, [html, isDarkReader]);
-
-    return <div ref={hostRef} className="h-full overflow-y-auto" />;
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 

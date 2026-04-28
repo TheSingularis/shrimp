@@ -9,13 +9,12 @@
   "main": "electron/main.js",
   "private": true,
   "scripts": {
-    "web:dev": "bash start.sh",
-    "electron:dev": "npm run build:frontend && bash electron/start-server.sh && npx electron .",
-    "electron:start": "electron .",
-    "build": "npm run build:frontend && electron-builder --linux",
-    "build:linux": "npm run build:frontend && electron-builder --linux AppImage",
-    "build:mac": "npm run build:frontend && electron-builder --mac",
-    "build:win": "npm run build:frontend && electron-builder --win"
+    "web": "bash start.sh",
+    "electron": "bash start-electron.sh",
+    "build": "bash build.sh",
+    "build:linux": "bash build.sh --linux",
+    "build:mac": "bash build.sh --mac",
+    "build:win": "bash build.sh --win"
   },
   "build": {
     "appId": "com.shrimp.app",
@@ -57,7 +56,7 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "pacman"
       ],
       "icon": "frontend/public/icons/shrimp(1).png",
       "category": "Utility"
