@@ -1,5 +1,4 @@
 import checklist
-import email_smtp
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -23,8 +22,7 @@ import tool_executor
 import file_ops
 import notifications
 import scheduler
-import email_client
-import email_processor
+import plugin_loader
 import obsidian_ops
 from urllib.parse import unquote
 
@@ -43,6 +41,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Discover plugins and mount their routers before the app starts serving
+plugin_loader.discover()
+plugin_loader.include_routers(app)
 
 # ── models ────────────────────────────────────────────────────────────────────
 
@@ -216,26 +218,12 @@ async def startup():
     # that occur when asyncio.run() creates a new loop in a thread).
     scheduler.set_main_loop(asyncio.get_event_loop())
 
-    # Register background automations — defaults may be overridden by AUTOMATION_CONFIG
+    # Register core (non-plugin) background automations
     def _auto_cfg(name: str, default_cron: str, default_enabled: bool) -> tuple[str, bool]:
         """Return (cron, enabled) applying any saved overrides from config.AUTOMATION_CONFIG."""
         overrides = getattr(config, "AUTOMATION_CONFIG", {}).get(name, {})
         return overrides.get("cron", default_cron), overrides.get("enabled", default_enabled)
 
-    from automations.email_triage import run as email_triage_run
-    from automations.daily_digest import run as daily_digest_run
-    poll_mins = config.EMAIL_CONFIG.get("poll_interval_minutes", 15)
-    _cron, _en = _auto_cfg(
-        "email_triage", f"*/{poll_mins} * * * *", config.EMAIL_CONFIG.get("enabled", False))
-    scheduler.register_automation(
-        "email_triage", email_triage_run, cron=_cron,
-        description="Polling fallback: fetch new emails and triage each one", enabled=_en,
-    )
-    _cron, _en = _auto_cfg("daily_digest", "0 8 * * *", True)
-    scheduler.register_automation(
-        "daily_digest", daily_digest_run, cron=_cron,
-        description="Today's focus: action items from triaged emails", enabled=_en,
-    )
     from automations.news_digest import run as news_digest_run
     from automations.obsidian_maintenance import run as obsidian_maintenance_run
     _cron, _en = _auto_cfg("news_digest", "0 9 * * *",
@@ -255,26 +243,20 @@ async def startup():
         "checklist_rollover", _checklist.rollover_items, cron=_cron,
         description="Roll overdue checklist items forward to today", enabled=_en,
     )
+
+    # Register and start plugin jobs, then start scheduler
+    plugin_loader.register_all_jobs()
     scheduler.start()
 
-    # Start IMAP sync engine (IDLE + periodic multi-folder sync)
-    import email_sync
-    email_sync.start()
-
-    # Clean up any duplicate emails left by the previous race condition
-    threading.Thread(target=email_client.deduplicate_cache, daemon=True, name="email-dedup").start()
-
-    # Backfill semantic embeddings for any cached emails missing them
-    threading.Thread(target=email_client.embed_all_emails,
-                     daemon=True, name="email-embed-backfill").start()
+    # Run plugin startup hooks (IMAP sync, background threads, etc.)
+    await plugin_loader.startup_all()
 
     log.info("Startup complete - structural maps and index status ready")
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    import email_sync
-    email_sync.stop()
+    await plugin_loader.shutdown_all()
     scheduler.stop()
 
 
@@ -284,6 +266,12 @@ async def shutdown():
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": config.OLLAMA_MODEL}
+
+
+@app.get("/api/plugins")
+async def list_plugins():
+    """Return all discovered plugin manifests."""
+    return {"plugins": plugin_loader.get_manifests()}
 
 
 # ── routes: debug ─────────────────────────────────────────────────────────────
@@ -2332,6 +2320,9 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
 
     config_path.write_text(new_config)
 
+    # Update in-memory value so subsequent requests use the new host immediately
+    config.OLLAMA_HOST = new_host
+
     log.info(f"Updated OLLAMA_HOST to: {new_host}")
 
     return {"status": "updated", "mode": req.mode, "host": new_host}
@@ -2521,335 +2512,6 @@ async def update_automation(automation_name: str, req: AutomationUpdateRequest):
     return scheduler.get_automation(automation_name)
 
 
-# ── routes: email ───────────────────────────────────────────────────────────────
-
-
-class EmailConfigRequest(BaseModel):
-    enabled: bool = False
-    imap_host: str = ""
-    imap_port: int = 993
-    imap_ssl: bool = True
-    username: str = ""
-    password: str = ""
-    mailbox: str = "INBOX"
-    fetch_max: int = 50
-    poll_interval_minutes: int = 15
-
-
-class SmtpConfigRequest(BaseModel):
-    enabled: bool = False
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_ssl: bool = False
-    smtp_starttls: bool = True
-    username: str = ""
-    password: str = ""
-    from_name: str = ""
-    from_email: str = ""
-
-
-class SendEmailRequest(BaseModel):
-    to: str
-    subject: str
-    body: str
-    cc: str = ""
-    bcc: str = ""
-
-
-def _write_smtp_config(cfg: dict) -> None:
-    """Persist SMTP_CONFIG changes to config.py."""
-    import re as _re
-    config_path = Path(__file__).parent / "config.py"
-    current = config_path.read_text()
-    new_block = f"SMTP_CONFIG: dict = {repr(cfg)}"
-    current = _re.sub(
-        r"SMTP_CONFIG: dict = \{.*?\}",
-        new_block,
-        current,
-        flags=_re.DOTALL,
-    )
-    config_path.write_text(current)
-    config.SMTP_CONFIG.update(cfg)
-    log.info("SMTP_CONFIG written")
-
-
-def _write_email_config(cfg: dict) -> None:
-    """Persist EMAIL_CONFIG changes to config.py."""
-    import re as _re
-    config_path = Path(__file__).parent / "config.py"
-    current = config_path.read_text()
-    new_block = f"EMAIL_CONFIG: dict = {repr(cfg)}"
-    current = _re.sub(
-        r"EMAIL_CONFIG: dict = \{.*?\}",
-        new_block,
-        current,
-        flags=_re.DOTALL,
-    )
-    config_path.write_text(current)
-    # Update runtime config too
-    config.EMAIL_CONFIG.update(cfg)
-    log.info("EMAIL_CONFIG written")
-
-
-@app.get("/email/config")
-async def get_email_config():
-    cfg = dict(config.EMAIL_CONFIG)
-    cfg["password"] = "••••••••" if cfg.get("password") else ""  # redact
-    return cfg
-
-
-@app.post("/email/config")
-async def save_email_config(req: EmailConfigRequest):
-    cfg = dict(config.EMAIL_CONFIG)
-    cfg.update(req.model_dump())
-    # If password is the redacted placeholder, keep the existing one
-    if req.password == "••••••••":
-        cfg["password"] = config.EMAIL_CONFIG.get("password", "")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _write_email_config, cfg)
-    # Update scheduler job enabled state to match
-    scheduler.set_automation_enabled("email_triage", cfg.get("enabled", False))
-    return {"status": "ok"}
-
-
-@app.post("/email/config/test")
-async def test_email_config():
-    loop = asyncio.get_event_loop()
-    success, message = await loop.run_in_executor(None, email_client.test_connection)
-    return {"success": success, "message": message}
-
-
-@app.get("/email/smtp/config")
-async def get_smtp_config():
-    cfg = dict(config.SMTP_CONFIG)
-    cfg["password"] = "••••••••" if cfg.get("password") else ""
-    return cfg
-
-
-@app.post("/email/smtp/config")
-async def save_smtp_config(req: SmtpConfigRequest):
-    cfg = dict(config.SMTP_CONFIG)
-    data = req.model_dump()
-    # Preserve existing password if redacted placeholder sent
-    if data.get("password") == "••••••••":
-        data["password"] = cfg.get("password", "")
-    cfg.update(data)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _write_smtp_config, cfg)
-    return {"status": "ok"}
-
-
-@app.post("/email/smtp/config/test")
-async def test_smtp_config():
-    loop = asyncio.get_event_loop()
-    success, message = await loop.run_in_executor(None, email_smtp.test_connection)
-    return {"success": success, "message": message}
-
-
-@app.post("/email/send")
-async def send_email(req: SendEmailRequest):
-    loop = asyncio.get_event_loop()
-    success, message = await loop.run_in_executor(
-        None, email_smtp.send_email, req.to, req.subject, req.body, req.cc, req.bcc
-    )
-    if not success:
-        raise HTTPException(status_code=500, detail=message)
-    return {"status": "sent"}
-
-
-@app.get("/email/inbox")
-async def get_inbox(limit: int = 50, folder: str = "INBOX"):
-    loop = asyncio.get_event_loop()
-    emails = await loop.run_in_executor(None, email_client.list_emails_by_folder, folder, limit)
-    return emails
-
-
-@app.get("/email/search")
-async def search_emails(q: str = "", limit: int = 50):
-    loop = asyncio.get_event_loop()
-    results = await loop.run_in_executor(None, email_client.search_emails, q, limit)
-    return results
-
-
-@app.post("/email/embed-all")
-async def embed_all_emails():
-    """Backfill semantic embeddings for all cached emails. Safe to call multiple times."""
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, email_client.embed_all_emails)
-    return result
-
-
-@app.get("/email/folders")
-async def list_email_folders():
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, email_client.list_imap_folders)
-
-
-@app.post("/email/fetch")
-async def fetch_inbox():
-    loop = asyncio.get_event_loop()
-    new_emails = await loop.run_in_executor(None, email_client.fetch_emails)
-    return {"fetched": len(new_emails), "emails": new_emails}
-
-
-@app.post("/email/fetch/{folder}")
-async def fetch_folder(folder: str, limit: int = 50):
-    loop = asyncio.get_event_loop()
-    count, msg = await loop.run_in_executor(None, email_client.fetch_folder, folder, limit)
-    if msg == "IMAP error":
-        raise HTTPException(status_code=500, detail=msg)
-    return {"fetched": count, "folder": folder, "message": msg}
-
-
-@app.post("/email/refresh-all")
-async def refresh_all_emails():
-    """Re-fetch all cached emails from IMAP to backfill html_body for old cache entries."""
-    loop = asyncio.get_event_loop()
-    emails = await loop.run_in_executor(None, email_client.list_emails, 500)
-    count = 0
-    for em in emails:
-        if not em.get("html_body"):  # only refresh ones missing HTML
-            result = await loop.run_in_executor(None, email_client.refresh_email_body, em["id"])
-            if result and result.get("html_body"):
-                count += 1
-    return {"refreshed": count}
-
-
-@app.get("/email/triage/status")
-async def email_triage_status():
-    return email_processor.get_triage_status()
-
-
-@app.get("/email/sync-state")
-async def email_sync_state():
-    return email_client.get_sync_state()
-
-
-@app.post("/email/{email_id}/refresh-body")
-async def refresh_email_body(email_id: str):
-    loop = asyncio.get_event_loop()
-    updated = await loop.run_in_executor(None, email_client.refresh_email_body, email_id)
-    if updated is None:
-        raise HTTPException(
-            status_code=404, detail="Email not found or IMAP not configured")
-    return updated
-
-
-@app.get("/email/flagged")
-async def get_flagged_emails():
-    loop = asyncio.get_event_loop()
-    emails = await loop.run_in_executor(None, email_client.list_flagged)
-    return emails
-
-
-class FlagRequest(BaseModel):
-    flagged: bool
-
-
-@app.post("/email/{email_id}/flag")
-async def flag_email(email_id: str, req: FlagRequest):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.flag_email, email_id, req.flagged)
-    if not ok:
-        raise HTTPException(status_code=404, detail=msg)
-    return {"status": "ok", "flagged": req.flagged, "message": msg}
-
-
-class ReadRequest(BaseModel):
-    read: bool
-
-
-@app.post("/email/{email_id}/read")
-async def set_email_read_route(email_id: str, req: ReadRequest):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.set_email_read, email_id, req.read)
-    if not ok:
-        raise HTTPException(status_code=404, detail=msg)
-    return {"status": "ok", "read": req.read, "message": msg}
-
-
-class MoveEmailRequest(BaseModel):
-    dest_folder: str
-
-
-@app.post("/email/{email_id}/move")
-async def move_email_route(email_id: str, req: MoveEmailRequest):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.move_email, email_id, req.dest_folder)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    return {"status": "ok", "folder": req.dest_folder, "message": msg}
-
-
-@app.post("/email/{email_id}/archive")
-async def archive_email_route(email_id: str):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.archive_email, email_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    return {"status": "ok", "message": msg}
-
-
-@app.post("/email/{email_id}/trash")
-async def trash_email_route(email_id: str):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.trash_email, email_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    return {"status": "ok", "message": msg}
-
-
-@app.post("/email/{email_id}/junk")
-async def junk_email_route(email_id: str):
-    loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, email_client.junk_email, email_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    return {"status": "ok", "message": msg}
-
-
-@app.get("/email/{email_id}/attachment/{filename}")
-async def get_email_attachment(email_id: str, filename: str, dl: bool = False):
-    attach_path = email_client._ATTACH_DIR / email_id / filename
-    if not attach_path.exists():
-        raise HTTPException(status_code=404, detail="Attachment not found")
-    data = email_client.load_email(email_id)
-    content_type = "application/octet-stream"
-    if data:
-        for a in data.get("attachments", []):
-            if a.get("filename") == filename:
-                content_type = a.get("content_type", content_type)
-                break
-    disposition = f'attachment; filename="{filename}"' if dl else f'inline; filename="{filename}"'
-    return FileResponse(
-        str(attach_path),
-        media_type=content_type,
-        headers={"Content-Disposition": disposition},
-    )
-
-
-@app.get("/email/{email_id}")
-async def get_email(email_id: str):
-    data = email_client.load_email(email_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail="Email not found")
-    email_client.mark_email_read(email_id)
-    return data
-
-
-@app.post("/email/{email_id}/triage")
-async def triage_email(email_id: str):
-    data = email_client.load_email(email_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail="Email not found")
-
-    async def _stream():
-        async for token in email_processor.triage_email(email_id):
-            yield token.encode()
-
-    return StreamingResponse(_stream(), media_type="text/plain; charset=utf-8")
-
-
 # ── routes: obsidian ─────────────────────────────────────────────────────────
 
 
@@ -2921,22 +2583,6 @@ async def search_obsidian(req: ObsidianSearchRequest):
     loop = asyncio.get_event_loop()
     raw = await loop.run_in_executor(None, rag.query_scopes, req.query, [scope])
     return {"results": raw, "scope": scope}
-
-
-# ── routes: digest ────────────────────────────────────────────────────────────
-
-_DIGEST_FILE = Path(__file__).parent.parent / \
-    "notifications" / "digest_latest.json"
-
-
-@app.get("/digest/latest")
-async def get_latest_digest():
-    if not _DIGEST_FILE.exists():
-        return {"date": None, "summary": None, "emails": [], "unread_count": 0}
-    try:
-        return json.loads(_DIGEST_FILE.read_text())
-    except Exception:
-        return {"date": None, "summary": None, "emails": [], "unread_count": 0}
 
 
 # ── routes: checklist ──────────────────────────────────────────────────────────

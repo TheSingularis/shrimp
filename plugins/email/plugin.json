@@ -1,0 +1,9 @@
+{
+  "id": "email",
+  "name": "Email",
+  "version": "1.0.0",
+  "category": "core",
+  "description": "IMAP/SMTP email client with AI triage, digest, and automations",
+  "min_shrimp_version": "1.0.0",
+  "settings_level": "top-level"
+}

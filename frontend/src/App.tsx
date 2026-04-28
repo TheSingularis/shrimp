@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project, getInbox } from "./api";
+import { getScopes, type Scope, type Message, getConversation, saveConversation, getTheme, listProjects, type Project } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ScopeSelector } from "./components/ScopeSelector";
 import { SettingsModal } from "./components/SettingsModal";
@@ -7,15 +7,18 @@ import { ConversationSidebar } from "./components/ConversationSidebar";
 import { ConversationTabs } from "./components/ConversationTabs";
 import { DashboardHome } from "./components/DashboardHome";
 import { AutomationsPanel } from "./components/AutomationsPanel";
-import { EmailPanel } from "./components/EmailPanel";
 import { NotificationFeed, NotificationBadge } from "./components/NotificationFeed";
 import { useVisualViewport } from "./hooks/useVisualViewport";
 import { useNotifications } from "./hooks/useNotifications";
 import { TitleBar } from "./components/TitleBar";
-import { Settings, House, MessageSquare, Mail, BriefcaseBusiness } from "lucide-react";
+import { usePlugins } from "./plugins/context";
+import type { ShrimpPluginFrontend, PanelParams } from "./plugins/types";
+import { Settings, House, MessageSquare, BriefcaseBusiness } from "lucide-react";
 import "./index.css";
 
-type Panel = "dashboard" | "chat" | "email" | "automations" | "notifications";
+// Core panels + plugin panels (identified by plugin id)
+type CorePanel = "dashboard" | "chat" | "automations" | "notifications";
+type Panel = CorePanel | string;
 
 interface ConversationTab {
     id: string;
@@ -90,18 +93,39 @@ function PlaceholderPanel({ label, icon }: { label: string; icon: React.ReactNod
     );
 }
 
+// ── Plugin nav button (per-plugin component so useBadge hook rules are met) ───
+
+function PluginNavButton({ plugin, active, onClick }: {
+    plugin: ShrimpPluginFrontend;
+    active: boolean;
+    onClick: () => void;
+}) {
+    const navItem = plugin.navItem!;
+    const badge = navItem.useBadge?.() ?? 0;
+    return (
+        <NavItem
+            icon={<navItem.Icon size={18} />}
+            label={navItem.label}
+            active={active}
+            onClick={onClick}
+            badge={badge > 0 ? badge : undefined}
+        />
+    );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
     const [activePanel, setActivePanel] = useState<Panel>("dashboard");
-    const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+    // Params passed to the active plugin panel (e.g. emailId when opening an email)
+    const [panelParams, setPanelParams] = useState<PanelParams>({});
     const [scopes, setScopes] = useState<Scope[]>([]);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [projects, setProjects] = useState<Project[]>([]);
 
     const { notifications, unreadCount, connected, dismiss: dismissNotif, remove: removeNotif } = useNotifications();
-    const [emailUnread, setEmailUnread] = useState(0);
+    const plugins = usePlugins();
 
     // Tab state
     const [tabs, setTabs] = useState<ConversationTab[]>([]);
@@ -110,10 +134,6 @@ export default function App() {
 
     const appContainerRef = useRef<HTMLDivElement>(null);
     useVisualViewport(appContainerRef);
-
-    function refreshEmailUnread() {
-        getInbox(200).then(emails => setEmailUnread(emails.filter(e => !e.read).length)).catch(() => {});
-    }
 
     useEffect(() => {
         getTheme().then((theme) => {
@@ -141,13 +161,6 @@ export default function App() {
             setTabs([initialTab]);
             setActiveTabId(initialTab.id);
         });
-    }, []);
-
-    // Poll unread email count every 5 minutes
-    useEffect(() => {
-        refreshEmailUnread();
-        const emailPoll = setInterval(refreshEmailUnread, 5 * 60 * 1000);
-        return () => clearInterval(emailPoll);
     }, []);
 
     const getActiveTab = (): ConversationTab | undefined => tabs.find(t => t.id === activeTabId);
@@ -341,10 +354,9 @@ export default function App() {
 
     const activeTab = getActiveTab();
 
-    const navItems: { panel: Panel; icon: React.ReactNode; label: string; badge?: number }[] = [
-        { panel: "dashboard",   icon: <House size={18} />,            label: "Home" },
-        { panel: "chat",        icon: <MessageSquare size={18} />,    label: "Chat" },
-        { panel: "email",       icon: <Mail size={18} />,             label: "Email",  badge: emailUnread },
+    const coreNavItems: { panel: Panel; icon: React.ReactNode; label: string }[] = [
+        { panel: "dashboard",   icon: <House size={18} />,             label: "Home" },
+        { panel: "chat",        icon: <MessageSquare size={18} />,     label: "Chat" },
         { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Tasks" },
     ];
 
@@ -362,14 +374,21 @@ export default function App() {
                 <div className="mb-2">
                     <img src="./icons/shrimp(1).png" alt="SHRIMP" className="w-7 h-7" />
                 </div>
-                {navItems.map(item => (
+                {coreNavItems.map(item => (
                     <NavItem
                         key={item.panel}
                         icon={item.icon}
                         label={item.label}
                         active={activePanel === item.panel}
-                        onClick={() => setActivePanel(item.panel)}
-                        badge={item.badge}
+                        onClick={() => { setActivePanel(item.panel); setPanelParams({}); }}
+                    />
+                ))}
+                {plugins.filter(p => p.navItem).map(plugin => (
+                    <PluginNavButton
+                        key={plugin.id}
+                        plugin={plugin}
+                        active={activePanel === plugin.id}
+                        onClick={() => { setActivePanel(plugin.id); setPanelParams({}); }}
                     />
                 ))}
                 {/* Spacer pushes remaining items to the bottom */}
@@ -445,11 +464,14 @@ export default function App() {
                 {/* Panel content */}
                 <main className="flex-1 overflow-hidden min-h-0 flex flex-col">
                     {activePanel === "dashboard" && (
-                        <DashboardHome onNavigate={(p, emailId, conversationId) => {
-                            setActivePanel(p as Panel);
-                            if (emailId) setSelectedEmailId(emailId);
-                            if (conversationId) handleLoadConversation(conversationId);
-                        }} />
+                        <DashboardHome
+                            plugins={plugins}
+                            onNavigate={(panel, emailId, conversationId) => {
+                                setActivePanel(panel);
+                                setPanelParams(emailId ? { emailId } : {});
+                                if (conversationId) handleLoadConversation(conversationId);
+                            }}
+                        />
                     )}
                     {activePanel === "chat" && activeTab && (
                         <ChatPanel
@@ -460,10 +482,23 @@ export default function App() {
                             conversationId={activeTab.conversationId}
                         />
                     )}
-                    {activePanel === "email" && (
-                        <EmailPanel initialEmailId={selectedEmailId} onEmailOpened={() => setSelectedEmailId(null)} />
-                    )}
                     {activePanel === "automations" && <AutomationsPanel />}
+                    {/* Plugin panels */}
+                    {plugins.map(plugin => plugin.PanelComponent && (
+                        <div
+                            key={plugin.id}
+                            style={{ display: activePanel === plugin.id ? "contents" : "none" }}
+                        >
+                            <plugin.PanelComponent
+                                onNavigate={(panel, emailId, conversationId) => {
+                                    setActivePanel(panel);
+                                    setPanelParams(emailId ? { emailId } : {});
+                                    if (conversationId) handleLoadConversation(conversationId);
+                                }}
+                                params={activePanel === plugin.id ? panelParams : {}}
+                            />
+                        </div>
+                    ))}
                     {activePanel === "notifications" && (
                         <NotificationFeed
                             open={true}
@@ -483,6 +518,7 @@ export default function App() {
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 onScopesChanged={handleScopesChanged}
+                plugins={plugins}
             />
 
         </div>

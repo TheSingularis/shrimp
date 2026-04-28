@@ -8,11 +8,11 @@ function cleanTriageNote(note: string | undefined, maxLen = 90): string | undefi
     clean = clean.charAt(0).toUpperCase() + clean.slice(1);
     return clean.length > maxLen ? clean.slice(0, maxLen - 1) + "…" : clean;
 }
-import { getInbox, fetchInbox, fetchFolder, getFolders, searchEmails, getEmail, setEmailFlag, setEmailRead, archiveEmail, trashEmail, junkEmail, getTriageStatus, type EmailMeta, type EmailFull, type TriageStatus, type EmailFolder } from "../api";
+import { getInbox, fetchInbox, fetchFolder, getFolders, searchEmails, getEmail, setEmailFlag, setEmailRead, archiveEmail, trashEmail, junkEmail, getTriageStatus, type EmailMeta, type EmailFull, type TriageStatus, type EmailFolder } from "./api";
 import { EmailDetail } from "./EmailDetail";
 import { ComposeModal } from "./ComposeModal";
-import { senderName, relativeTime } from "../utils/email";
-import { URGENCY_CONFIG, type UrgencyLevel } from "../utils/urgency";
+import { senderName, relativeTime } from "@core/utils/email";
+import { URGENCY_CONFIG, type UrgencyLevel } from "@core/utils/urgency";
 
 // ── Context menu ───────────────────────────────────────────────────────────────
 

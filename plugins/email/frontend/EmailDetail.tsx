@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { ArrowLeft, Sparkles, X, FileText, Globe, Copy, Star, RefreshCw, Reply, Forward, Archive, Trash2, ShieldAlert, Paperclip, Download, Eye } from "lucide-react";
 import DOMPurify from "dompurify";
-import { triageEmail, setEmailFlag, refreshEmailBody, archiveEmail, trashEmail, junkEmail, attachmentUrl, type EmailFull, type EmailAttachment } from "../api";
-import { formatDateFull } from "../utils/email";
-import { URGENCY_CONFIG, type UrgencyLevel } from "../utils/urgency";
+import { triageEmail, setEmailFlag, refreshEmailBody, archiveEmail, trashEmail, junkEmail, attachmentUrl, type EmailFull, type EmailAttachment } from "./api";
+import { formatDateFull } from "@core/utils/email";
+import { URGENCY_CONFIG, type UrgencyLevel } from "@core/utils/urgency";
 
 interface ComposeInitial { to?: string; subject?: string; body?: string; cc?: string; }
 

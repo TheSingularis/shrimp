@@ -11,10 +11,8 @@ import {
 } from "../api";
 import { UrgencyBadge, toUrgencyLevel } from "../utils/urgency";
 
-type Panel = "chat" | "dashboard" | "email" | "automations";
-
 interface Props {
-    onNavigate: (panel: Panel, emailId?: string) => void;
+    onNavigate: (panel: string, emailId?: string) => void;
 }
 
 

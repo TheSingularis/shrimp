@@ -4,6 +4,25 @@ All notable changes to SHRIMP* will be documented in this file.
 
 ---
 
+## [Unreleased] — 2026-04-27
+
+### Added
+- **Plugin system**: Obsidian/VSCode-style plugin architecture. Backend plugins extend FastAPI with `ShrimpPlugin` base class; frontend plugins register nav items, panel components, dashboard cards, and settings sections via a typed contract. Plugins live in `plugins/<id>/` at the repo root.
+- **Email plugin** (`plugins/email/`): All email functionality (IMAP sync, SMTP send, triage, digest, dashboard cards, settings) packaged as the first core plugin. Routes now live at `/plugins/email/...`.
+- **`GET /api/plugins`** route: Returns list of installed plugin manifests for the frontend loader.
+- **Dynamic plugin loading**: Backend uses `importlib` to discover and load plugins at startup; frontend uses `import.meta.glob` to lazily load plugin UI modules.
+- **Plugin-driven nav rail**: Navigation items, panel components, and badge counts are contributed by plugins. Core panels (Dashboard, Chat, Automations) remain hardcoded; plugin panels are dynamically added.
+- **Plugin settings tabs**: Core plugins get top-level settings tabs alongside Appearance/Models/Scopes. Community plugins will get a shared Plugins tab (future).
+- **Plugin dashboard cards**: `DashboardHome` renders plugin-provided card components instead of hardcoded email sections.
+
+### Changed
+- **Email API routes migrated**: All `/email/...` routes moved to `/plugins/email/...` (clean cutover, no aliases).
+- **Email frontend moved to plugin**: `EmailPanel`, `EmailDetail`, `ComposeModal` now live in `plugins/email/frontend/` and import from the plugin's own `api.ts`.
+- **Core `frontend/src/api.ts` cleaned up**: Removed all email types, functions, and digest API — these now live exclusively in the plugin.
+- **`DashboardHome`**: Removed hardcoded `EmailSection` and `FlaggedSection`; replaced with plugin `DashboardCards` prop.
+- **`SettingsModal`**: Removed hardcoded email settings tab; now renders `SettingsSection` components from core plugins.
+- **`App.tsx`**: Nav rail and panel routing are now plugin-driven. Removed `emailUnread` polling (moved to `useEmailUnreadCount` hook in the email plugin).
+
 ## [Unreleased] — 2026-04-17
 
 ### Added

@@ -553,7 +553,7 @@ def refresh_email_body(email_id: str) -> dict | None:
             log.warning("refresh_email_body: UID not found for %s", email_id)
             return None
 
-        _, msg_data = conn.uid("fetch", imap_uid.encode(), "(BODY[])")
+        _, msg_data = conn.uid("fetch", imap_uid.encode(), "(BODY.PEEK[])")
         raw_tuple = next((item for item in msg_data if isinstance(item, tuple)), None)
         if raw_tuple is None:
             conn.logout()
@@ -956,7 +956,7 @@ def incremental_fetch(
     for num in reversed(new_uids):  # process oldest→newest so highest_uid tracks correctly
         try:
             uid_int = int(num)
-            _, msg_data = conn.uid("fetch", num, "(FLAGS BODY[])")
+            _, msg_data = conn.uid("fetch", num, "(FLAGS BODY.PEEK[])")
             raw_tuple = next((item for item in msg_data if isinstance(item, tuple)), None)
             if raw_tuple is None:
                 continue
@@ -1173,11 +1173,12 @@ def _fetch_from_mailbox(
 
     for num in msg_ids:
         try:
-            _, msg_data = conn.uid("fetch", num, "(BODY[])")
+            _, msg_data = conn.uid("fetch", num, "(FLAGS BODY.PEEK[])")
             raw_tuple = next((item for item in msg_data if isinstance(item, tuple)), None)
             if raw_tuple is None:
                 log.warning("fetch: no body data for uid %s — raw: %r", num, msg_data)
                 continue
+            fetch_header = raw_tuple[0].decode(errors="replace") if isinstance(raw_tuple[0], bytes) else str(raw_tuple[0])
             raw = raw_tuple[1]
             msg = email_lib.message_from_bytes(raw)
 
@@ -1206,9 +1207,9 @@ def _fetch_from_mailbox(
                 "date": date_iso,
                 "body": body_plain[:20000],
                 "html_body": body_html[:500000],
-                "read": mark_read,
+                "read": ("\\Seen" in fetch_header) or mark_read,
                 "triaged": skip_triage,
-                "flagged": False,
+                "flagged": "\\Flagged" in fetch_header,
                 "folder": canonical_folder,
                 "triage_result": None,
                 "triage_actions": [],
