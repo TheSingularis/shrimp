@@ -591,7 +591,18 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
 
     return (
         <div className="flex flex-col flex-1 overflow-hidden">
-            {composing && <ComposeModal initial={composeInitial} onClose={() => setComposing(false)} />}
+            {composing && <ComposeModal
+                initial={composeInitial}
+                onClose={() => setComposing(false)}
+                onSent={() => {
+                    const sentFolder = folders.find(f => f.role === "sent");
+                    if (sentFolder) {
+                        fetchFolder(sentFolder.display_name, 50)
+                            .then(() => refresh(sentFolder.display_name))
+                            .catch(() => {});
+                    }
+                }}
+            />}
 
             {/* Context menu */}
             {contextMenu && (() => {

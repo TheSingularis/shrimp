@@ -4,6 +4,7 @@ import { sendEmail } from "./api";
 
 interface Props {
     onClose: () => void;
+    onSent?: () => void;
     /** Pre-fill fields when replying or forwarding */
     initial?: {
         to?: string;
@@ -13,7 +14,7 @@ interface Props {
     };
 }
 
-export function ComposeModal({ onClose, initial = {} }: Props) {
+export function ComposeModal({ onClose, onSent, initial = {} }: Props) {
     const [to, setTo] = useState(initial.to ?? "");
     const [cc, setCc] = useState(initial.cc ?? "");
     const [subject, setSubject] = useState(initial.subject ?? "");
@@ -37,6 +38,7 @@ export function ComposeModal({ onClose, initial = {} }: Props) {
         try {
             await sendEmail({ to: to.trim(), subject: subject.trim(), body, cc: cc.trim() });
             setSent(true);
+            onSent?.();
             setTimeout(onClose, 1200);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Send failed");

@@ -29,6 +29,7 @@ function EmailPanelWrapper({ params }: { onNavigate: NavigateFn; params?: PanelP
 
 const emailPlugin: ShrimpPluginFrontend = {
     id: "email",
+    name: "Email",
     category: "core",
 
     navItem: {

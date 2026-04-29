@@ -372,6 +372,8 @@ def list_emails(limit: int = 50) -> list[dict]:
     for p in _CACHE_DIR.glob("*.json"):
         try:
             data = json.loads(p.read_text())
+            if not data.get("id"):
+                continue
             items.append({k: data.get(k) for k in _EMAIL_META_KEYS})
         except Exception:
             pass
@@ -386,6 +388,8 @@ def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]
     for p in _CACHE_DIR.glob("*.json"):
         try:
             data = json.loads(p.read_text())
+            if not data.get("id"):
+                continue
             cached_folder = (data.get("folder") or "INBOX").upper()
             if cached_folder == norm:
                 items.append({k: data.get(k) for k in _EMAIL_META_KEYS})
