@@ -11,6 +11,7 @@ build/
 
 # ── Local config (contains personal paths, credentials, API keys) ─────────────
 backend/config.py
+*/.obsidian/**
 
 # ── Runtime data (local-only, not part of the codebase) ──────────────────────
 backend/chroma_db/
