@@ -224,14 +224,7 @@ async def startup():
         overrides = getattr(config, "AUTOMATION_CONFIG", {}).get(name, {})
         return overrides.get("cron", default_cron), overrides.get("enabled", default_enabled)
 
-    from automations.news_digest import run as news_digest_run
     from automations.obsidian_maintenance import run as obsidian_maintenance_run
-    _cron, _en = _auto_cfg("news_digest", "0 9 * * *",
-                           bool(getattr(config, "RSS_FEEDS", [])))
-    scheduler.register_automation(
-        "news_digest", news_digest_run, cron=_cron,
-        description="Fetch RSS feeds and add new articles to checklist", enabled=_en,
-    )
     _cron, _en = _auto_cfg("obsidian_maintenance", "0 7 * * 1", True)
     scheduler.register_automation(
         "obsidian_maintenance", obsidian_maintenance_run, cron=_cron,
@@ -270,8 +263,60 @@ async def health():
 
 @app.get("/api/plugins")
 async def list_plugins():
-    """Return all discovered plugin manifests."""
-    return {"plugins": plugin_loader.get_manifests()}
+    """Return all discovered plugin manifests with enabled state."""
+    manifests = plugin_loader.get_manifests()
+    plugins_cfg = getattr(config, "PLUGINS_CONFIG", {})
+    result = []
+    for m in manifests:
+        entry = dict(m)
+        entry["enabled"] = plugins_cfg.get(m["id"], {}).get("enabled", True)
+        result.append(entry)
+    return {"plugins": result}
+
+
+class PluginUpdateRequest(BaseModel):
+    enabled: bool
+
+
+def _persist_plugins_config(plugin_id: str, **updates: object) -> None:
+    import re as _re
+    import ast
+
+    config_path = Path(__file__).parent / "config.py"
+    current = config_path.read_text()
+
+    match = _re.search(
+        r"PLUGINS_CONFIG: dict = (\{.*?\})(?=\s*\n[A-Z_#]|\s*\Z)", current, _re.DOTALL)
+    if match:
+        try:
+            cfg = ast.literal_eval(match.group(1))
+        except (ValueError, SyntaxError):
+            cfg = {}
+    else:
+        cfg = {}
+
+    cfg.setdefault(plugin_id, {}).update(updates)
+    config.PLUGINS_CONFIG = cfg
+
+    new_block = f"PLUGINS_CONFIG: dict = {repr(cfg)}"
+    current = _re.sub(
+        r"PLUGINS_CONFIG: dict = \{.*?\}(?=\s*\n[A-Z_#]|\s*\Z)",
+        new_block,
+        current,
+        flags=_re.DOTALL,
+    )
+    config_path.write_text(current)
+    log.info("PLUGINS_CONFIG written")
+
+
+@app.put("/api/plugins/{plugin_id}")
+async def update_plugin(plugin_id: str, req: PluginUpdateRequest):
+    """Enable or disable a plugin. Takes effect on next frontend reload."""
+    manifests = plugin_loader.get_manifests()
+    if not any(m["id"] == plugin_id for m in manifests):
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' not found")
+    _persist_plugins_config(plugin_id, enabled=req.enabled)
+    return {"id": plugin_id, "enabled": req.enabled}
 
 
 # ── routes: debug ─────────────────────────────────────────────────────────────
@@ -2326,62 +2371,6 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
     log.info(f"Updated OLLAMA_HOST to: {new_host}")
 
     return {"status": "updated", "mode": req.mode, "host": new_host}
-
-
-@app.get("/settings/rss-feeds")
-async def get_rss_feeds():
-    return {"feeds": getattr(config, "RSS_FEEDS", [])}
-
-
-class RssFeedsUpdate(BaseModel):
-    feeds: list[dict]
-
-
-@app.post("/settings/rss-feeds")
-async def set_rss_feeds(update: RssFeedsUpdate):
-    config.RSS_FEEDS = update.feeds
-    config_path = Path(__file__).parent / "config.py"
-    current = config_path.read_text()
-    import re as _re
-    new_val = json.dumps(update.feeds)
-    if _re.search(r"RSS_FEEDS: list\[dict\] = \[.*?\]", current, _re.DOTALL):
-        current = _re.sub(r"RSS_FEEDS: list\[dict\] = \[.*?\]",
-                          f"RSS_FEEDS: list[dict] = {new_val}", current, flags=_re.DOTALL)
-    else:
-        current += f"\nRSS_FEEDS: list[dict] = {new_val}\n"
-    config_path.write_text(current)
-    return {"feeds": config.RSS_FEEDS}
-
-
-@app.get("/settings/news-interests")
-async def get_news_interests():
-    return {"interests": getattr(config, "NEWS_INTERESTS", "")}
-
-
-class NewsInterestsUpdate(BaseModel):
-    interests: str
-
-
-@app.post("/settings/news-interests")
-async def set_news_interests(update: NewsInterestsUpdate):
-    import re as _re
-    config.NEWS_INTERESTS = update.interests
-    config_path = Path(__file__).parent / "config.py"
-    current = config_path.read_text()
-    # Use triple-quoted strings so multiline values are stored correctly.
-    # Escape any triple-quote sequences in the value itself.
-    safe = update.interests.replace('"""', '\\"\\"\\"')
-    replacement = f'NEWS_INTERESTS: str = """{safe}"""'
-    if _re.search(r'NEWS_INTERESTS: str = """.*?"""', current, _re.DOTALL):
-        current = _re.sub(r'NEWS_INTERESTS: str = """.*?"""',
-                          replacement, current, flags=_re.DOTALL)
-    elif _re.search(r'NEWS_INTERESTS: str = ".*?"', current, _re.DOTALL):
-        current = _re.sub(r'NEWS_INTERESTS: str = ".*?"',
-                          replacement, current, flags=_re.DOTALL)
-    else:
-        current += f'\n{replacement}\n'
-    config_path.write_text(current)
-    return {"interests": config.NEWS_INTERESTS}
 
 
 # ── routes: notifications ──────────────────────────────────────────────────────

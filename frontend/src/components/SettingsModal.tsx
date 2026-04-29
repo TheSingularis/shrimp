@@ -4,9 +4,9 @@ import { getIndexStatus, triggerIndexAll, triggerIndexOne, type IndexStatus } fr
 import { pullModel, deleteModel } from "../api";
 import { getCustomInstructions, setCustomInstructions, generateScopeDescription, getWebSearchEnabled, setWebSearchEnabled } from "../api";
 import { getTheme, setTheme, getLanguage, setLanguage, getOllamaHostSetting, setOllamaHostSetting } from "../api";
-import { getRssFeeds, saveRssFeeds, getNewsInterests, saveNewsInterests } from "../api";
 import type { ShrimpPluginFrontend } from "../plugins/types";
-import { X, RefreshCw, Sparkles, Loader2 } from "lucide-react";
+import { usePluginManager } from "../plugins/context";
+import { X, RefreshCw, Sparkles, Loader2, Puzzle } from "lucide-react";
 import "./SettingsModal.css";
 
 const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname || 'localhost'}:8000`;
@@ -18,7 +18,7 @@ interface Props {
     plugins?: ShrimpPluginFrontend[];
 }
 
-type CoreTabType = "appearance" | "models" | "scopes" | "advanced" | "automations";
+type CoreTabType = "appearance" | "models" | "scopes" | "advanced" | "plugins";
 type TabType = CoreTabType | string; // plugin ids become additional tabs
 
 // ── context slider ─────────────────────────────────────────────────────────────
@@ -131,13 +131,7 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
     const [externalUrl, setExternalUrl] = useState("");
     const [ollamaError, setOllamaError] = useState("");
     const [ollamaSuccess, setOllamaSuccess] = useState(false);
-    const [rssFeeds, setRssFeeds] = useState<{ url: string; name: string; enabled: boolean }[]>([]);
-    const [newFeedUrl, setNewFeedUrl] = useState("");
-    const [newFeedName, setNewFeedName] = useState("");
-    const [rssSaving, setRssSaving] = useState(false);
-    const [newsInterests, setNewsInterests] = useState("");
-    const [interestsSaving, setInterestsSaving] = useState(false);
-
+    const { manifests: pluginManifests, togglePlugin } = usePluginManager();
     useEffect(() => {
         if (!open) return;
         getModels().then((data) => {
@@ -168,12 +162,6 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
             });
     }, [open]);
 
-    useEffect(() => {
-        if (activeTab === "automations") {
-            getRssFeeds().then(setRssFeeds).catch(() => {});
-            getNewsInterests().then(setNewsInterests).catch(() => {});
-        }
-    }, [activeTab]);
 
     async function handleCtxChange(value: number) {
         setCtxValue(value);
@@ -500,8 +488,8 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                     >
                         Advanced
                     </button>
-                    <button onClick={() => setActiveTab("automations")} className={`tab ${activeTab === "automations" ? "active" : ""}`}>
-                        Automations
+                    <button onClick={() => setActiveTab("plugins")} className={`tab ${activeTab === "plugins" ? "active" : ""}`}>
+                        Plugins
                     </button>
                     {corePluginsWithSettings.map(plugin => (
                         <button
@@ -509,7 +497,7 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                             className={`tab ${activeTab === plugin.id ? "active" : ""}`}
                             onClick={() => setActiveTab(plugin.id)}
                         >
-                            {plugin.navItem?.label ?? plugin.id}
+                            {plugin.navItem?.label ?? plugin.name ?? plugin.id}
                         </button>
                     ))}
                 </div>
@@ -906,126 +894,53 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                         </>
                     )}
 
+                    {activeTab === "plugins" && (
+                        <section className="drawer-section">
+                            <h2>INSTALLED PLUGINS</h2>
+                            <div className="scope-list">
+                                {pluginManifests.map((manifest) => (
+                                    <div key={manifest.id} className="scope-row">
+                                        <div className="scope-info">
+                                            <div className="scope-header">
+                                                <div className="scope-main-info">
+                                                    <span className="scope-name">
+                                                        <Puzzle size={14} style={{ display: "inline", marginRight: "0.35rem", verticalAlign: "middle" }} />
+                                                        {manifest.name}
+                                                    </span>
+                                                    <span className="scope-path">v{manifest.version} · {manifest.category ?? "core"}</span>
+                                                </div>
+                                                <div className="scope-actions">
+                                                    <button
+                                                        className={`toggle-btn ${manifest.enabled ? "on" : "off"}`}
+                                                        onClick={() => togglePlugin(manifest.id, !manifest.enabled)}
+                                                    >
+                                                        {manifest.enabled ? "on" : "off"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {manifest.description && (
+                                                <span className="scope-status">{manifest.description}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {pluginManifests.length === 0 && (
+                                    <span className="scope-status unindexed">no plugins installed</span>
+                                )}
+                            </div>
+                            <div style={{ marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
+                                <h2>PLUGIN STORE</h2>
+                                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                    Browse and install community plugins — coming soon.
+                                </p>
+                            </div>
+                        </section>
+                    )}
+
                     {/* Plugin settings tabs */}
                     {corePluginsWithSettings.map(plugin => activeTab === plugin.id && plugin.SettingsSection && (
                         <plugin.SettingsSection key={plugin.id} />
                     ))}
-                    {activeTab === "automations" && (
-                        <section className="drawer-section">
-                            <h2>RSS FEEDS</h2>
-                            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-                                News articles from these feeds appear in your Daily Focus checklist each morning.
-                            </p>
-
-                            <div className="scope-list" style={{ marginBottom: "0.75rem" }}>
-                                {rssFeeds.length === 0 && (
-                                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>No feeds configured.</p>
-                                )}
-                                {rssFeeds.map((feed, i) => (
-                                    <div key={i} className="scope-row">
-                                        <div className="scope-header">
-                                            <div className="scope-main-info">
-                                                <span className="scope-name">{feed.name || feed.url}</span>
-                                                <span className="scope-path">{feed.url}</span>
-                                            </div>
-                                            <div className="scope-actions">
-                                                <button
-                                                    className={`toggle-btn ${feed.enabled ? "on" : "off"}`}
-                                                    onClick={async () => {
-                                                        const updated = rssFeeds.map((f, j) => j === i ? { ...f, enabled: !f.enabled } : f);
-                                                        setRssFeeds(updated);
-                                                        await saveRssFeeds(updated);
-                                                    }}
-                                                >
-                                                    {feed.enabled ? "on" : "off"}
-                                                </button>
-                                                <button
-                                                    className="delete-btn"
-                                                    title="Remove"
-                                                    onClick={async () => {
-                                                        const updated = rssFeeds.filter((_, j) => j !== i);
-                                                        setRssFeeds(updated);
-                                                        await saveRssFeeds(updated);
-                                                    }}
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="add-scope">
-                                <input
-                                    type="text"
-                                    placeholder="Feed name (e.g. Hacker News)"
-                                    value={newFeedName}
-                                    onChange={e => setNewFeedName(e.target.value)}
-                                />
-                                <input
-                                    type="url"
-                                    placeholder="Feed URL (RSS or Atom)"
-                                    value={newFeedUrl}
-                                    onChange={e => setNewFeedUrl(e.target.value)}
-                                    onKeyDown={async e => {
-                                        if (e.key === "Enter" && newFeedUrl.trim()) {
-                                            const updated = [...rssFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || newFeedUrl.trim(), enabled: true }];
-                                            setRssFeeds(updated);
-                                            await saveRssFeeds(updated);
-                                            setNewFeedUrl("");
-                                            setNewFeedName("");
-                                        }
-                                    }}
-                                />
-                                <button
-                                    disabled={!newFeedUrl.trim() || rssSaving}
-                                    onClick={async () => {
-                                        if (!newFeedUrl.trim()) return;
-                                        setRssSaving(true);
-                                        try {
-                                            const updated = [...rssFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || newFeedUrl.trim(), enabled: true }];
-                                            setRssFeeds(updated);
-                                            await saveRssFeeds(updated);
-                                            setNewFeedUrl("");
-                                            setNewFeedName("");
-                                        } finally {
-                                            setRssSaving(false);
-                                        }
-                                    }}
-                                >
-                                    Add Feed
-                                </button>
-                            </div>
-
-                            <div style={{ marginTop: "1.25rem" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                                    Your Interests
-                                </label>
-                                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0.35rem 0 0.5rem" }}>
-                                    Describe what topics you care about. The AI will filter articles to only add relevant ones.
-                                </p>
-                                <textarea
-                                    value={newsInterests}
-                                    onChange={e => setNewsInterests(e.target.value)}
-                                    placeholder="e.g. technology, AI, climate change, local politics, indie games..."
-                                    rows={3}
-                                    style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
-                                />
-                                <button
-                                    disabled={interestsSaving}
-                                    onClick={async () => {
-                                        setInterestsSaving(true);
-                                        try { await saveNewsInterests(newsInterests); }
-                                        finally { setInterestsSaving(false); }
-                                    }}
-                                    style={{ marginTop: "0.5rem" }}
-                                >
-                                    {interestsSaving ? "Saving…" : "Save Interests"}
-                                </button>
-                            </div>
-                        </section>
-                    )}
                 </div>
             </div>
         </>

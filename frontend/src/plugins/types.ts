@@ -46,4 +46,6 @@ export interface ShrimpPluginFrontend {
     DashboardCards?: React.ComponentType<{ onNavigate: NavigateFn }>[];
     /** Settings section rendered inside the settings modal. */
     SettingsSection?: React.ComponentType;
+    /** Human-readable name for the plugin. */
+    name?: string;
 }

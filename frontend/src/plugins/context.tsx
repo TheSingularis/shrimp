@@ -7,40 +7,89 @@
  *
  *   // anywhere inside the tree
  *   const plugins = usePlugins();
+ *   const { manifests, togglePlugin } = usePluginManager(); // settings only
  */
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ShrimpPluginFrontend } from "./types";
+import type { PluginManifest } from "../api";
+import { setPluginEnabled } from "../api";
 import { loadPlugins } from "./loader";
 
+interface PluginManagerValue {
+    manifests: PluginManifest[];
+    togglePlugin: (id: string, enabled: boolean) => Promise<void>;
+}
+
 const PluginContext = createContext<ShrimpPluginFrontend[]>([]);
+const PluginManagerContext = createContext<PluginManagerValue>({
+    manifests: [],
+    togglePlugin: async () => {},
+});
 
 const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname || "localhost"}:8000`;
 
 export function PluginProvider({ children }: { children: React.ReactNode }) {
-    const [plugins, setPlugins] = useState<ShrimpPluginFrontend[]>([]);
+    const [allPlugins, setAllPlugins] = useState<ShrimpPluginFrontend[]>([]);
+    const [manifests, setManifests] = useState<PluginManifest[]>([]);
 
     useEffect(() => {
         fetch(`${BASE}/api/plugins`)
             .then((r) => r.json())
-            .then(async (data: { plugins: { id: string }[] }) => {
-                const ids = data.plugins.map((p) => p.id);
-                const loaded = await loadPlugins(ids);
-                setPlugins(loaded);
+            .then(async (data: { plugins: PluginManifest[] }) => {
+                setManifests(data.plugins);
+                // Load ALL plugin modules upfront — browser caches them, so
+                // toggling enabled state is a pure in-memory operation (no reload).
+                const allIds = data.plugins.map((p) => p.id);
+                const loaded = await loadPlugins(allIds);
+                setAllPlugins(loaded);
             })
             .catch((err) => {
                 console.warn("[plugins] Failed to fetch plugin list:", err);
             });
     }, []);
 
+    const enabledIds = useMemo(
+        () => new Set(manifests.filter((m) => m.enabled !== false).map((m) => m.id)),
+        [manifests],
+    );
+
+    const enabledPlugins = useMemo(
+        () => allPlugins.filter((p) => enabledIds.has(p.id)),
+        [allPlugins, enabledIds],
+    );
+
+    async function togglePlugin(id: string, enabled: boolean) {
+        // Optimistic update
+        setManifests((prev) => prev.map((m) => (m.id === id ? { ...m, enabled } : m)));
+        try {
+            await setPluginEnabled(id, enabled);
+        } catch {
+            // Rollback
+            setManifests((prev) => prev.map((m) => (m.id === id ? { ...m, enabled: !enabled } : m)));
+        }
+    }
+
+    const managerValue = useMemo<PluginManagerValue>(
+        () => ({ manifests, togglePlugin }),
+        [manifests],
+    );
+
     return (
-        <PluginContext.Provider value={plugins}>
-            {children}
-        </PluginContext.Provider>
+        <PluginManagerContext.Provider value={managerValue}>
+            <PluginContext.Provider value={enabledPlugins}>
+                {children}
+            </PluginContext.Provider>
+        </PluginManagerContext.Provider>
     );
 }
 
-/** Returns the array of currently loaded frontend plugins. */
+/** Returns only the currently enabled plugins. */
 export function usePlugins(): ShrimpPluginFrontend[] {
     return useContext(PluginContext);
+}
+
+/** Returns manifests (all plugins + enabled state) and a toggle function. */
+export function usePluginManager(): PluginManagerValue {
+    return useContext(PluginManagerContext);
 }

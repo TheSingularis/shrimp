@@ -477,40 +477,6 @@ export async function moveConversationToProject(
     if (!res.ok) throw new Error("Failed to move conversation");
 }
 
-// ── RSS Feeds ────────────────────────────────────────────────────────────────
-
-export async function getRssFeeds(): Promise<{ url: string; name: string; enabled: boolean }[]> {
-    const res = await fetch(`${BASE}/settings/rss-feeds`);
-    if (!res.ok) throw new Error("Failed to get RSS feeds");
-    const data = await res.json();
-    return data.feeds || [];
-}
-
-export async function saveRssFeeds(feeds: { url: string; name: string; enabled: boolean }[]): Promise<void> {
-    const res = await fetch(`${BASE}/settings/rss-feeds`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feeds }),
-    });
-    if (!res.ok) throw new Error("Failed to save RSS feeds");
-}
-
-export async function getNewsInterests(): Promise<string> {
-    const res = await fetch(`${BASE}/settings/news-interests`);
-    if (!res.ok) throw new Error("Failed to get news interests");
-    const data = await res.json();
-    return data.interests || "";
-}
-
-export async function saveNewsInterests(interests: string): Promise<void> {
-    const res = await fetch(`${BASE}/settings/news-interests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interests }),
-    });
-    if (!res.ok) throw new Error("Failed to save news interests");
-}
-
 // ── Notifications ────────────────────────────────────────────────────────────
 
 export interface Notification {
@@ -685,4 +651,28 @@ export async function searchObsidian(query: string, scope?: string): Promise<{ r
     });
     if (!res.ok) throw new Error("Search failed");
     return res.json();
+}
+
+export interface PluginManifest {
+    id: string;
+    name: string;
+    version: string;
+    description?: string;
+    category?: string;
+    enabled: boolean;
+}
+
+export async function getPluginManifests(): Promise<PluginManifest[]> {
+    const res = await fetch(`${BASE}/api/plugins`);
+    if (!res.ok) throw new Error(`getPluginManifests: ${res.status}`);
+    return (await res.json()).plugins;
+}
+
+export async function setPluginEnabled(id: string, enabled: boolean): Promise<void> {
+    const res = await fetch(`${BASE}/api/plugins/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) throw new Error(`setPluginEnabled: ${res.status}`);
 }
