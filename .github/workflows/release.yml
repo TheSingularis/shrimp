@@ -138,14 +138,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          ASSET_NAME="SHRIMP-${VERSION}.AppImage"
           RELEASE_TAG="${GITHUB_REF_NAME}"
           DOWNLOAD_URL=""
           for i in $(seq 1 18); do
+            echo "--- assets on release ($i/18) ---"
+            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' 2>/dev/null || true
             DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
-              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url" 2>/dev/null || true)
+              --jq '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' 2>/dev/null || true)
             if [ -n "$DOWNLOAD_URL" ]; then echo "Asset found: $DOWNLOAD_URL"; break; fi
-            echo "Waiting for asset... ($i/18)"; sleep 10
+            sleep 10
           done
           if [ -z "$DOWNLOAD_URL" ]; then
             echo "ERROR: AppImage asset not found after 3 minutes" && exit 1
