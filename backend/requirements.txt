@@ -123,7 +123,7 @@ typing_extensions==4.15.0
 tzlocal==5.3.1
 urllib3==2.6.3
 uvicorn==0.45.0
-uvloop==0.22.1
+uvloop==0.22.1; sys_platform != "win32"
 watchfiles==1.1.1
 websocket-client==1.9.0
 websockets==16.0

@@ -132,20 +132,7 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for AppImage asset to be available
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ASSET_NAME="SHRIMP-${{ steps.ver.outputs.version }}.AppImage"
-          RELEASE_TAG="${GITHUB_REF_NAME}"
-          for i in $(seq 1 12); do
-            URL=$(gh release view "$RELEASE_TAG" --json assets \
-              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .url" 2>/dev/null || true)
-            if [ -n "$URL" ]; then echo "Asset found"; break; fi
-            echo "Waiting for asset... ($i/12)"; sleep 10
-          done
-
-      - name: Compute AppImage SHA256
+      - name: Wait for AppImage and compute SHA256
         id: sha
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -153,8 +140,16 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
           ASSET_NAME="SHRIMP-${VERSION}.AppImage"
           RELEASE_TAG="${GITHUB_REF_NAME}"
-          DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
-            --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+          DOWNLOAD_URL=""
+          for i in $(seq 1 18); do
+            DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
+              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url" 2>/dev/null || true)
+            if [ -n "$DOWNLOAD_URL" ]; then echo "Asset found: $DOWNLOAD_URL"; break; fi
+            echo "Waiting for asset... ($i/18)"; sleep 10
+          done
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "ERROR: AppImage asset not found after 3 minutes" && exit 1
+          fi
           curl -L --silent --output appimage.tmp "$DOWNLOAD_URL"
           SHA256=$(sha256sum appimage.tmp | awk '{print $1}')
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
