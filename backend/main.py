@@ -24,6 +24,7 @@ import notifications
 import scheduler
 import plugin_loader
 import obsidian_ops
+from config_utils import atomic_write
 from urllib.parse import unquote
 
 logging.basicConfig(
@@ -152,7 +153,7 @@ def write_config(scopes: list[dict], model: str):
         f'OLLAMA_MODEL = "{model}"',
         current,
     )
-    config_path.write_text(current)
+    atomic_write(config_path, current)
     log.info("config.py written: model=%s  scopes=%s",
              model, [s["name"] for s in scopes])
 
@@ -305,7 +306,7 @@ def _persist_plugins_config(plugin_id: str, **updates: object) -> None:
         current,
         flags=_re.DOTALL,
     )
-    config_path.write_text(current)
+    atomic_write(config_path, current)
     log.info("PLUGINS_CONFIG written")
 
 
@@ -341,7 +342,7 @@ async def debug_find(filename: str, scope: str):
 
 
 @app.post("/debug/prompt")
-async def debug_prompt(req: ChatRequest):
+async def debug_post_prompt(req: ChatRequest):
     """Debug endpoint to see the system prompt and augmented message without calling the model."""
     enabled = [s for s in config.WATCHED_DIRS if s["enabled"]]
     active = [s for s in enabled if s["name"]
@@ -1658,7 +1659,7 @@ async def get_scopes():
 
 @app.get("/settings/scopes", response_model=list[Scope])
 async def get_scopes_settings():
-    return config.WATCHED_DIRS
+    return await get_scopes()
 
 
 @app.post("/settings/scopes")
@@ -2154,7 +2155,7 @@ async def set_ctx_setting(update: CtxUpdate):
     if _re.search(r"NUM_CTX: int = \d+", current):
         current = _re.sub(r"NUM_CTX: int = \d+",
                           f"NUM_CTX: int = {update.num_ctx}", current)
-        config_path.write_text(current)
+        atomic_write(config_path, current)
         log.info("settings: NUM_CTX set to %d", update.num_ctx)
         return {"num_ctx": config.NUM_CTX}
 
@@ -2181,7 +2182,7 @@ async def set_custom_instructions(update: CustomInstructionsUpdate):
             current,
             flags=_re.DOTALL
         )
-        config_path.write_text(current)
+        atomic_write(config_path, current)
         log.info("settings: CUSTOM_INSTRUCTIONS updated")
         return {"custom_instructions": config.CUSTOM_INSTRUCTIONS}
 
@@ -2207,7 +2208,7 @@ async def set_web_search(update: WebSearchUpdate):
             f"WEB_SEARCH_ENABLED: bool = {update.enabled}",
             current,
         )
-        config_path.write_text(current)
+        atomic_write(config_path, current)
     log.info("settings: WEB_SEARCH_ENABLED set to %s", update.enabled)
     return {"enabled": config.WEB_SEARCH_ENABLED}
 
@@ -2236,7 +2237,7 @@ async def set_theme(update: ThemeUpdate):
             f'UI_THEME: str = "{update.theme}"',
             current
         )
-        config_path.write_text(current)
+        atomic_write(config_path, current)
         log.info("settings: UI_THEME set to %s", update.theme)
         return {"theme": config.UI_THEME}
 
@@ -2261,7 +2262,7 @@ async def set_language(update: LanguageUpdate):
             f'UI_LANGUAGE: str = "{escaped_lang}"',
             current
         )
-        config_path.write_text(current)
+        atomic_write(config_path, current)
         log.info("settings: UI_LANGUAGE set to %s", update.language)
         return {"language": config.UI_LANGUAGE}
 
@@ -2363,7 +2364,7 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
         lines.insert(insert_idx, f'OLLAMA_HOST = "{new_host}"')
         new_config = '\n'.join(lines)
 
-    config_path.write_text(new_config)
+    atomic_write(config_path, new_config)
 
     # Update in-memory value so subsequent requests use the new host immediately
     config.OLLAMA_HOST = new_host
@@ -2482,7 +2483,7 @@ def _persist_automation_config(name: str, **updates: object) -> None:
         current,
         flags=_re.DOTALL,
     )
-    config_path.write_text(current)
+    atomic_write(config_path, current)
     log.info("AUTOMATION_CONFIG written")
 
 

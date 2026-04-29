@@ -117,6 +117,29 @@ Frontend contributions: **Panel** (nav rail entry), **Settings tab**, **Dashboar
 
 ---
 
+## 🔧 Code Quality — Pending Refactors
+
+> From `docs/REFACTORS.md`. Tackle in order — atomic writes first (highest risk if skipped), then response normalization, then asyncio guard.
+
+- [x] **Atomic config writes** — `main.py:write_config()`, `plugins/email/backend/__init__.py:_write_email_config()`, `plugins/news/backend/__init__.py`
+  - Extract a shared `_atomic_write(path, content)` helper in `main.py` (or a new `config_utils.py`)
+  - Use `tempfile.NamedTemporaryFile` + `os.replace()` — atomic on POSIX, safe on Windows
+  - Replace all `config_path.write_text(current)` calls with the helper (5–6 call sites across 3 files)
+  - Test: kill the process mid-write with `kill -9` and confirm `config.py` is intact
+
+- [x] **Normalize email fetch response envelopes** — `plugins/email/backend/__init__.py`
+  - `POST /plugins/email/fetch` returns `{"fetched": N, "emails": [...]}` 
+  - `POST /plugins/email/fetch/{folder}` returns `{"fetched": N, "folder": ..., "message": ...}` (no emails list)
+  - Normalize both to `{"fetched": N, "folder": ..., "emails": [...]}` 
+  - Check `plugins/email/frontend/` for any consumers before changing; update them if needed
+
+- [x] **Guard against `asyncio.run()` in automation threads** — won't do; fails loudly at runtime, documented in PLUGINS.md — convention enforcement
+  - Add a grep check or comment in `scheduler.py:_wrapper()` noting the restriction
+  - Simplest enforcement: add a one-liner to `CLAUDE.md` or a `# NEVER use asyncio.run() here` comment in the wrapper so future AI edits don't regress it
+  - Optional: add a CI grep: `grep -r "asyncio\.run(" plugins/*/backend/ && echo "Use scheduler.run_async() instead" && exit 1`
+
+---
+
 ## ✅ Completed
 
 **Core chat & UX**

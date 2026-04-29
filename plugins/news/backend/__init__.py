@@ -13,6 +13,7 @@ import re as _re
 from pathlib import Path
 
 import config as _config
+from config_utils import atomic_write as _atomic_write
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -50,7 +51,7 @@ def _write_feeds(feeds: list[dict]) -> None:
         )
     else:
         current += f"\nRSS_FEEDS: list[dict] = {new_val}\n"
-    _CONFIG_PATH.write_text(current)
+    _atomic_write(_CONFIG_PATH, current)
 
 
 def _write_interests(interests: str) -> None:
@@ -63,7 +64,7 @@ def _write_interests(interests: str) -> None:
         current = _re.sub(r'NEWS_INTERESTS: str = ".*?"', replacement, current, flags=_re.DOTALL)
     else:
         current += f'\n{replacement}\n'
-    _CONFIG_PATH.write_text(current)
+    _atomic_write(_CONFIG_PATH, current)
 
 
 def _write_strictness(strictness: str) -> None:
@@ -73,7 +74,7 @@ def _write_strictness(strictness: str) -> None:
         current = _re.sub(r'NEWS_FILTER_STRICTNESS: str = ".*?"', replacement, current)
     else:
         current += f'\n{replacement}\n'
-    _CONFIG_PATH.write_text(current)
+    _atomic_write(_CONFIG_PATH, current)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

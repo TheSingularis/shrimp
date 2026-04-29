@@ -21,6 +21,8 @@ class PluginJob:
     cron: str              # 5-field cron expression: minute hour dom month dow
     description: str = ""
     enabled_default: bool = True
+    # Pre-override default. Once the user saves a state via AutomationsPanel,
+    # AUTOMATION_CONFIG in config.py takes permanent precedence over this value.
 
 
 class ShrimpPlugin:

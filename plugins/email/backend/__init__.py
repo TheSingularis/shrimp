@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 
 import config as _config
+from config_utils import atomic_write as _atomic_write
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -94,7 +95,7 @@ def _write_email_config(cfg: dict) -> None:
         current,
         flags=_re.DOTALL,
     )
-    _CONFIG_PATH.write_text(current)
+    _atomic_write(_CONFIG_PATH, current)
     _config.EMAIL_CONFIG.update(cfg)
     log.info("EMAIL_CONFIG written")
 
@@ -108,7 +109,7 @@ def _write_smtp_config(cfg: dict) -> None:
         current,
         flags=_re.DOTALL,
     )
-    _CONFIG_PATH.write_text(current)
+    _atomic_write(_CONFIG_PATH, current)
     _config.SMTP_CONFIG.update(cfg)
     log.info("SMTP_CONFIG written")
 
@@ -220,7 +221,7 @@ async def list_email_folders():
 async def fetch_inbox():
     loop = asyncio.get_event_loop()
     new_emails = await loop.run_in_executor(None, email_client.fetch_emails)
-    return {"fetched": len(new_emails), "emails": new_emails}
+    return {"fetched": len(new_emails), "folder": "INBOX"}
 
 
 @router.post("/fetch/{folder}")
@@ -229,7 +230,7 @@ async def fetch_folder(folder: str, limit: int = 50):
     count, msg = await loop.run_in_executor(None, email_client.fetch_folder, folder, limit)
     if msg == "IMAP error":
         raise HTTPException(status_code=500, detail=msg)
-    return {"fetched": count, "folder": folder, "message": msg}
+    return {"fetched": count, "folder": folder}
 
 
 @router.post("/refresh-all")
