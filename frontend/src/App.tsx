@@ -355,9 +355,8 @@ export default function App() {
     const activeTab = getActiveTab();
 
     const coreNavItems: { panel: Panel; icon: React.ReactNode; label: string }[] = [
-        { panel: "dashboard",   icon: <House size={18} />,             label: "Home" },
-        { panel: "chat",        icon: <MessageSquare size={18} />,     label: "Chat" },
-        { panel: "automations", icon: <BriefcaseBusiness size={18} />, label: "Tasks" },
+        { panel: "dashboard", icon: <House size={18} />,         label: "Home" },
+        { panel: "chat",      icon: <MessageSquare size={18} />, label: "Chat" },
     ];
 
     const isElectron = !!(window as any).__shrimp__?.isElectron;
@@ -393,17 +392,29 @@ export default function App() {
                 ))}
                 {/* Spacer pushes remaining items to the bottom */}
                 <div className="flex-1" />
+                <NavItem
+                    icon={<BriefcaseBusiness size={18}/>}
+                    label="Tasks"
+                    active={activePanel === "automations"}
+                    onClick={() => { setActivePanel("automations"); setPanelParams({}); }}
+                />
                 <NotificationBadge
                     count={unreadCount}
+                    active={activePanel === "notifications"}
                     onClick={() => setActivePanel(activePanel === "notifications" ? "dashboard" : "notifications")}
                 />
                 <button
                     onClick={() => setSettingsOpen(true)}
                     className="nav-btn flex flex-col items-center justify-center gap-1"
                     title="Settings"
-                    style={{ width: '44px', height: '44px', color: 'var(--color-text-muted)' }}
+                    style={{
+                        width: '44px',
+                        height: '44px',
+                        color: settingsOpen ? 'var(--accent)' : 'var(--color-text-muted)',
+                        background: settingsOpen ? 'var(--theme-accent-dim)' : 'transparent',
+                    }}
                 >
-                    <Settings size={18} style={{ color: 'var(--accent)' }} />
+                    <Settings size={18} />
                     <span style={{ fontSize: '9px', fontWeight: 500, lineHeight: 1 }} className="hidden sm:block">Settings</span>
                 </button>
             </nav>

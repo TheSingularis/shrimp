@@ -196,15 +196,20 @@ export function NotificationFeed({ open, onClose, onNavigate, notifications, unr
     );
 }
 
-export function NotificationBadge({ count, onClick }: { count: number; onClick: () => void }) {
+export function NotificationBadge({ count, onClick, active }: { count: number; onClick: () => void; active?: boolean }) {
     return (
         <button
             onClick={onClick}
             className="nav-btn relative flex flex-col items-center justify-center gap-1"
             title="Notifications"
-            style={{ width: '44px', height: '44px', color: 'var(--color-text-muted)' }}
+            style={{
+                width: '44px',
+                height: '44px',
+                color: active ? 'var(--accent)' : 'var(--color-text-muted)',
+                background: active ? 'var(--theme-accent-dim)' : 'transparent',
+            }}
         >
-            <Bell size={18} style={{ color: 'var(--accent)' }} />
+            <Bell size={18} />
             <span style={{ fontSize: '9px', fontWeight: 500, lineHeight: 1 }} className="hidden sm:block">Alerts</span>
             {count > 0 && (
                 <span
