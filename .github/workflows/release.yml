@@ -8,9 +8,29 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      content: ${{ steps.cliff.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --current --strip header
+
   build-linux:
     runs-on: ubuntu-latest
+    needs: changelog
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +38,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,6 +54,9 @@ jobs:
       - name: Install Node deps
         run: npm ci
 
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
       - name: Build frontend
         env:
           ELECTRON: '1'
@@ -50,11 +72,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist-electron/SHRIMP-*.AppImage
+          body: ${{ needs.changelog.outputs.content }}
           draft: false
           prerelease: false
 
   build-windows:
     runs-on: windows-latest
+    needs: changelog
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +86,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -78,6 +101,9 @@ jobs:
       - name: Install Node deps
         run: npm ci
 
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
       - name: Build frontend
         env:
           ELECTRON: '1'
@@ -92,6 +118,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist-electron/SHRIMP*.exe
+          body: ${{ needs.changelog.outputs.content }}
           draft: false
           prerelease: false
 
@@ -131,7 +158,6 @@ jobs:
           curl -L --silent --output appimage.tmp "$DOWNLOAD_URL"
           SHA256=$(sha256sum appimage.tmp | awk '{print $1}')
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
-          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
 
       - name: Update shrimp-bin PKGBUILD
         run: |
