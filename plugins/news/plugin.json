@@ -1,0 +1,9 @@
+{
+  "id": "news",
+  "name": "News",
+  "version": "1.0.0",
+  "category": "core",
+  "description": "RSS feed reader with AI interest filtering and daily checklist integration",
+  "min_shrimp_version": "1.0.0",
+  "settings_level": "top-level"
+}

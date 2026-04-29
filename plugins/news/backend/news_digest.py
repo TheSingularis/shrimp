@@ -4,8 +4,11 @@ News digest job — runs at 9am daily (and on demand).
 Fetches RSS/Atom feeds configured in config.RSS_FEEDS, filters to entries
 published in the last 48 hours, deduplicates by URL, and pushes each article
 as a low-priority checklist item. If NEWS_INTERESTS is set, uses the LLM to
-filter articles to only those relevant to the user's interests. Sends one
-notification summarising results.
+filter articles to only those relevant to the user's interests.
+NEWS_FILTER_STRICTNESS controls how tightly the model screens articles:
+  "broad"   — tangentially related articles pass through
+  "focused" — must be a clear and primary topic (default)
+  "strict"  — must be the central focus; conservative, when in doubt exclude
 """
 from __future__ import annotations
 
@@ -22,23 +25,49 @@ import config
 import notifications
 import scheduler as _scheduler
 
-log = logging.getLogger("shrimp.automations.news_digest")
+log = logging.getLogger("shrimp.plugin.news.digest")
 
-# Atom namespace
 _ATOM_NS = "http://www.w3.org/2005/Atom"
+
+_STRICTNESS_PROMPTS: dict[str, str] = {
+    "broad": (
+        "The user is interested in: {interests}\n\n"
+        "From the numbered list of articles below, return the numbers of any articles "
+        "that are related to or touch on the user's interests, even tangentially.\n"
+        "Return ONLY the numbers as a comma-separated list (e.g. 1,3,7). "
+        "If none qualify, return an empty response.\n\n"
+        "{numbered}"
+    ),
+    "focused": (
+        "The user is interested in: {interests}\n\n"
+        "From the numbered list of articles below, return the numbers of articles where "
+        "the user's interests are a clear and primary topic — not just briefly mentioned "
+        "or tangentially related.\n"
+        "Return ONLY the numbers as a comma-separated list (e.g. 1,3,7). "
+        "If none qualify, return an empty response.\n\n"
+        "{numbered}"
+    ),
+    "strict": (
+        "The user is interested in: {interests}\n\n"
+        "From the numbered list of articles below, return ONLY the numbers of articles "
+        "where the user's stated interests are the central focus. Be conservative — "
+        "when in doubt, exclude. Do not include articles that merely mention or relate "
+        "to the interests in passing.\n"
+        "Return ONLY the numbers as a comma-separated list (e.g. 1,3,7). "
+        "If none qualify, return an empty response.\n\n"
+        "{numbered}"
+    ),
+}
 
 
 def _parse_date(date_str: str | None) -> datetime | None:
-    """Parse RFC 2822 or ISO 8601 date strings, returning UTC-aware datetime."""
     if not date_str:
         return None
     date_str = date_str.strip()
-    # Try RFC 2822 (common in RSS 2.0 pubDate)
     try:
         return parsedate_to_datetime(date_str).astimezone(timezone.utc)
     except Exception:
         pass
-    # Try ISO 8601 variants (Atom published/updated)
     for fmt in (
         "%Y-%m-%dT%H:%M:%S%z",
         "%Y-%m-%dT%H:%M:%SZ",
@@ -57,7 +86,6 @@ def _parse_date(date_str: str | None) -> datetime | None:
 
 
 def _fetch_entries(feed_url: str) -> list[dict]:
-    """Fetch a feed URL and return a list of entry dicts."""
     try:
         with httpx.Client(timeout=20, follow_redirects=True) as client:
             resp = client.get(feed_url, headers={"User-Agent": "SHRIMP/1.0 RSS reader"})
@@ -74,15 +102,11 @@ def _fetch_entries(feed_url: str) -> list[dict]:
         return []
 
     entries: list[dict] = []
-
-    # Detect format: RSS 2.0 uses <channel><item>, Atom uses <feed><entry>
     tag = root.tag
-    # Strip namespace if present
     if tag.startswith("{"):
         tag = tag.split("}", 1)[1]
 
     if tag in ("rss", "RDF"):
-        # RSS 2.0 / RSS 1.0
         for item in root.iter("item"):
             title_el = item.find("title")
             link_el = item.find("link")
@@ -95,18 +119,20 @@ def _fetch_entries(feed_url: str) -> list[dict]:
                 "date_str": pub_el.text if pub_el is not None else None,
             })
     else:
-        # Atom
-        ns = {"atom": _ATOM_NS}
-        # Try with namespace first, then without
         for entry in root.findall(f"{{{_ATOM_NS}}}entry") or root.findall("entry"):
             title_el = entry.find(f"{{{_ATOM_NS}}}title") or entry.find("title")
-            # Atom link is an element with href attribute
             link_el = entry.find(f"{{{_ATOM_NS}}}link") or entry.find("link")
             link_url = ""
             if link_el is not None:
                 link_url = link_el.get("href", "") or (link_el.text or "")
-            summary_el = entry.find(f"{{{_ATOM_NS}}}summary") or entry.find("summary") or entry.find(f"{{{_ATOM_NS}}}content") or entry.find("content")
-            pub_el = entry.find(f"{{{_ATOM_NS}}}published") or entry.find("published") or entry.find(f"{{{_ATOM_NS}}}updated") or entry.find("updated")
+            summary_el = (
+                entry.find(f"{{{_ATOM_NS}}}summary") or entry.find("summary")
+                or entry.find(f"{{{_ATOM_NS}}}content") or entry.find("content")
+            )
+            pub_el = (
+                entry.find(f"{{{_ATOM_NS}}}published") or entry.find("published")
+                or entry.find(f"{{{_ATOM_NS}}}updated") or entry.find("updated")
+            )
             entries.append({
                 "title": (title_el.text or "").strip() if title_el is not None else "",
                 "url": link_url.strip(),
@@ -127,7 +153,10 @@ async def _call_llm(prompt: str) -> str:
                 "model": config.OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": True,
-                "options": {"num_ctx": min(getattr(config, "NUM_CTX", 4096), 4096)},
+                "options": {
+                    "num_ctx": min(getattr(config, "NUM_CTX", 4096), 4096),
+                    "temperature": 0,
+                },
             },
         ) as resp:
             async for line in resp.aiter_lines():
@@ -143,8 +172,11 @@ async def _call_llm(prompt: str) -> str:
     return "".join(parts).strip()
 
 
-def _filter_by_interests(entries: list[tuple[dict, str]], interests: str) -> list[tuple[dict, str]]:
-    """Use the LLM to keep only entries relevant to the user's interests."""
+def _filter_by_interests(
+    entries: list[tuple[dict, str]],
+    interests: str,
+    strictness: str = "focused",
+) -> list[tuple[dict, str]]:
     if not entries:
         return entries
 
@@ -152,13 +184,9 @@ def _filter_by_interests(entries: list[tuple[dict, str]], interests: str) -> lis
         f"{i+1}. {e['title']} — {e['description'][:150]}"
         for i, (e, _) in enumerate(entries)
     )
-    prompt = (
-        f"The user is interested in: {interests}\n\n"
-        f"Below is a numbered list of news article headlines and summaries.\n"
-        f"Return ONLY the numbers of articles that are relevant to the user's interests, "
-        f"as a comma-separated list (e.g. 1,3,7). If none are relevant, return an empty response.\n\n"
-        f"{numbered}"
-    )
+
+    template = _STRICTNESS_PROMPTS.get(strictness, _STRICTNESS_PROMPTS["focused"])
+    prompt = template.format(interests=interests, numbered=numbered)
 
     try:
         raw = _scheduler.run_async(_call_llm(prompt))
@@ -170,7 +198,10 @@ def _filter_by_interests(entries: list[tuple[dict, str]], interests: str) -> lis
                 if 0 <= idx < len(entries):
                     kept_indices.add(idx)
         filtered = [entries[i] for i in sorted(kept_indices)]
-        log.info("News digest: interest filter kept %d/%d articles", len(filtered), len(entries))
+        log.info(
+            "News digest: interest filter (%s) kept %d/%d articles",
+            strictness, len(filtered), len(entries),
+        )
         return filtered
     except Exception:
         log.exception("News digest: interest filtering failed, returning all entries")
@@ -178,7 +209,6 @@ def _filter_by_interests(entries: list[tuple[dict, str]], interests: str) -> lis
 
 
 def run() -> None:
-    """Entry point called by the scheduler (sync)."""
     try:
         feeds: list[dict] = getattr(config, "RSS_FEEDS", [])
         enabled_feeds = [f for f in feeds if f.get("enabled", True)]
@@ -191,7 +221,7 @@ def run() -> None:
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
         seen_urls: set[str] = set()
-        all_new_entries: list[tuple[dict, str]] = []  # (entry, feed_name)
+        all_new_entries: list[tuple[dict, str]] = []
 
         for feed in enabled_feeds:
             feed_url: str = feed.get("url", "")
@@ -206,12 +236,9 @@ def run() -> None:
                 url = entry.get("url", "")
                 if not url or url in seen_urls:
                     continue
-
-                # Filter by date
                 dt = _parse_date(entry.get("date_str"))
                 if dt is not None and dt < cutoff:
                     continue
-
                 seen_urls.add(url)
                 all_new_entries.append((entry, feed_name))
 
@@ -219,11 +246,14 @@ def run() -> None:
             log.info("News digest: no new entries in the last 48 hours")
             return
 
-        # Filter by interests if configured
         interests: str = getattr(config, "NEWS_INTERESTS", "").strip()
         if interests:
-            log.info("News digest: filtering %d articles by interests", len(all_new_entries))
-            all_new_entries = _filter_by_interests(all_new_entries, interests)
+            strictness: str = getattr(config, "NEWS_FILTER_STRICTNESS", "focused")
+            log.info(
+                "News digest: filtering %d articles by interests (strictness=%s)",
+                len(all_new_entries), strictness,
+            )
+            all_new_entries = _filter_by_interests(all_new_entries, interests, strictness)
             if not all_new_entries:
                 log.info("News digest: no articles matched interests")
                 return
