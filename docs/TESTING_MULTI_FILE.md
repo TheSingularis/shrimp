@@ -6,9 +6,9 @@ This document provides a comprehensive testing checklist for the multi-file edit
 
 ## Prerequisites
 
-1. Start SHRIMP in distrobox:
+1. Start SHRIMP:
    ```sh
-   distrobox enter arch-dev -- bash start.sh
+   npm run web
    ```
 
 2. Ensure you have a scope with multiple editable files (e.g., shrimp itself)
@@ -105,7 +105,7 @@ This document provides a comprehensive testing checklist for the multi-file edit
 
 **Test 4.3: Network Disconnect**
 - [ ] Start multi-file edit
-- [ ] Stop backend mid-stream: `Ctrl+C` in distrobox
+- [ ] Stop backend mid-stream: `Ctrl+C`
 - [ ] Expected: Frontend shows partial response or error
 - [ ] Restart, verify state didn't corrupt
 

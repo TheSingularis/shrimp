@@ -34,7 +34,7 @@ The main UI entry point shifts from "chat interface with a sidebar" to a **dashb
 
 ### Stays the Same
 
-- Arch distrobox development and deployment model (`distrobox enter arch-dev -- bash start.sh`)
+- `npm run web` (browser) / `npm run electron` (desktop) development and deployment model
 - FastAPI backend on port 8000, Vite frontend on port 5173
 - Ollama for all LLM and embedding work
 - LlamaIndex + ChromaDB for RAG indexing
@@ -352,7 +352,7 @@ Unread count shown as badge on bell icon. `useNotifications.ts` hook maintains t
 - `GET /notifications/stream` — SSE endpoint
 - `scheduler.py` — APScheduler wrapper with no-op test job
 - `GET /jobs`, `POST /jobs/{name}/run`
-- Install `apscheduler` via pip in the distrobox
+- Install `apscheduler` via pip
 
 **Frontend:**
 - `App.tsx` — add nav rail; Chat remains default view
@@ -374,7 +374,7 @@ Unread count shown as badge on bell icon. `useNotifications.ts` hook maintains t
 - `jobs/email_triage.py` — periodic fetch + triage registered with APScheduler
 - `fetch_emails` tool in `tool_executor.py`
 - `EMAIL_CONFIG` block in `config.py`
-- Install `aioimaplib`, `html2text` via pip in the distrobox
+- Install `aioimaplib`, `html2text` via pip
 
 **Frontend:**
 - `EmailPanel.tsx` — two-pane inbox
@@ -410,7 +410,7 @@ Unread count shown as badge on bell icon. `useNotifications.ts` hook maintains t
 - `jobs/file_summary.py` — changed file summaries
 - `PUT /jobs/{name}` — schedule editing
 - RSS/OPML config in `config.py`
-- Install `feedparser` via pip in the distrobox
+- Install `feedparser` via pip
 
 **Frontend:**
 - `JobsPanel.tsx` — job status grid with trigger and schedule controls
@@ -455,4 +455,4 @@ Unread count shown as badge on bell icon. `useNotifications.ts` hook maintains t
 | `backend/config.py` | `EMAIL_CONFIG`, RSS feed config, job schedule config blocks added |
 | `frontend/src/App.tsx` | Nav rail and panel routing (only structural change to existing frontend) |
 | `frontend/src/api.ts` | All new API calls added; existing functions never modified |
-| `pip` (distrobox) | Install new Python packages: `apscheduler`, `aioimaplib`, `html2text`, `feedparser` |
+| `pip` | Install new Python packages: `apscheduler`, `aioimaplib`, `html2text`, `feedparser` |

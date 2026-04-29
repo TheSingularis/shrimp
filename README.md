@@ -168,9 +168,9 @@ EMBED_MODEL = "nomic-embed-text"
 
 ## Prerequisites
 
-- [distrobox](https://github.com/89luca89/distrobox) with an Arch Linux container named `arch-dev`
 - A GPU or CPU capable of running Ollama models (7B models work well on most modern hardware)
-- Node.js 20+ and npm (for building the Electron app)
+- Node.js 20+ and npm
+- Python 3.12+
 
 ---
 
@@ -209,7 +209,12 @@ You can also add, edit, and delete scopes from the UI after starting the app —
 
 **Browser dev mode** (Vite dev server at port 5173):
 ```sh
-distrobox enter arch-dev -- bash start.sh
+npm run web
+```
+
+**Electron desktop app:**
+```sh
+npm run electron
 ```
 
 On first run this will:
@@ -275,7 +280,7 @@ tail -f .ollama/frontend.log   # Vite
 
 SHRIMP can be accessed from other devices on your local network:
 
-1. Start SHRIMP: `distrobox enter arch-dev -- bash start.sh`
+1. Start SHRIMP: `npm run web`
 2. Find your computer's IP address: `ip addr show | grep "inet "`
 3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
 
@@ -344,15 +349,16 @@ shrimp/
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh` inside the Arch distrobox:
+All services (Ollama, FastAPI backend, Vite frontend) are started via:
 
 ```sh
-distrobox enter arch-dev -- bash start.sh
+npm run web        # browser dev mode (Vite at port 5173)
+npm run electron   # Electron desktop app
 ```
 
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox.
-- To restart, stop the running processes and re-run the above command.
-- Install Python packages with `pip install` inside the distrobox; system packages with `pacman -S`.
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `npm run web` or `npm run electron`.
+- To restart, stop the running processes and re-run the start command.
+- Install Python packages with `pip install`.
 
 ### Watching logs
 
@@ -407,7 +413,7 @@ tail -f .ollama/backend.log .ollama/frontend.log .ollama/serve.log  # everything
 - Do not make any calls to external APIs or cloud services
 - Do not store sensitive data (file contents, paths) in frontend state longer than needed
 - Do not use `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh` via the distrobox
+- Do not run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `npm run web` or `npm run electron`
 
 ---
 
@@ -469,7 +475,7 @@ tail -f .ollama/frontend.log   # Vite
 
 SHRIMP can be accessed from other devices on your local network:
 
-1. Start SHRIMP: `distrobox enter arch-dev -- bash start.sh`
+1. Start SHRIMP: `npm run web`
 2. Find your computer's IP address: `ip addr show | grep "inet "`
 3. On your phone/tablet browser, visit: `http://<YOUR_IP>:5173`
 
@@ -544,7 +550,8 @@ shrimp/
 Stop the running processes and re-run the start command:
 
 ```sh
-distrobox enter arch-dev -- bash start.sh
+npm run web        # browser mode
+npm run electron   # desktop app
 ```
 
 ---
@@ -552,7 +559,7 @@ distrobox enter arch-dev -- bash start.sh
 ## Troubleshooting
 
 **Backend won't start**
-Make sure you're running via `distrobox enter arch-dev -- bash start.sh` and not invoking uvicorn directly.
+Make sure you're running via `npm run web` or `npm run electron` and not invoking uvicorn directly.
 
 **Scopes show "not indexed"**
 Click **↻** next to the scope in the Settings drawer. Check `.ollama/backend.log` for errors — the most common cause is a path that doesn't exist or contains no supported file types.
