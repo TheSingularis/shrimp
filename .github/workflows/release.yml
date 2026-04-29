@@ -144,7 +144,7 @@ jobs:
             echo "--- assets on release ($i/18) ---"
             gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' 2>/dev/null || true
             DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
-              --jq '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' 2>/dev/null || true)
+              --jq '.assets[].browser_download_url' 2>/dev/null | grep '\.AppImage$' || true)
             if [ -n "$DOWNLOAD_URL" ]; then echo "Asset found: $DOWNLOAD_URL"; break; fi
             sleep 10
           done
