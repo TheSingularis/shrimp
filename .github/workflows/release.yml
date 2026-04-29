@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          ELECTRON: '1'
+        run: cd frontend && npm run build
+
+      - name: Build Linux AppImage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Override to AppImage only — pacman target requires Arch and makepkg
+        run: npx electron-builder --linux AppImage
+
+      - name: Upload AppImage to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-electron/SHRIMP-*.AppImage
+          draft: false
+          prerelease: false
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv\Scripts\pip.exe install -r requirements.txt
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          ELECTRON: '1'
+        run: cd frontend && npm run build
+
+      - name: Build Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis
+
+      - name: Upload installer to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-electron/SHRIMP*.exe
+          draft: false
+          prerelease: false
+
+  publish-aur:
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version (strip leading v)
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for AppImage asset to be available
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET_NAME="SHRIMP-${{ steps.ver.outputs.version }}.AppImage"
+          RELEASE_TAG="${GITHUB_REF_NAME}"
+          for i in $(seq 1 12); do
+            URL=$(gh release view "$RELEASE_TAG" --json assets \
+              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .url" 2>/dev/null || true)
+            if [ -n "$URL" ]; then echo "Asset found"; break; fi
+            echo "Waiting for asset... ($i/12)"; sleep 10
+          done
+
+      - name: Compute AppImage SHA256
+        id: sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          ASSET_NAME="SHRIMP-${VERSION}.AppImage"
+          RELEASE_TAG="${GITHUB_REF_NAME}"
+          DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
+            --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+          curl -L --silent --output appimage.tmp "$DOWNLOAD_URL"
+          SHA256=$(sha256sum appimage.tmp | awk '{print $1}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Update shrimp-bin PKGBUILD
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SHA256="${{ steps.sha.outputs.sha256 }}"
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp-bin/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp-bin/PKGBUILD
+          sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" aur/shrimp-bin/PKGBUILD
+
+      - name: Publish shrimp-bin to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: shrimp-bin
+          pkgbuild: aur/shrimp-bin/PKGBUILD
+          commit_username: ${{ github.actor }}
+          commit_email: ${{ github.actor }}@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to v${{ steps.ver.outputs.version }}"
+          force_push: true
+
+      - name: Update shrimp PKGBUILD version
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp/PKGBUILD
+
+      - name: Publish shrimp to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: shrimp
+          pkgbuild: aur/shrimp/PKGBUILD
+          commit_username: ${{ github.actor }}
+          commit_email: ${{ github.actor }}@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to v${{ steps.ver.outputs.version }}"
+          force_push: true
