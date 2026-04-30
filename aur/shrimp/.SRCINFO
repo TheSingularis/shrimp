@@ -3,8 +3,15 @@ pkgbase = shrimp
 	pkgver = 0.1.0
 	pkgrel = 1
 	url = https://github.com/TheSingularis/shrimp
-	arch = any
+	arch = x86_64
 	license = MIT
-	depends = shrimp-bin
+	depends = gcc-libs
+	depends = glibc
+	depends = gtk3
+	depends = nss
+	conflicts = shrimp-bin
+	options = !strip
+	source = SHRIMP-0.1.0.AppImage::https://github.com/TheSingularis/shrimp/releases/download/v0.1.0/SHRIMP-0.1.0.AppImage
+	sha256sums = SKIP
 
 pkgname = shrimp
