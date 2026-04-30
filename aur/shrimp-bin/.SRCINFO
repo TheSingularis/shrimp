@@ -5,8 +5,13 @@ pkgbase = shrimp-bin
 	url = https://github.com/TheSingularis/shrimp
 	arch = x86_64
 	license = MIT
+	depends = gcc-libs
+	depends = glibc
+	depends = gtk3
+	depends = nss
 	provides = shrimp
 	conflicts = shrimp
+	options = !strip
 	source = SHRIMP-0.1.0.AppImage::https://github.com/TheSingularis/shrimp/releases/download/v0.1.0/SHRIMP-0.1.0.AppImage
 	sha256sums = SKIP
 
