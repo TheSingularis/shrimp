@@ -4,6 +4,19 @@ import tempfile
 from pathlib import Path
 
 
+def get_config_path() -> Path:
+    """Return the writable config.py path.
+
+    In a packaged Electron install the backend runs from a root-owned system
+    directory. SHRIMP_CONFIG_DIR is set by main.js to the user's XDG data dir
+    so settings can actually be saved.
+    """
+    env = os.environ.get("SHRIMP_CONFIG_DIR")
+    if env:
+        return Path(env) / "config.py"
+    return Path(__file__).parent / "config.py"
+
+
 def atomic_write(path: Path, content: str) -> None:
     """Write content to path atomically via tempfile + os.replace().
 

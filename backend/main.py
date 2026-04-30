@@ -24,7 +24,7 @@ import notifications
 import scheduler
 import plugin_loader
 import obsidian_ops
-from config_utils import atomic_write
+from config_utils import atomic_write, get_config_path
 from urllib.parse import unquote
 
 logging.basicConfig(
@@ -140,7 +140,7 @@ class OllamaHostSettingRequest(BaseModel):
 
 
 def write_config(scopes: list[dict], model: str):
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     current = re.sub(
         r"WATCHED_DIRS: list\[dict\] = \[.*?\]",
@@ -283,7 +283,7 @@ def _persist_plugins_config(plugin_id: str, **updates: object) -> None:
     import re as _re
     import ast
 
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
 
     match = _re.search(
@@ -2149,7 +2149,7 @@ async def get_ctx():
 async def set_ctx_setting(update: CtxUpdate):
     config.NUM_CTX = update.num_ctx
     # persist to config.py
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     import re as _re
     if _re.search(r"NUM_CTX: int = \d+", current):
@@ -2169,7 +2169,7 @@ async def get_custom_instructions():
 async def set_custom_instructions(update: CustomInstructionsUpdate):
     config.CUSTOM_INSTRUCTIONS = update.custom_instructions
     # persist to config.py
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     import re as _re
     # Escape special regex characters in the value for safe replacement
@@ -2199,7 +2199,7 @@ class WebSearchUpdate(BaseModel):
 @app.post("/settings/web-search")
 async def set_web_search(update: WebSearchUpdate):
     config.WEB_SEARCH_ENABLED = update.enabled
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     import re as _re
     if _re.search(r"WEB_SEARCH_ENABLED: bool = (True|False)", current):
@@ -2228,7 +2228,7 @@ async def set_theme(update: ThemeUpdate):
 
     config.UI_THEME = update.theme
     # persist to config.py
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     import re as _re
     if _re.search(r'UI_THEME: str = ".*?"', current):
@@ -2251,7 +2251,7 @@ async def get_language():
 async def set_language(update: LanguageUpdate):
     config.UI_LANGUAGE = update.language
     # persist to config.py
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
     import re as _re
     # Escape special characters in language name
@@ -2271,7 +2271,7 @@ async def set_language(update: LanguageUpdate):
 async def get_ollama_host_setting():
     """Get current Ollama host configuration"""
     # Read from config.py
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     config_text = config_path.read_text()
 
     # Default to local if not explicitly set to external
@@ -2301,7 +2301,7 @@ async def get_ollama_host_setting():
 @app.post("/settings/ollama-host")
 async def set_ollama_host_setting(req: OllamaHostSettingRequest):
     """Update Ollama host configuration"""
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     config_text = config_path.read_text()
     import re as _re
 
@@ -2457,7 +2457,7 @@ def _persist_automation_config(name: str, **updates: object) -> None:
     import re as _re
     import ast
 
-    config_path = Path(__file__).parent / "config.py"
+    config_path = get_config_path()
     current = config_path.read_text()
 
     # Parse the current AUTOMATION_CONFIG from the file using a greedy match for nested dicts

@@ -39,6 +39,20 @@ const VENV_PYTHON = app.isPackaged
   ? path.join(BACKEND_DIR, ".venv", "bin", "python")
   : path.join(path.join(ROOT_DIR, "backend"), ".venv", "bin", "python");
 
+// User-writable dir for config.py — avoids writing to root-owned system paths.
+// Set lazily after app is ready (app.getPath requires app.whenReady).
+let USER_CONFIG_DIR = null;
+
+function setupUserConfig() {
+  USER_CONFIG_DIR = path.join(app.getPath("userData"), "config");
+  fs.mkdirSync(USER_CONFIG_DIR, { recursive: true });
+  const userConfig = path.join(USER_CONFIG_DIR, "config.py");
+  const systemConfig = path.join(BACKEND_DIR, "config.py");
+  if (!fs.existsSync(userConfig) && fs.existsSync(systemConfig)) {
+    fs.copyFileSync(systemConfig, userConfig);
+  }
+}
+
 const ICON_PATH = path.join(
   ROOT_DIR,
   "frontend",
@@ -146,7 +160,10 @@ function startBackend() {
     ],
     {
       cwd: BACKEND_DIR,
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        ...(USER_CONFIG_DIR ? { SHRIMP_CONFIG_DIR: USER_CONFIG_DIR } : {}),
+      },
     },
   );
 
@@ -339,6 +356,8 @@ if (!gotLock) {
 }
 
 app.whenReady().then(async () => {
+  if (app.isPackaged) setupUserConfig();
+
   const [backendUp, ollamaUp] = await Promise.all([
     isBackendRunning(),
     isOllamaRunning(),
