@@ -127,8 +127,7 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
     const [generatingDescription, setGeneratingDescription] = useState<string | null>(null);
     const [currentTheme, setCurrentTheme] = useState("blue-purple");
     const [currentLanguage, setCurrentLanguage] = useState("English");
-    const [ollamaMode, setOllamaMode] = useState<"local" | "external">("local");
-    const [externalUrl, setExternalUrl] = useState("");
+    const [ollamaUrl, setOllamaUrl] = useState("localhost:11434");
     const [ollamaError, setOllamaError] = useState("");
     const [ollamaSuccess, setOllamaSuccess] = useState(false);
     const { manifests: pluginManifests, togglePlugin } = usePluginManager();
@@ -151,14 +150,18 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
         getLanguage().then(setCurrentLanguage).catch(() => {});
         getOllamaHostSetting()
             .then((data) => {
-                setOllamaMode(data.mode);
-                const displayUrl = data.external_url
-                    .replace("http://", "")
-                    .replace("https://", "");
-                setExternalUrl(displayUrl);
+                if (data.mode === "local" || !data.external_url) {
+                    setOllamaUrl("localhost:11434");
+                } else {
+                    setOllamaUrl(
+                        data.external_url
+                            .replace("http://", "")
+                            .replace("https://", "")
+                    );
+                }
             })
             .catch(() => {
-                setOllamaMode("local");
+                setOllamaUrl("localhost:11434");
             });
     }, [open]);
 
@@ -200,15 +203,12 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
         await setLanguage(language);
     }
 
-    async function handleSaveOllamaHost(mode: "local" | "external", url: string) {
+    async function handleSaveOllamaHost(url: string) {
         try {
             setOllamaError("");
             setOllamaSuccess(false);
-            await setOllamaHostSetting(mode, url);
-            setOllamaMode(mode);
-            if (mode === "external") {
-                setExternalUrl(url);
-            }
+            await setOllamaHostSetting("external", url);
+            setOllamaUrl(url);
             // Refresh models from the new host
             const data = await getModels();
             setModels(data.models);
@@ -578,54 +578,34 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                             <section className="drawer-section">
                                 <h2>OLLAMA HOST</h2>
                                 <p className="section-description">Configure where Ollama runs</p>
-                                <div className="theme-pills">
-                                    <button
-                                        className={`theme-pill ${ollamaMode === "local" ? "active" : ""}`}
-                                        onClick={() => handleSaveOllamaHost("local", "")}
-                                    >
-                                        Local (Managed)
-                                    </button>
-                                    <button
-                                        className={`theme-pill ${ollamaMode === "external" ? "active" : ""}`}
-                                        onClick={() => setOllamaMode("external")}
-                                    >
-                                        External (Custom)
-                                    </button>
-                                </div>
-
-                                {ollamaMode === "external" && (
-                                    <div className="external-url-input">
-                                        <label htmlFor="ollama-url" className="input-label">
-                                            Ollama URL (host:port)
-                                        </label>
-                                        <div className="url-input-group">
-                                            <input
-                                                id="ollama-url"
-                                                type="text"
-                                                value={externalUrl}
-                                                onChange={(e) => setExternalUrl(e.target.value)}
-                                                placeholder="192.168.1.100:11434"
-                                                className="url-input"
-                                            />
-                                            <button
-                                                className="save-url-btn"
-                                                onClick={() => handleSaveOllamaHost("external", externalUrl)}
-                                                disabled={!externalUrl.trim()}
-                                            >
-                                                Save
-                                            </button>
-                                        </div>
-                                        {ollamaError && (
-                                            <div className="error-message">{ollamaError}</div>
-                                        )}
-                                        {ollamaSuccess && (
-                                            <div className="success-message">Connected successfully!</div>
-                                        )}
-                                        <div className="help-text">
-                                            Example: 192.168.1.100:11434 for a networked Ollama instance
-                                        </div>
+                                <div className="external-url-input">
+                                    <label htmlFor="ollama-url" className="input-label">
+                                        Ollama URL (host:port)
+                                    </label>
+                                    <div className="url-input-group">
+                                        <input
+                                            id="ollama-url"
+                                            type="text"
+                                            value={ollamaUrl}
+                                            onChange={(e) => setOllamaUrl(e.target.value)}
+                                            placeholder="localhost:11434"
+                                            className="url-input"
+                                        />
+                                        <button
+                                            className="save-url-btn"
+                                            onClick={() => handleSaveOllamaHost(ollamaUrl)}
+                                            disabled={!ollamaUrl.trim()}
+                                        >
+                                            Save
+                                        </button>
                                     </div>
-                                )}
+                                    {ollamaError && (
+                                        <div className="error-message">{ollamaError}</div>
+                                    )}
+                                    {ollamaSuccess && (
+                                        <div className="success-message">Connected successfully!</div>
+                                    )}
+                                </div>
                             </section>
 
                             <section className="drawer-section">
