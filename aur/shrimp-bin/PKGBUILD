@@ -21,6 +21,7 @@ prepare() {
 package() {
     install -dm755 "${pkgdir}/usr/lib/shrimp"
     cp -a squashfs-root/. "${pkgdir}/usr/lib/shrimp/"
+    chmod 755 "${pkgdir}/usr/lib/shrimp"
 
     install -Dm755 /dev/stdin "${pkgdir}/usr/bin/shrimp" <<'EOF'
 #!/usr/bin/env sh
