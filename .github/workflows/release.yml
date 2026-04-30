@@ -169,20 +169,22 @@ jobs:
             StrictHostKeyChecking no
           EOF
 
-      - name: Install makepkg deps
-        run: sudo apt-get install -y libarchive-tools
-
       - name: Publish shrimp-bin to AUR
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           SHA256="${{ steps.sha.outputs.sha256 }}"
           git clone ssh://aur@aur.archlinux.org/shrimp-bin.git /tmp/aur-shrimp-bin
+          # Update PKGBUILD
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp-bin/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp-bin/PKGBUILD
           sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" aur/shrimp-bin/PKGBUILD
-          cp aur/shrimp-bin/PKGBUILD /tmp/aur-shrimp-bin/PKGBUILD
+          # Update .SRCINFO (mirrors PKGBUILD without requiring makepkg)
+          sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp-bin/.SRCINFO
+          sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp-bin/.SRCINFO
+          sed -i "s|source = .*|source = SHRIMP-${VERSION}.AppImage::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/SHRIMP-${VERSION}.AppImage|" aur/shrimp-bin/.SRCINFO
+          sed -i "s/sha256sums = .*/sha256sums = ${SHA256}/" aur/shrimp-bin/.SRCINFO
+          cp aur/shrimp-bin/PKGBUILD aur/shrimp-bin/.SRCINFO /tmp/aur-shrimp-bin/
           cd /tmp/aur-shrimp-bin
-          makepkg --printsrcinfo > .SRCINFO
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
           git add PKGBUILD .SRCINFO
@@ -195,9 +197,10 @@ jobs:
           git clone ssh://aur@aur.archlinux.org/shrimp.git /tmp/aur-shrimp
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp/PKGBUILD
-          cp aur/shrimp/PKGBUILD /tmp/aur-shrimp/PKGBUILD
+          sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp/.SRCINFO
+          sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp/.SRCINFO
+          cp aur/shrimp/PKGBUILD aur/shrimp/.SRCINFO /tmp/aur-shrimp/
           cd /tmp/aur-shrimp
-          makepkg --printsrcinfo > .SRCINFO
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
           git add PKGBUILD .SRCINFO
