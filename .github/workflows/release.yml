@@ -153,7 +153,11 @@ jobs:
           if [ -z "$DOWNLOAD_URL" ]; then
             echo "ERROR: AppImage asset not found after 3 minutes" && exit 1
           fi
-          curl -L --silent --output appimage.tmp "$DOWNLOAD_URL"
+          curl -L --fail --output appimage.tmp "$DOWNLOAD_URL"
+          SIZE=$(stat -c%s appimage.tmp)
+          if [ "$SIZE" -lt 10000000 ]; then
+            echo "ERROR: Downloaded file is only ${SIZE} bytes — expected >10MB AppImage" && exit 1
+          fi
           SHA256=$(sha256sum appimage.tmp | awk '{print $1}')
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
 
