@@ -250,7 +250,6 @@ All notable changes to SHRIMP* will be documented in this file.
   - Batch apply with progress tracking
   - Supports up to 5 files per request
   - Quality control loop with automatic refinement when issues detected
-- Dev testing: switched development/test workflow to use `distrobox` for faster iterative testing on non-NixOS distributions. See `README.md` for basic usage notes.
 - Chat UI: real-time stage indicators during LLM operations show progress (e.g., "Finding file…", "Reading file…", "Thinking…", "Searching…", "Editing 2/3…") with animated spinner.
 - **Retry button**: Regenerate the last assistant response with a single click. Button appears in the message header of the last assistant message when not streaming.
 - **Create new files**: Model can now create new files in addition to editing existing ones. Simply request "create a file for X" and the model will propose the new file content for review in the diff viewer. Parent directories are created automatically if needed.
@@ -327,7 +326,7 @@ All notable changes to SHRIMP* will be documented in this file.
 - Index status display showing file count and last-indexed timestamp per scope
 - Structured backend logging to `.ollama/backend.log` covering index progress, chat requests, config changes, and errors
 - Automatic port clearing on shell start — stale processes on ports 8000 and 5173 are killed before services start
-- Full dev environment started via `distrobox enter arch-dev -- bash start.sh` — starts Ollama, the backend, and the frontend automatically
+- Full dev environment started via `bash start.sh` — starts Ollama, the backend, and the frontend automatically
 - Indexed file types: `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.env.example`
 
 - **New:** Indexing now automatically skips common dependency and junk folders (`node_modules`, `.git`, `.venv`, `dist`, `build`, `out`, `chroma_db`, etc.) for much faster indexing of large projects.

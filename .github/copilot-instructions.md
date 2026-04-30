@@ -48,16 +48,15 @@ shrimp/
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started via:
+All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh`:
 
 ```sh
-npm run web        # browser dev mode (Vite at port 5173)
-npm run electron   # Electron desktop app
+bash start.sh
 ```
 
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `npm run web` or `npm run electron`.
-- To restart, stop the running processes and re-run the start command.
-- Python packages: `pip install`.
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh`.
+- To restart, stop the running processes and re-run the above command.
+- Python packages: `pip install`. System packages: `pacman -S`.
 
 `start.sh` handles:
 1. Killing anything on ports 8000 and 5173 with `fuser -k` before starting
@@ -228,8 +227,8 @@ interface IndexStatus {
 - Do not suggest storing sensitive data (file contents, paths) in frontend state longer than needed
 - Do not add `any` types in TypeScript without a comment explaining why
 - Do not suggest using `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `npm run web` or `npm run electron`
-- Install Python packages with `pip install`
+- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `bash start.sh`
+- Install Python packages with `pip install`; system packages with `pacman -S`
 
 SHRIMP (Self-Hosted RAG Intelligence Model Project) is a local-first AI assistant with two layers:
 
@@ -353,16 +352,15 @@ Note: A new `DiffPanel` / `DiffViewer` component was recently added to the front
 
 ## Dev environment
 
-All services (Ollama, FastAPI backend, Vite frontend) are started via:
+All services (Ollama, FastAPI backend, Vite frontend) are started via `start.sh`:
 
 ```sh
-npm run web        # browser dev mode (Vite at port 5173)
-npm run electron   # Electron desktop app
+bash start.sh
 ```
 
-- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `npm run web` or `npm run electron`.
-- To restart, stop the running processes and re-run the start command.
-- Install Python packages with `pip install`.
+- **Never** run `npm run dev`, `uvicorn`, or `ollama serve` directly — always use `start.sh`.
+- To restart, stop the running processes and re-run the above command.
+- Install Python packages with `pip install`; system packages with `pacman -S`.
 
 ---
 
@@ -373,4 +371,4 @@ npm run electron   # Electron desktop app
 - Do not suggest storing sensitive data (file contents, paths) in frontend state longer than needed for the current diff review
 - Do not add `any` types in TypeScript without a comment explaining why
 - Do not suggest using `LangChain` — this project uses `LlamaIndex` for all RAG plumbing
-- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `distrobox enter arch-dev -- bash start.sh`
+- Do not suggest running `npm run dev`, `uvicorn`, or `ollama serve` directly — all services must be started via `bash start.sh`

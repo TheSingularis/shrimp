@@ -35,10 +35,8 @@ fi
 
 # ── 2. config ────────────────────────────────────────────────────────────────
 if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
-  warn "No config.py found — copying from config.example.py"
+  info "No config.py found — copying defaults from config.example.py"
   cp "$SHRIMP_DIR/backend/config.example.py" "$SHRIMP_DIR/backend/config.py"
-  warn "Edit backend/config.py to set your watched directories, then re-run."
-  exit 1
 fi
 
 # ── 3. python venv ───────────────────────────────────────────────────────────
