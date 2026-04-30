@@ -141,11 +141,13 @@ jobs:
           RELEASE_TAG="${GITHUB_REF_NAME}"
           DOWNLOAD_URL=""
           for i in $(seq 1 18); do
-            echo "--- assets on release ($i/18) ---"
-            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' 2>/dev/null || true
-            DOWNLOAD_URL=$(gh release view "$RELEASE_TAG" --json assets \
-              --jq '.assets[].browser_download_url' 2>/dev/null | grep '\.AppImage$' || true)
-            if [ -n "$DOWNLOAD_URL" ]; then echo "Asset found: $DOWNLOAD_URL"; break; fi
+            ASSET_NAME=$(gh release view "$RELEASE_TAG" --json assets \
+              --jq '.assets[].name' 2>/dev/null | grep '\.AppImage$' || true)
+            if [ -n "$ASSET_NAME" ]; then
+              DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+              echo "Asset found: $DOWNLOAD_URL"; break
+            fi
+            echo "Waiting for AppImage... ($i/18)"
             sleep 10
           done
           if [ -z "$DOWNLOAD_URL" ]; then
