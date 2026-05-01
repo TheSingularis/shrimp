@@ -5,11 +5,12 @@ import json
 import uuid
 import logging
 from typing import Optional
+from config_utils import get_data_dir
 
 log = logging.getLogger("shrimp.conversations")
 
-CONVERSATIONS_DIR = Path(__file__).parent.parent / "conversations"
-CONVERSATIONS_DIR.mkdir(exist_ok=True)
+CONVERSATIONS_DIR = get_data_dir() / "conversations"
+CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Conversation:

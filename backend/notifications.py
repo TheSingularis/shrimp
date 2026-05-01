@@ -7,11 +7,12 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from config_utils import get_data_dir
 
 log = logging.getLogger("shrimp.notifications")
 
-_FEED_PATH = Path(__file__).parent.parent / "notifications" / "feed.jsonl"
-_FEED_PATH.parent.mkdir(exist_ok=True)
+_FEED_PATH = get_data_dir() / "notifications" / "feed.jsonl"
+_FEED_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # SSE subscribers: each entry is a queue.Queue that receives notification dicts
 _subscribers: list[Any] = []

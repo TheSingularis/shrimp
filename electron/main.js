@@ -163,6 +163,7 @@ function startBackend() {
       env: {
         ...process.env,
         ...(USER_CONFIG_DIR ? { SHRIMP_CONFIG_DIR: USER_CONFIG_DIR } : {}),
+        SHRIMP_DATA_DIR: app.getPath("userData"),
       },
     },
   );

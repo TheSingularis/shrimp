@@ -4,6 +4,19 @@ import tempfile
 from pathlib import Path
 
 
+def get_data_dir() -> Path:
+    """Return the user-writable data directory.
+
+    In a packaged install the backend runs from a root-owned system directory.
+    SHRIMP_DATA_DIR is set by main.js to the user's XDG data dir so that
+    mutable data (conversations, notifications) can actually be written.
+    """
+    env = os.environ.get("SHRIMP_DATA_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).parent.parent
+
+
 def get_config_path() -> Path:
     """Return the writable config.py path.
 

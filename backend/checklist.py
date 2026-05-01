@@ -6,11 +6,12 @@ import logging
 import uuid
 from datetime import datetime, timezone, date
 from pathlib import Path
+from config_utils import get_data_dir
 
 log = logging.getLogger("shrimp.checklist")
 
-_CHECKLIST_PATH = Path(__file__).parent.parent / "notifications" / "checklist.jsonl"
-_CHECKLIST_PATH.parent.mkdir(exist_ok=True)
+_CHECKLIST_PATH = get_data_dir() / "notifications" / "checklist.jsonl"
+_CHECKLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _now() -> str:

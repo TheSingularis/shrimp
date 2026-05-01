@@ -4,10 +4,11 @@ import json
 import uuid
 from datetime import datetime, timezone
 import logging
+from config_utils import get_data_dir
 
 log = logging.getLogger("shrimp.projects")
 
-PROJECTS_FILE = Path(__file__).parent.parent / "conversations" / "projects.json"
+PROJECTS_FILE = get_data_dir() / "conversations" / "projects.json"
 
 
 class Project:
@@ -112,7 +113,7 @@ def migrate_to_projects():
     Project.save_all({"projects": [], "default_project_id": None})
 
     # Add project_id: null to existing conversations
-    conv_dir = Path(__file__).parent.parent / "conversations"
+    conv_dir = get_data_dir() / "conversations"
     if conv_dir.exists():
         for conv_file in conv_dir.glob("*.json"):
             try:
