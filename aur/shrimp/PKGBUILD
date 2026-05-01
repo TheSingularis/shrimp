@@ -29,6 +29,9 @@ export APPDIR=/usr/lib/shrimp
 exec /usr/lib/shrimp/AppRun "$@"
 EOF
 
+    install -Dm644 squashfs-root/usr/share/icons/hicolor/512x512/apps/shrimp.png \
+        "${pkgdir}/usr/share/icons/hicolor/512x512/apps/shrimp.png"
+
     install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/shrimp.desktop" <<'EOF'
 [Desktop Entry]
 Name=SHRIMP
