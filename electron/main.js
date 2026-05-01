@@ -396,26 +396,29 @@ app.whenReady().then(async () => {
       backgroundColor: "#0D0F17",
       webPreferences: { contextIsolation: true },
     });
-    splash.loadURL(`data:text/html,<!DOCTYPE html><html><head><style>
+    const splashHtml = `<!DOCTYPE html><html><head><style>
       *{box-sizing:border-box;margin:0;padding:0}
       body{background:#0D0F17;display:flex;flex-direction:column;align-items:center;
            justify-content:center;height:100vh;font-family:sans-serif;color:#8891A8;
            font-size:13px;gap:16px}
       h1{font-size:22px;font-weight:700;color:#E8EAF0;letter-spacing:.05em}
-      .spinner{width:32px;height:32px;border:3px solid #1E2333;
-               border-top-color:#5B8DD9;border-radius:50%;
+      .spinner{width:32px;height:32px;border:3px solid #252838;
+               border-top-color:#FF6B6B;border-radius:50%;
                animation:spin .8s linear infinite}
       @keyframes spin{to{transform:rotate(360deg)}}
-      .bar-track{width:220px;height:4px;background:#1E2333;border-radius:2px;overflow:hidden}
-      .bar-fill{height:100%;width:5%;background:#5B8DD9;border-radius:2px;
+      .bar-track{width:220px;height:4px;background:#332020;border-radius:2px;overflow:hidden}
+      .bar-fill{height:100%;width:5%;background:#FF6B6B;border-radius:2px;
                 transition:width .4s ease}
-      .status{font-size:11px;color:#5B6882}
+      .status{font-size:11px;color:#404669}
     </style></head><body>
       <h1>SHRIMP*</h1>
       <div class="spinner"></div>
       <div class="bar-track"><div id="bar" class="bar-fill"></div></div>
       <div id="status" class="status">Starting services\u2026</div>
-    </body></html>`);
+    </body></html>`;
+    const splashPath = path.join(app.getPath("temp"), "shrimp-splash.html");
+    fs.writeFileSync(splashPath, splashHtml);
+    splash.loadFile(splashPath);
 
     await new Promise(r => splash.webContents.once("did-finish-load", r));
 
