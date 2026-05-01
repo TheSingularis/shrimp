@@ -35,8 +35,8 @@ fi
 
 # ── 2. config ────────────────────────────────────────────────────────────────
 if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
-  info "No config.py found — copying defaults from config.example.py"
-  cp "$SHRIMP_DIR/backend/config.example.py" "$SHRIMP_DIR/backend/config.py"
+  info "No config.py found — copying defaults from config.py.example"
+  cp "$SHRIMP_DIR/backend/config.py.example" "$SHRIMP_DIR/backend/config.py"
 fi
 
 # ── 3. python venv ───────────────────────────────────────────────────────────

@@ -189,7 +189,7 @@ shrimp/
 │   ├── main.py          # FastAPI app and all API routes
 │   ├── rag.py           # LlamaIndex indexing and querying
 │   ├── config.py        # Your local configuration (not committed)
-│   └── config.example.py
+│   └── config.py.example
 ├── electron/
 │   ├── main.js          # Electron main process (dev + packaged mode)
 │   └── preload.js       # Context bridge for window controls

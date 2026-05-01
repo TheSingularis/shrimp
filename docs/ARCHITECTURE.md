@@ -162,7 +162,7 @@ config_path.write_text(current)
 
 **Caveat:** The regex substitution is fragile if you add comments or unusual whitespace inside config blocks. Keep config values on their own lines and avoid nested comments inside list/dict literals.
 
-`start.sh` copies `config.example.py` → `config.py` on first run if `config.py` doesn't exist.
+`start.sh` copies `config.py.example` → `config.py` on first run if `config.py` doesn't exist.
 
 ---
 
@@ -199,6 +199,6 @@ npm run build [-- --linux | --mac | --win]
 First run: `start.sh` will:
 1. Check system deps (python3, node, npm, fuser)
 2. Create `backend/.venv` and pip-install requirements
-3. Copy `config.example.py` → `config.py` if missing
+3. Copy `config.py.example` → `config.py` if missing
 4. Kill stale processes on ports 8000 and 5173
 5. Spawn backend and frontend in background, wait for Ctrl+C

@@ -5,8 +5,8 @@ EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
 NUM_CTX: int = 8192
 CUSTOM_INSTRUCTIONS: str = ""
-UI_THEME: str = "blue-purple"  # "blue-purple" | "shrimp" | "refined-blue"
-UI_LANGUAGE: str = "English"  # Language for LLM responses
+UI_THEME: str = "shrimp"  # "blue-purple" | "shrimp" | "refined-blue"
+UI_LANGUAGE: str = "English"  # Language for LLM responses # TODO: either remove other language options or add multi language support to the UI
 
 # Tool calling configuration
 USE_TOOL_CALLING: bool = True

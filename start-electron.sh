@@ -36,8 +36,8 @@ fi
 
 # ── 3. config check ───────────────────────────────────────────────────────────
 if [ ! -f "$SHRIMP_DIR/backend/config.py" ]; then
-  warn "No config.py found — copying from config.example.py"
-  cp "$SHRIMP_DIR/backend/config.example.py" "$SHRIMP_DIR/backend/config.py"
+  warn "No config.py found — copying from config.py.example"
+  cp "$SHRIMP_DIR/backend/config.py.example" "$SHRIMP_DIR/backend/config.py"
   warn "Edit backend/config.py to set your watched directories, then re-run."
   exit 1
 fi

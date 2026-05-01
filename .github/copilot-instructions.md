@@ -30,7 +30,7 @@ shrimp/
 │   ├── main.py          # FastAPI app — all route definitions live here
 │   ├── rag.py           # LlamaIndex setup, index builders, query engine
 │   ├── config.py        # User-configured paths, model names, Chroma path
-│   └── config.example.py  # Template — copy to config.py before first run
+│   └── config.py.example  # Template — copy to config.py before first run
 │
 ├── frontend/
 │   ├── src/
