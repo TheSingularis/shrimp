@@ -49,7 +49,20 @@
         "from": "backend/.venv",
         "to": "backend/.venv",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/pip/**",
+          "!**/pip-*/**",
+          "!**/pip-*.dist-info/**",
+          "!**/hf_xet/**",
+          "!**/hf_xet-*.dist-info/**",
+          "!**/pytest/**",
+          "!**/pytest-*.dist-info/**",
+          "!**/pytest_asyncio/**",
+          "!**/build/**",
+          "!**/build-*.dist-info/**",
+          "!**/pyproject_hooks/**",
+          "!**/pyproject_hooks-*.dist-info/**"
         ]
       },
       {
