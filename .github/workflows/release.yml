@@ -206,3 +206,24 @@ jobs:
           git add PKGBUILD .SRCINFO
           git diff --cached --quiet || git commit -m "Update to v${VERSION}"
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur_ed25519" git push origin master
+
+      - name: Sync updated AUR files back to dev
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SHA256="${{ steps.sha.outputs.sha256 }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev
+          git checkout dev
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp/PKGBUILD
+          sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" aur/shrimp/PKGBUILD
+          sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp/.SRCINFO
+          sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp/.SRCINFO
+          sed -i "s|source = .*|source = SHRIMP-${VERSION}.AppImage::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/SHRIMP-${VERSION}.AppImage|" aur/shrimp/.SRCINFO
+          sed -i "s/sha256sums = .*/sha256sums = ${SHA256}/" aur/shrimp/.SRCINFO
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp-bin/PKGBUILD
+          sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp-bin/.SRCINFO
+          git add aur/shrimp/PKGBUILD aur/shrimp/.SRCINFO aur/shrimp-bin/PKGBUILD aur/shrimp-bin/.SRCINFO
+          git diff --cached --quiet || git commit -m "chore(aur): sync pkgver to v${VERSION}"
+          git push origin dev
