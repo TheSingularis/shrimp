@@ -51,6 +51,17 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "plugins",
+        "to": "plugins",
+        "filter": [
+          "**/*",
+          "!**/emails/**",
+          "!**/frontend/**",
+          "!**/__pycache__/**/*",
+          "!**/*.pyc"
+        ]
       }
     ],
     "linux": {

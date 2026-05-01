@@ -38,7 +38,7 @@ app = FastAPI(title="SHRIMP*")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=".*",  # reflects actual origin back (handles null from file:// in Electron)
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1901,19 +1901,19 @@ async def move_conversation_to_project(conversation_id: str, req: MoveConversati
 
 @app.get("/models")
 async def get_models():
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{config.OLLAMA_HOST}/api/tags")
-        data = resp.json()
-        # Filter out embedding models (they're not for chat)
-        chat_models = [
-            m["name"] for m in data.get("models", [])
-            # Exclude nomic-embed-text, etc.
-            if "embed" not in m["name"].lower()
-        ]
-        return {
-            "models": chat_models,
-            "active": config.OLLAMA_MODEL,
-        }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{config.OLLAMA_HOST}/api/tags")
+            if resp.status_code != 200:
+                return {"models": [], "active": config.OLLAMA_MODEL}
+            data = resp.json()
+            chat_models = [
+                m["name"] for m in data.get("models", [])
+                if "embed" not in m["name"].lower()
+            ]
+            return {"models": chat_models, "active": config.OLLAMA_MODEL}
+    except Exception:
+        return {"models": [], "active": config.OLLAMA_MODEL}
 
 
 @app.post("/settings/model")
@@ -2332,18 +2332,23 @@ async def set_ollama_host_setting(req: OllamaHostSettingRequest):
 
         # Test connection before saving
         test_url = f"{url}/api/tags"
+        ok = False
+        err_detail = f"Cannot connect to Ollama at {url}"
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(test_url)
-                if response.status_code != 200:
-                    raise HTTPException(
-                        400, f"Cannot connect to Ollama at {url}")
+                if response.status_code == 200:
+                    ok = True
+                else:
+                    err_detail = f"Cannot connect to Ollama at {url} (HTTP {response.status_code})"
         except httpx.TimeoutException:
-            raise HTTPException(400, f"Connection timeout to Ollama at {url}")
+            err_detail = f"Connection timeout to Ollama at {url}"
         except httpx.ConnectError:
-            raise HTTPException(400, f"Cannot connect to Ollama at {url}")
+            err_detail = f"Cannot connect to Ollama at {url}"
         except Exception as e:
-            raise HTTPException(400, f"Failed to connect to Ollama: {str(e)}")
+            err_detail = f"Failed to connect to Ollama: {str(e)}"
+        if not ok:
+            raise HTTPException(400, err_detail)
 
         new_host = url
 

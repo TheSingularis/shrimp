@@ -197,7 +197,7 @@ function startBackend() {
   });
 }
 
-function waitForBackend(maxAttempts = 60) {
+function waitForBackend(maxAttempts = 60, onProgress = null) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     function check() {
@@ -211,6 +211,7 @@ function waitForBackend(maxAttempts = 60) {
     function retry() {
       if (++attempts >= maxAttempts)
         return reject(new Error("Backend did not start in time"));
+      if (onProgress) onProgress(attempts, maxAttempts);
       setTimeout(check, 500);
     }
     check();
@@ -389,25 +390,57 @@ app.whenReady().then(async () => {
   if (!backendUp) {
     splash = new BrowserWindow({
       width: 360,
-      height: 200,
+      height: 220,
       frame: false,
       alwaysOnTop: true,
       backgroundColor: "#0D0F17",
       webPreferences: { contextIsolation: true },
     });
-    splash.loadURL(`data:text/html,<html><body style="margin:0;background:#0D0F17;
-            display:flex;flex-direction:column;align-items:center;justify-content:center;
-            height:100vh;font-family:sans-serif;color:#8891A8;font-size:13px;">
-            <p style="font-size:22px;font-weight:700;color:#E8EAF0;margin-bottom:8px">SHRIMP*</p>
-            <p>Starting services\u2026</p></body></html>`);
+    splash.loadURL(`data:text/html,<!DOCTYPE html><html><head><style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#0D0F17;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;height:100vh;font-family:sans-serif;color:#8891A8;
+           font-size:13px;gap:16px}
+      h1{font-size:22px;font-weight:700;color:#E8EAF0;letter-spacing:.05em}
+      .spinner{width:32px;height:32px;border:3px solid #1E2333;
+               border-top-color:#5B8DD9;border-radius:50%;
+               animation:spin .8s linear infinite}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      .bar-track{width:220px;height:4px;background:#1E2333;border-radius:2px;overflow:hidden}
+      .bar-fill{height:100%;width:5%;background:#5B8DD9;border-radius:2px;
+                transition:width .4s ease}
+      .status{font-size:11px;color:#5B6882}
+    </style></head><body>
+      <h1>SHRIMP*</h1>
+      <div class="spinner"></div>
+      <div class="bar-track"><div id="bar" class="bar-fill"></div></div>
+      <div id="status" class="status">Starting services\u2026</div>
+    </body></html>`);
+
+    await new Promise(r => splash.webContents.once("did-finish-load", r));
 
     try {
-      await waitForBackend();
+      await waitForBackend(60, (attempt, max) => {
+        if (splash && !splash.isDestroyed()) {
+          const pct = Math.min(5 + Math.round((attempt / max) * 90), 95);
+          splash.webContents.executeJavaScript(
+            `document.getElementById('bar').style.width='${pct}%';` +
+            `document.getElementById('status').textContent='Starting services\u2026 ('+attempt+'/'+max+')';`
+          ).catch(() => {});
+        }
+      });
     } catch (e) {
       console.error("[electron] Backend failed to start:", e.message);
     }
 
-    splash.close();
+    if (splash && !splash.isDestroyed()) {
+      splash.webContents.executeJavaScript(
+        `document.getElementById('bar').style.width='100%';` +
+        `document.getElementById('status').textContent='Ready';`
+      ).catch(() => {});
+      await new Promise(r => setTimeout(r, 300));
+      splash.close();
+    }
     splash = null;
   }
 
