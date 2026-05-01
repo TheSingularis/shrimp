@@ -414,9 +414,10 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         setSelectedId(id);
         setMobileDetail(true);
         try {
-            const full = await getEmail(id);
+            const [full] = await Promise.all([getEmail(id), setEmailRead(id, true)]);
             setSelectedEmail(full);
             setEmails(prev => prev.map(e => e.id === id ? { ...e, read: true } : e));
+            window.dispatchEvent(new CustomEvent('email:read-changed'));
         } catch (e) {
             console.error(e);
         }
@@ -475,7 +476,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
     // Single-email actions (used by context menu)
     async function handleMarkRead(id: string, read: boolean) {
         setEmails(prev => prev.map(e => e.id === id ? { ...e, read } : e));
-        try { await setEmailRead(id, read); } catch (e) { console.error(e); }
+        try { await setEmailRead(id, read); window.dispatchEvent(new CustomEvent('email:read-changed')); } catch (e) { console.error(e); }
     }
 
     async function handleArchiveSingle(id: string) {
@@ -508,6 +509,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         setEmails(prev => prev.map(e => ids.includes(e.id) ? { ...e, read } : e));
         setSelectedIds(new Set());
         await Promise.allSettled(ids.map(id => setEmailRead(id, read)));
+        window.dispatchEvent(new CustomEvent('email:read-changed'));
     }
 
     async function bulkFlag() {

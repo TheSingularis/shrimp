@@ -39,7 +39,8 @@ export function useEmailUnreadCount(): number {
         }
         poll();
         const id = setInterval(poll, 5 * 60 * 1000);
-        return () => { cancelled = true; clearInterval(id); };
+        window.addEventListener('email:read-changed', poll);
+        return () => { cancelled = true; clearInterval(id); window.removeEventListener('email:read-changed', poll); };
     }, []);
 
     return count;
