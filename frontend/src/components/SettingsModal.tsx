@@ -18,7 +18,7 @@ interface Props {
     plugins?: ShrimpPluginFrontend[];
 }
 
-type CoreTabType = "appearance" | "models" | "scopes" | "advanced" | "plugins";
+type CoreTabType = "appearance" | "models" | "scopes" | "advanced" | "plugins" | "about";
 type TabType = CoreTabType | string; // plugin ids become additional tabs
 
 // ── context slider ─────────────────────────────────────────────────────────────
@@ -464,6 +464,9 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                 </div>
 
                 <div className="modal-tabs">
+                    <button onClick={() => setActiveTab("about")} className={`tab ${activeTab === "about" ? "active" : ""}`}>
+                        About
+                    </button>
                     <button
                         className={`tab ${activeTab === "appearance" ? "active" : ""}`}
                         onClick={() => setActiveTab("appearance")}
@@ -872,6 +875,18 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                             </div>
                         </section>
                         </>
+                    )}
+
+                    {activeTab === "about" && (
+                        <section className="drawer-section">
+                            <h2>ABOUT</h2>
+                            <div className="scope-row">
+                                <div className="scope-info">
+                                    <span className="scope-name">SHRIMP*</span>
+                                    <span className="scope-status">v{__APP_VERSION__}</span>
+                                </div>
+                            </div>
+                        </section>
                     )}
 
                     {activeTab === "plugins" && (
