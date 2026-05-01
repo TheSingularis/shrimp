@@ -191,11 +191,11 @@ jobs:
           sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp/.SRCINFO
           sed -i "s|source = .*|source = SHRIMP-${VERSION}.AppImage::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/SHRIMP-${VERSION}.AppImage|" aur/shrimp/.SRCINFO
           sed -i "s/sha256sums = .*/sha256sums = ${SHA256}/" aur/shrimp/.SRCINFO
-          cp aur/shrimp/PKGBUILD aur/shrimp/.SRCINFO /tmp/aur-shrimp/
+          cp aur/shrimp/PKGBUILD aur/shrimp/.SRCINFO aur/shrimp/shrimp.install /tmp/aur-shrimp/
           cd /tmp/aur-shrimp
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git add PKGBUILD .SRCINFO
+          git add PKGBUILD .SRCINFO shrimp.install
           git diff --cached --quiet || git commit -m "Update to v${VERSION}"
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur_ed25519" git push origin master
 
