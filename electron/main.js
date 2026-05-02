@@ -21,23 +21,25 @@ const BACKEND_PORT = 8000;
 const OLLAMA_PORT = 11434;
 const ROOT_DIR = path.join(__dirname, "..");
 
-// ── Path resolution (dev vs packaged) ──────────────────────────────────────────
+// ── Path resolution (dev vs packaged vs system install) ────────────────────────
+//
+// Three modes:
+//   dev:           __dirname = <repo>/electron/, ROOT_DIR = <repo>/
+//   electron-builder AppImage/pacman:
+//                  app.isPackaged = true, process.resourcesPath = <app>/resources/
+//   system install (AUR): SHRIMP_APP_PATH env var set by /usr/bin/shrimp launcher
+//                  app.isPackaged = false but SHRIMP_APP_PATH is set
 
-// In packaged mode:
-//   - __dirname is <app>/resources/app/electron/ (inside the ASAR or alongside it)
-//   - process.resourcesPath is <app>/resources/
-//   - extraFiles land at <app>/resources/backend/ and <app>/resources/backend/.venv/
-// In dev mode:
-//   - __dirname is <repo>/electron/
-//   - ROOT_DIR is <repo>/
+const SYSTEM_APP_PATH = process.env.SHRIMP_APP_PATH || null;
+const IS_PACKAGED = app.isPackaged || !!SYSTEM_APP_PATH;
 
-const BACKEND_DIR = app.isPackaged
-  ? path.join(process.resourcesPath, "backend")
-  : path.join(ROOT_DIR, "backend");
+const BACKEND_DIR = SYSTEM_APP_PATH
+  ? path.join(SYSTEM_APP_PATH, "backend")
+  : app.isPackaged
+    ? path.join(process.resourcesPath, "backend")
+    : path.join(ROOT_DIR, "backend");
 
-const VENV_PYTHON = app.isPackaged
-  ? path.join(BACKEND_DIR, ".venv", "bin", "python")
-  : path.join(path.join(ROOT_DIR, "backend"), ".venv", "bin", "python");
+const VENV_PYTHON = path.join(BACKEND_DIR, ".venv", "bin", "python");
 
 // User-writable dir for config.py — avoids writing to root-owned system paths.
 // Set lazily after app is ready (app.getPath requires app.whenReady).
@@ -53,18 +55,14 @@ function setupUserConfig() {
   }
 }
 
-const ICON_PATH = path.join(
-  ROOT_DIR,
-  "frontend",
-  "public",
-  "icons",
-  "shrimp(1).png",
-);
+const ICON_PATH = SYSTEM_APP_PATH
+  ? "/usr/share/icons/hicolor/512x512/apps/shrimp.png"
+  : path.join(ROOT_DIR, "frontend", "public", "icons", "shrimp(1).png");
 
 // ── Logging setup (packaged mode writes to OS log dir) ─────────────────────────
 
 function getLogStream(filename) {
-  if (!app.isPackaged) return null; // dev mode logs to console
+  if (!IS_PACKAGED) return null; // dev mode logs to console
   const logDir = app.getPath("logs");
   try {
     fs.mkdirSync(logDir, { recursive: true });
@@ -269,7 +267,7 @@ function createWindow() {
   });
 
   // Forward all renderer console messages to the terminal
-  if (!app.isPackaged) {
+  if (!IS_PACKAGED) {
     const LEVEL = ["verbose", "info", "warn", "error"];
     mainWindow.webContents.on("console-message", (_e, level, msg, line, src) => {
       const tag = LEVEL[level] ?? "log";
@@ -287,10 +285,11 @@ function createWindow() {
   });
 
   // Packaged: load built frontend from disk; dev: load from backend HTTP server
-  if (app.isPackaged) {
-    mainWindow.loadFile(
-      path.join(__dirname, "..", "frontend", "dist", "index.html"),
-    );
+  if (IS_PACKAGED) {
+    const distPath = SYSTEM_APP_PATH
+      ? path.join(SYSTEM_APP_PATH, "frontend", "dist", "index.html")
+      : path.join(__dirname, "..", "frontend", "dist", "index.html");
+    mainWindow.loadFile(distPath);
   } else {
     mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
   }
@@ -358,7 +357,7 @@ if (!gotLock) {
 }
 
 app.whenReady().then(async () => {
-  if (app.isPackaged) setupUserConfig();
+  if (IS_PACKAGED) setupUserConfig();
 
   const [backendUp, ollamaUp] = await Promise.all([
     isBackendRunning(),

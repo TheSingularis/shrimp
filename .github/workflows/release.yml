@@ -71,10 +71,29 @@ jobs:
         # Override to AppImage only — pacman target requires Arch and makepkg
         run: npx electron-builder --linux AppImage
 
-      - name: Upload AppImage to release
+      - name: Create AUR source tarball
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          TARBALL_DIR="shrimp-${VERSION}"
+          mkdir -p "${TARBALL_DIR}/frontend/public"
+          cp -r electron "${TARBALL_DIR}/"
+          cp -r frontend/dist "${TARBALL_DIR}/frontend/"
+          cp -r frontend/public/icons "${TARBALL_DIR}/frontend/public/"
+          cp -r backend "${TARBALL_DIR}/"
+          rm -rf "${TARBALL_DIR}/backend/.venv"
+          find "${TARBALL_DIR}/backend" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+          find "${TARBALL_DIR}/backend" -name "*.pyc" -delete 2>/dev/null || true
+          cp -r plugins "${TARBALL_DIR}/"
+          find "${TARBALL_DIR}/plugins" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+          cp package.json "${TARBALL_DIR}/"
+          tar czf "shrimp-${VERSION}.tar.gz" "${TARBALL_DIR}/"
+
+      - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-electron/SHRIMP-*.AppImage
+          files: |
+            dist-electron/SHRIMP-*.AppImage
+            shrimp-*.tar.gz
           body: ${{ needs.changelog.outputs.content }}
           draft: false
           prerelease: false
@@ -138,33 +157,34 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for AppImage and compute SHA256
+      - name: Wait for source tarball and compute SHA256
         id: sha
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           RELEASE_TAG="${GITHUB_REF_NAME}"
+          TARBALL_NAME="shrimp-${VERSION}.tar.gz"
           DOWNLOAD_URL=""
           for i in $(seq 1 18); do
             ASSET_NAME=$(gh release view "$RELEASE_TAG" --json assets \
-              --jq '.assets[].name' 2>/dev/null | grep '\.AppImage$' || true)
+              --jq '.assets[].name' 2>/dev/null | grep "^${TARBALL_NAME}$" || true)
             if [ -n "$ASSET_NAME" ]; then
               DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
               echo "Asset found: $DOWNLOAD_URL"; break
             fi
-            echo "Waiting for AppImage... ($i/18)"
+            echo "Waiting for tarball... ($i/18)"
             sleep 10
           done
           if [ -z "$DOWNLOAD_URL" ]; then
-            echo "ERROR: AppImage asset not found after 3 minutes" && exit 1
+            echo "ERROR: Source tarball not found after 3 minutes" && exit 1
           fi
-          curl -L --fail --output appimage.tmp "$DOWNLOAD_URL"
-          SIZE=$(stat -c%s appimage.tmp)
-          if [ "$SIZE" -lt 10000000 ]; then
-            echo "ERROR: Downloaded file is only ${SIZE} bytes — expected >10MB AppImage" && exit 1
+          curl -L --fail --output tarball.tmp "$DOWNLOAD_URL"
+          SIZE=$(stat -c%s tarball.tmp)
+          if [ "$SIZE" -lt 100000 ]; then
+            echo "ERROR: Downloaded file is only ${SIZE} bytes — expected >100KB tarball" && exit 1
           fi
-          SHA256=$(sha256sum appimage.tmp | awk '{print $1}')
+          SHA256=$(sha256sum tarball.tmp | awk '{print $1}')
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Set up SSH for AUR
@@ -189,7 +209,7 @@ jobs:
           sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" aur/shrimp/PKGBUILD
           sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp/.SRCINFO
           sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp/.SRCINFO
-          sed -i "s|source = .*|source = SHRIMP-${VERSION}.AppImage::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/SHRIMP-${VERSION}.AppImage|" aur/shrimp/.SRCINFO
+          sed -i "s|source = .*|source = shrimp-${VERSION}.tar.gz::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/shrimp-${VERSION}.tar.gz|" aur/shrimp/.SRCINFO
           sed -i "s/sha256sums = .*/sha256sums = ${SHA256}/" aur/shrimp/.SRCINFO
           cp aur/shrimp/PKGBUILD aur/shrimp/.SRCINFO aur/shrimp/shrimp.install /tmp/aur-shrimp/
           cd /tmp/aur-shrimp
@@ -227,7 +247,7 @@ jobs:
           sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" aur/shrimp/PKGBUILD
           sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp/.SRCINFO
           sed -i "s/pkgrel = .*/pkgrel = 1/" aur/shrimp/.SRCINFO
-          sed -i "s|source = .*|source = SHRIMP-${VERSION}.AppImage::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/SHRIMP-${VERSION}.AppImage|" aur/shrimp/.SRCINFO
+          sed -i "s|source = .*|source = shrimp-${VERSION}.tar.gz::https://github.com/${{ github.repository }}/releases/download/v${VERSION}/shrimp-${VERSION}.tar.gz|" aur/shrimp/.SRCINFO
           sed -i "s/sha256sums = .*/sha256sums = ${SHA256}/" aur/shrimp/.SRCINFO
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp-bin/PKGBUILD
           sed -i "s/pkgver = .*/pkgver = ${VERSION}/" aur/shrimp-bin/.SRCINFO
