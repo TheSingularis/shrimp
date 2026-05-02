@@ -220,6 +220,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin dev
+          git restore aur/
           git checkout dev
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/shrimp/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur/shrimp/PKGBUILD
