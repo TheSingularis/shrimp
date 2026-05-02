@@ -111,8 +111,11 @@ def _looks_like_html(text: str) -> bool:
     return sum(1 for t in tags if t in sample) >= 2
 
 
-def _extract_body(msg: email_lib.message.Message) -> tuple[str, str]:
-    """Return (plain_text, html_body). Both may be empty strings.
+def _extract_body(msg: email_lib.message.Message) -> tuple[str, str, bool]:
+    """Return (plain_text, html_body, has_genuine_plain). Both strings may be empty.
+
+    has_genuine_plain is True only when a real text/plain MIME part was found —
+    not when plain_text was derived by stripping HTML.
 
     Inline images (cid: references) are resolved to base64 data URIs so they
     render correctly in the browser without needing a mail-client session.
@@ -167,8 +170,9 @@ def _extract_body(msg: email_lib.message.Message) -> tuple[str, str]:
             html = html.replace(f"cid:{cid}", data_uri)
         log.debug("_extract_body: resolved %d cid: image(s)", len(cid_map))
 
+    has_genuine_plain = bool(plain)
     plain_out = plain.strip() if plain else (_strip_html(html) if html else "")
-    return plain_out, html.strip()
+    return plain_out, html.strip(), has_genuine_plain
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -564,10 +568,11 @@ def refresh_email_body(email_id: str) -> dict | None:
             return None
 
         msg = email_lib.message_from_bytes(raw_tuple[1])
-        body_plain, body_html = _extract_body(msg)
+        body_plain, body_html, has_genuine_plain = _extract_body(msg)
 
         data["body"] = body_plain[:20000]
         data["html_body"] = body_html[:500000]
+        data["has_genuine_plain"] = has_genuine_plain
         data["imap_uid"] = imap_uid
         data["attachments"] = _extract_attachments(msg, email_id)
         _save_email(data)
@@ -985,7 +990,7 @@ def incremental_fetch(
             except Exception:
                 date_iso = datetime.now(timezone.utc).isoformat()
 
-            body_plain, body_html = _extract_body(msg)
+            body_plain, body_html, has_genuine_plain = _extract_body(msg)
             email_id = str(uuid.uuid4())
             record: dict = {
                 "id": email_id,
@@ -998,6 +1003,7 @@ def incremental_fetch(
                 "date": date_iso,
                 "body": body_plain[:20000],
                 "html_body": body_html[:500000],
+                "has_genuine_plain": has_genuine_plain,
                 "read": is_read or mark_read,
                 "triaged": skip_triage,
                 "flagged": is_flagged,
@@ -1197,7 +1203,7 @@ def _fetch_from_mailbox(
             except Exception:
                 date_iso = datetime.now(timezone.utc).isoformat()
 
-            body_plain, body_html = _extract_body(msg)
+            body_plain, body_html, has_genuine_plain = _extract_body(msg)
 
             email_id = str(uuid.uuid4())
             record: dict = {
@@ -1211,6 +1217,7 @@ def _fetch_from_mailbox(
                 "date": date_iso,
                 "body": body_plain[:20000],
                 "html_body": body_html[:500000],
+                "has_genuine_plain": has_genuine_plain,
                 "read": ("\\Seen" in fetch_header) or mark_read,
                 "triaged": skip_triage,
                 "flagged": "\\Flagged" in fetch_header,
