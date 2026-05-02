@@ -1,6 +1,8 @@
 # SHRIMP\*
 
 [![Tests](https://github.com/TheSingularis/shrimp/actions/workflows/test.yml/badge.svg)](https://github.com/TheSingularis/shrimp/actions/workflows/test.yml)
+[![GitHub release](https://img.shields.io/github/v/release/TheSingularis/shrimp)](https://github.com/TheSingularis/shrimp/releases/latest)
+[![AUR Version](https://img.shields.io/aur/version/shrimp)](https://aur.archlinux.org/packages/shrimp)
 
 **Self-Hosted RAG Intelligence Model Project**
 
