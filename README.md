@@ -1,5 +1,7 @@
 # SHRIMP\*
 
+[![Tests](https://github.com/TheSingularis/shrimp/actions/workflows/test.yml/badge.svg)](https://github.com/TheSingularis/shrimp/actions/workflows/test.yml)
+
 **Self-Hosted RAG Intelligence Model Project**
 
 A local-first AI assistant that knows your files. Point it at your code, notes, or any directory — it indexes everything locally and uses that context when you chat with it. All inference runs on your machine via [Ollama](https://ollama.com). Nothing leaves your network.

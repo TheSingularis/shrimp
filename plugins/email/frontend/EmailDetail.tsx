@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { triageEmail, setEmailFlag, refreshEmailBody, archiveEmail, trashEmail, junkEmail, attachmentUrl, type EmailFull, type EmailAttachment } from "./api";
 import { formatDateFull } from "@core/utils/email";
 import { URGENCY_CONFIG, type UrgencyLevel } from "@core/utils/urgency";
+import { parseTriage, looksLikeHtml, preferredView, type TriageParsed } from "./emailRendering";
 
 interface ComposeInitial { to?: string; subject?: string; body?: string; cc?: string; }
 
@@ -15,54 +16,7 @@ interface Props {
     onMove?: (id: string, folder: string) => void;
 }
 
-// ── Triage parser ─────────────────────────────────────────────────────────────
 
-interface TriageParsed {
-    urgency: string;
-    summary: string;
-    actions: string[];
-    reply: string;
-}
-
-function parseTriage(raw: string): TriageParsed {
-    const result: TriageParsed = { urgency: "", summary: "", actions: [], reply: "" };
-    let section = "";
-    const replyLines: string[] = [];
-
-    for (const line of raw.split("\n")) {
-        const t = line.trim();
-        if (!t) {
-            if (section === "reply") replyLines.push("");
-            continue;
-        }
-
-        if (/\*\*urgency\*\*/i.test(t)) {
-            section = "urgency";
-            const m = t.match(/\*\*urgency\*\*[:\s]+(.+)/i);
-            if (m) result.urgency = m[1].replace(/\*\*/g, "").trim().toLowerCase();
-        } else if (/\*\*summary\*\*/i.test(t)) {
-            section = "summary";
-            const m = t.match(/\*\*summary\*\*[:\s]+(.+)/i);
-            if (m) result.summary = m[1].replace(/\*\*/g, "").trim();
-        } else if (/\*\*action items?\*\*/i.test(t)) {
-            section = "actions";
-        } else if (/\*\*suggested reply\*\*/i.test(t)) {
-            section = "reply";
-            const m = t.match(/\*\*suggested reply\*\*[:\s]*(.+)?/i);
-            if (m?.[1]) replyLines.push(m[1].replace(/^["']|["']$/g, "").trim());
-        } else {
-            if (section === "actions" && /^[-*•]/.test(t)) {
-                result.actions.push(t.replace(/^[-*•]\s*/, "").trim());
-            } else if (section === "summary" && !result.summary) {
-                result.summary = t;
-            } else if (section === "reply") {
-                replyLines.push(t.replace(/^["']|["']$/g, "").trim());
-            }
-        }
-    }
-    result.reply = replyLines.join("\n").trim();
-    return result;
-}
 
 
 function TriagePanel({ raw, streaming, hideSuggestedReply }: { raw: string; streaming: boolean; hideSuggestedReply?: boolean }) {
@@ -256,28 +210,6 @@ function PlainTextBody({ text }: { text: string }) {
 
 // ── HTML email renderer (sandboxed iframe) ────────────────────────────────────
 
-function looksLikeHtml(text: string): boolean {
-    const sample = text.slice(0, 2000).toLowerCase().trimStart();
-    if (sample.startsWith("<!doctype html") || /^<html[\s>]/.test(sample)) return true;
-    const tags = ["<body", "<div>", "<div ", "<p>", "<p ", "<table", "<td", "<tr",
-                  "<span>", "<span ", "<br>", "<br/", "<a ", "<img "];
-    return tags.filter(t => sample.includes(t)).length >= 2;
-}
-
-function isRichHtml(html: string): boolean {
-    const imgCount = (html.match(/<img\b/gi) ?? []).length;
-    const tableCount = (html.match(/<table\b/gi) ?? []).length;
-    return imgCount > 2 || tableCount >= 3;
-}
-
-function preferredView(e: Pick<EmailFull, "body" | "html_body">): "html" | "plain" {
-    const bodyIsHtml = looksLikeHtml(e.body || "");
-    const hasPlainBody = !!(e.body && !bodyIsHtml);
-    if (!hasPlainBody) return (e.html_body || bodyIsHtml) ? "html" : "plain";
-    if (e.html_body && isRichHtml(e.html_body)) return "html";
-    return "plain";
-}
-
 // Base CSS injected into every HTML email iframe — resets defaults and constrains width.
 const EMAIL_IFRAME_CSS = `
   html, body {
@@ -299,6 +231,12 @@ const EMAIL_IFRAME_CSS = `
 
 function HtmlEmailBody({ html }: { html: string }) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [showImages, setShowImages] = useState(false);
+
+    // Reset per-email
+    useEffect(() => { setShowImages(false); }, [html]);
+
+    const hasExternalImages = useMemo(() => /src=["']https?:\/\//i.test(html), [html]);
 
     // Sanitize + wrap in a full HTML document so the email renders in its own context.
     // allow-same-origin lets us read scrollHeight and patch links after load.
@@ -309,10 +247,13 @@ function HtmlEmailBody({ html }: { html: string }) {
             ADD_ATTR: ["bgcolor", "border", "cellpadding", "cellspacing", "height",
                        "target", "rel", "style"],
         });
+        const csp = (!showImages && hasExternalImages)
+            ? `<meta http-equiv="Content-Security-Policy" content="img-src data:;">`
+            : "";
         return `<!DOCTYPE html><html><head><meta charset="utf-8">` +
                `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-               `<style>${EMAIL_IFRAME_CSS}</style></head><body>${clean}</body></html>`;
-    }, [html]);
+               `${csp}<style>${EMAIL_IFRAME_CSS}</style></head><body>${clean}</body></html>`;
+    }, [html, showImages, hasExternalImages]);
 
     function resize() {
         const iframe = iframeRef.current;
@@ -340,6 +281,23 @@ function HtmlEmailBody({ html }: { html: string }) {
 
     return (
         <div className="h-full overflow-y-auto">
+            {hasExternalImages && !showImages && (
+                <div style={{
+                    padding: "6px 16px",
+                    borderBottom: "1px solid var(--color-border)",
+                    fontSize: 12,
+                    color: "var(--color-text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                }}>
+                    Remote images blocked.
+                    <button className="btn-bare" style={{ color: "var(--color-accent)", fontSize: 12 }}
+                        onClick={() => setShowImages(true)}>
+                        Load images
+                    </button>
+                </div>
+            )}
             <iframe
                 ref={iframeRef}
                 srcDoc={srcdoc}

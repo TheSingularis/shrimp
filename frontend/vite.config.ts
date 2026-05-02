@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -33,5 +34,9 @@ export default defineConfig({
       // Allow serving files from the repo root so plugins/ can be glob-imported
       allow: [".."],
     },
+  },
+  test: {
+    environment: "jsdom",
+    globals: true,
   },
 })

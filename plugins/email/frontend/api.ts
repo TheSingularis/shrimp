@@ -34,6 +34,7 @@ export interface EmailFull extends EmailMeta {
     to: string;
     body: string;
     html_body?: string;
+    has_genuine_plain?: boolean;
     triage_result: string | null;
     attachments?: EmailAttachment[];
 }
