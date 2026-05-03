@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { ArrowLeft, Sparkles, X, FileText, Globe, Copy, Star, RefreshCw, Reply, Forward, Archive, Trash2, ShieldAlert, Paperclip, Download, Eye } from "lucide-react";
+import { ArrowLeft, Sparkles, X, Copy, Star, RefreshCw, Reply, Forward, Archive, Trash2, ShieldAlert, Paperclip, Download, Eye } from "lucide-react";
 import DOMPurify from "dompurify";
 import { triageEmail, setEmailFlag, refreshEmailBody, archiveEmail, trashEmail, junkEmail, attachmentUrl, type EmailFull, type EmailAttachment } from "./api";
 import { formatDateFull } from "@core/utils/email";
 import { URGENCY_CONFIG, type UrgencyLevel } from "@core/utils/urgency";
-import { parseTriage, looksLikeHtml, preferredView, type TriageParsed } from "./emailRendering";
+import { parseTriage, looksLikeHtml, type TriageParsed } from "./emailRendering";
 
 interface ComposeInitial { to?: string; subject?: string; body?: string; cc?: string; }
 
@@ -212,21 +212,23 @@ function PlainTextBody({ text }: { text: string }) {
 
 // Base CSS injected into every HTML email iframe — resets defaults and constrains width.
 const EMAIL_IFRAME_CSS = `
+  :root { color-scheme: dark; }
   html, body {
     margin: 0; padding: 16px 20px;
-    background: #ffffff; color: #1a1a1a;
+    background: #0d0f17; color: #c8cad6;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 14px; line-height: 1.6;
     word-wrap: break-word; overflow-wrap: break-word;
   }
   img { max-width: 100% !important; height: auto !important; }
-  a { color: #0066cc; }
+  a { color: #7c9ef8; }
   table { border-collapse: collapse; max-width: 100% !important; }
   td, th { word-break: break-word; vertical-align: top; }
-  pre, code { white-space: pre-wrap; font-size: 13px; word-break: break-all; }
-  blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 0 4px 12px; color: #555; }
+  pre, code { white-space: pre-wrap; font-size: 13px; word-break: break-all; background: #1a1d2e; padding: 2px 4px; border-radius: 3px; }
+  blockquote { border-left: 3px solid #3a3f5c; margin: 8px 0; padding: 4px 0 4px 12px; color: #7a7f99; }
   p { margin: 6px 0; }
   center { width: 100% !important; }
+  h1, h2, h3, h4, h5, h6 { color: #e8eaf0; }
 `;
 
 function HtmlEmailBody({ html }: { html: string }) {
@@ -409,10 +411,7 @@ function AttachmentBar({ emailId, attachments }: { emailId: string; attachments:
 
 export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, onMove }: Props) {
     const [email, setEmail] = useState(initialEmail);
-    // Use html_body if available; fall back to body if it looks like HTML
     const htmlSource = email.html_body || (looksLikeHtml(email.body || "") ? email.body : null);
-    const hasHtml = !!htmlSource;
-    const [viewMode, setViewMode] = useState<"html" | "plain">(() => preferredView(email));
     const [triageText, setTriageText] = useState(email.triage_result || "");
     const [triaging, setTriaging] = useState(false);
     const [flagged, setFlagged] = useState(email.flagged ?? false);
@@ -424,25 +423,12 @@ export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, on
         setEmail(initialEmail);
     }, [initialEmail]);
 
-    // Reset state when a different email is opened
+    // Reset triage/flag state when a different email is opened
     useEffect(() => {
         abortRef.current?.abort();
         setTriaging(false);
         setTriageText(email.triage_result || "");
-        setViewMode(preferredView(email));
         setFlagged(email.flagged ?? false);
-
-        // Auto-fetch HTML body in background if missing
-        const src = email.html_body || (looksLikeHtml(email.body || "") ? email.body : null);
-        if (!src) {
-            refreshEmailBody(email.id)
-                .then(updated => {
-                    setEmail(updated);
-                    // Only switch to HTML if there's still no plain text alternative
-                    if (preferredView(updated) === "html") setViewMode("html");
-                })
-                .catch(() => {});
-        }
     }, [email.id]);
 
     async function handleRefreshBody() {
@@ -450,7 +436,6 @@ export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, on
         try {
             const updated = await refreshEmailBody(email.id);
             setEmail(updated);
-            if (preferredView(updated) === "html") setViewMode("html");
         } catch {
             // silently ignore — IMAP may not be configured
         } finally {
@@ -556,26 +541,6 @@ export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, on
                         <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
                     </button>
 
-                    {/* HTML / Plain toggle — only shown when HTML is available */}
-                    {hasHtml && (
-                        <div className="flex items-center rounded-lg overflow-hidden border border-shrimp-border">
-                            <button
-                                onClick={() => setViewMode("html")}
-                                className={`btn-secondary${viewMode === "html" ? " active" : ""}`}
-                                style={{ borderRadius: 0, border: 'none' }}
-                            >
-                                <Globe size={11} /> HTML
-                            </button>
-                            <button
-                                onClick={() => setViewMode("plain")}
-                                className={`btn-secondary${viewMode === "plain" ? " active" : ""}`}
-                                style={{ borderRadius: 0, border: 'none', borderLeft: '1px solid var(--color-border)' }}
-                            >
-                                <FileText size={11} /> Plain
-                            </button>
-                        </div>
-                    )}
-
                     <button onClick={handleArchive} title="Archive" className="btn-secondary">
                         <Archive size={12} /> Archive
                     </button>
@@ -628,7 +593,7 @@ export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, on
 
             {/* Body */}
             <div className="flex-1 overflow-hidden">
-                {viewMode === "html" && htmlSource ? (
+                {htmlSource ? (
                     <HtmlEmailBody html={htmlSource} />
                 ) : (
                     <PlainTextBody text={email.body || ""} />
