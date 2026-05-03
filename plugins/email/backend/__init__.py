@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 
 import config as _config
-from config_utils import atomic_write as _atomic_write
+from config_utils import atomic_write as _atomic_write, get_data_dir as _get_data_dir
 from credentials import get_credential, set_credential
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -32,7 +32,7 @@ log = logging.getLogger("shrimp.plugin.email")
 _CONFIG_PATH = Path(inspect.getfile(_config))
 
 # Digest file written by daily_digest job; read by GET /plugins/email/digest/latest
-_DIGEST_FILE = Path(__file__).parent.parent.parent.parent / "notifications" / "digest_latest.json"
+_DIGEST_FILE = _get_data_dir() / "notifications" / "digest_latest.json"
 
 router = APIRouter(prefix="/plugins/email", tags=["email"])
 

@@ -23,10 +23,11 @@ from typing import Any
 
 import httpx
 import config
+from config_utils import get_data_dir
 
 log = logging.getLogger("shrimp.email_client")
 
-_CACHE_DIR = Path(__file__).parent.parent / "emails"
+_CACHE_DIR = get_data_dir() / "emails"
 _CACHE_DIR.mkdir(exist_ok=True)
 _ATTACH_DIR = _CACHE_DIR / "attachments"
 _ATTACH_DIR.mkdir(exist_ok=True)
