@@ -494,10 +494,13 @@ export function EmailDetail({ email: initialEmail, onBack, onFlag, onCompose, on
         setTriaging(true);
         abortRef.current = new AbortController();
         try {
-            await triageEmail(email.id, (token) => setTriageText(t => t + token), abortRef.current.signal);
+            const updated = await triageEmail(email.id, abortRef.current.signal);
+            setEmail(updated);
+            setTriageText(updated.triage_result || "");
+            window.dispatchEvent(new CustomEvent("email:triage-complete", { detail: { id: email.id } }));
         } catch (e: unknown) {
             if (e instanceof Error && e.name !== "AbortError") {
-                setTriageText(t => t + `\n\nError: ${e.message}`);
+                setTriageText(`Error: ${e.message}`);
             }
         } finally {
             setTriaging(false);

@@ -286,10 +286,12 @@ async def auto_triage_email(email_id: str) -> dict | None:
         body=(data.get("body", "") or "")[:8000],
     )
 
+    log.debug("auto_triage: calling LLM for %s (prompt ~%d chars)", email_id, len(prompt))
     raw = await _llm_generate(prompt, timeout=120)
     if not raw:
-        log.warning("auto_triage: empty LLM response for %s", email_id)
+        log.warning("auto_triage: empty LLM response for %s (prompt was %d chars)", email_id, len(prompt))
         return None
+    log.debug("auto_triage: got %d chars from LLM for %s", len(raw), email_id)
 
     urgency, note, actions = _parse_triage_markdown(raw)
 

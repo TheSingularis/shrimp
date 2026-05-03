@@ -255,24 +255,13 @@ export async function getTriageStatus(): Promise<TriageStatus> {
     return res.json();
 }
 
-export async function triageEmail(
-    id: string,
-    onToken: (t: string) => void,
-    signal?: AbortSignal,
-): Promise<void> {
+export async function triageEmail(id: string, signal?: AbortSignal): Promise<EmailFull> {
     const res = await fetch(`${EMAIL}/${id}/triage`, { method: "POST", signal });
-    if (!res.ok || !res.body) throw new Error("Failed to triage email");
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            onToken(decoder.decode(value, { stream: true }));
-        }
-    } finally {
-        reader.cancel();
+    if (!res.ok) {
+        const detail = await res.json().catch(() => ({})) as { detail?: string };
+        throw new Error(detail.detail || "Failed to triage email");
     }
+    return res.json() as Promise<EmailFull>;
 }
 
 // ── Digest ────────────────────────────────────────────────────────────────────

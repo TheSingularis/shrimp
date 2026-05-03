@@ -128,9 +128,11 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
         ? "var(--accent)"
         : active
             ? "var(--theme-primary)"
-            : urgencyAccent
-                ? (em.read ? `color-mix(in srgb, ${urgencyAccent} 35%, transparent)` : urgencyAccent)
-                : (!em.read ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.07)");
+            : em.flagged
+                ? (em.read ? "color-mix(in srgb, #f59e0b 45%, transparent)" : "#f59e0b")
+                : urgencyAccent
+                    ? (em.read ? `color-mix(in srgb, ${urgencyAccent} 35%, transparent)` : urgencyAccent)
+                    : (!em.read ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.07)");
 
     const bgColor = selected
         ? "color-mix(in srgb, var(--accent) 14%, var(--surface))"
@@ -374,6 +376,13 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
             if (!loading && !fetching) refresh(activeFolderRef.current);
         }, 30_000);
         return () => clearInterval(id);
+    }, []);
+
+    // Refresh list when any individual email is triaged
+    useEffect(() => {
+        const handler = () => refresh(activeFolderRef.current);
+        window.addEventListener("email:triage-complete", handler);
+        return () => window.removeEventListener("email:triage-complete", handler);
     }, []);
 
     // Close context menu on scroll or click elsewhere

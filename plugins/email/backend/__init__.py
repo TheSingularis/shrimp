@@ -375,16 +375,18 @@ async def get_email(email_id: str):
 
 
 @router.post("/{email_id}/triage")
-async def triage_email(email_id: str):
-    data = email_client.load_email(email_id)
-    if data is None:
+async def triage_email_route(email_id: str):
+    if email_client.load_email(email_id) is None:
         raise HTTPException(status_code=404, detail="Email not found")
-
-    async def _stream():
-        async for token in email_processor.triage_email(email_id):
-            yield token.encode()
-
-    return StreamingResponse(_stream(), media_type="text/plain; charset=utf-8")
+    try:
+        email_processor.check_ollama()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    result = await email_processor.auto_triage_email(email_id)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Triage failed (empty LLM response)")
+    data = email_client.load_email(email_id)
+    return data
 
 
 # ── Routes: digest ────────────────────────────────────────────────────────────

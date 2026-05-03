@@ -34,8 +34,8 @@ def _triage_one(email_id: str, from_: str, subject: str) -> None:
             )
         else:
             log.warning("  -> no result for %s (empty LLM response?)", email_id)
-    except Exception:
-        log.exception("  -> FAILED for %s", email_id)
+    except Exception as exc:
+        log.exception("  -> FAILED for %s: %s", email_id, exc)
 
 
 def run() -> None:
