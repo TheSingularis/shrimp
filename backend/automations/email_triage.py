@@ -27,13 +27,15 @@ def _triage_one(email_id: str, from_: str, subject: str) -> None:
         )
         if result:
             log.info(
-                "Triaged [%s]: %s — %s",
+                "  -> done [%s]: %s — %s",
                 result["urgency"],
                 from_[:35],
                 subject[:45],
             )
+        else:
+            log.warning("  -> no result for %s (empty LLM response?)", email_id)
     except Exception:
-        log.exception("Triage failed for email %s", email_id)
+        log.exception("  -> FAILED for %s", email_id)
 
 
 def run() -> None:
@@ -77,6 +79,8 @@ def run() -> None:
     try:
         for i, em in enumerate(to_triage):
             subj = em.get("subject") or "(no subject)"
+            from_ = em.get("from", "?")
+            log.info("[%d/%d] Triaging: %s — %s", i + 1, len(to_triage), from_[:40], subj[:50])
             _scheduler.set_automation_progress(_JOB_NAME, {
                 "done": i,
                 "total": len(to_triage),
@@ -86,14 +90,14 @@ def run() -> None:
             if em["id"] in new_ids:
                 notifications.append(
                     title=f"New email: {subj}",
-                    body=f"From: {em.get('from', '')}",
+                    body=f"From: {from_}",
                     type="email_new",
                     priority="normal",
                     source="email_triage",
                     actions=[{"label": "Open Email", "route": f"/email?id={em['id']}"}],
                 )
 
-            _triage_one(em["id"], em.get("from", "?"), subj)
+            _triage_one(em["id"], from_, subj)
             email_processor._triage_tick()
     finally:
         email_processor._triage_end()
@@ -102,3 +106,4 @@ def run() -> None:
             "total": len(to_triage),
             "current": None,
         })
+        log.info("Triage complete: %d email(s) processed", len(to_triage))
