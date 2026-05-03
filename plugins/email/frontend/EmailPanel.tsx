@@ -414,10 +414,11 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         setSelectedId(id);
         setMobileDetail(true);
         try {
-            const [full] = await Promise.all([getEmail(id), setEmailRead(id, true)]);
+            const full = await getEmail(id);
             setSelectedEmail(full);
             setEmails(prev => prev.map(e => e.id === id ? { ...e, read: true } : e));
             window.dispatchEvent(new CustomEvent('email:read-changed'));
+            setEmailRead(id, true).catch(() => {});
         } catch (e) {
             console.error(e);
         }
