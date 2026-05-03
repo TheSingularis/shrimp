@@ -16,6 +16,7 @@ from pathlib import Path
 
 import config as _config
 from config_utils import atomic_write as _atomic_write
+from credentials import get_credential, set_credential
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -87,8 +88,13 @@ class MoveEmailRequest(BaseModel):
 
 
 def _write_email_config(cfg: dict) -> None:
+    password = cfg.get("password", "")
+    if password and password != "••••••••":
+        set_credential("email-imap", password)
+    stored = dict(cfg)
+    stored["password"] = ""  # never write password to config.py
     current = _CONFIG_PATH.read_text()
-    new_block = f"EMAIL_CONFIG: dict = {repr(cfg)}"
+    new_block = f"EMAIL_CONFIG: dict = {repr(stored)}"
     current = _re.sub(
         r"EMAIL_CONFIG: dict = \{.*?\}",
         new_block,
@@ -96,13 +102,19 @@ def _write_email_config(cfg: dict) -> None:
         flags=_re.DOTALL,
     )
     _atomic_write(_CONFIG_PATH, current)
+    cfg["password"] = password  # keep real password in memory
     _config.EMAIL_CONFIG.update(cfg)
     log.info("EMAIL_CONFIG written")
 
 
 def _write_smtp_config(cfg: dict) -> None:
+    password = cfg.get("password", "")
+    if password and password != "••••••••":
+        set_credential("email-smtp", password)
+    stored = dict(cfg)
+    stored["password"] = ""  # never write password to config.py
     current = _CONFIG_PATH.read_text()
-    new_block = f"SMTP_CONFIG: dict = {repr(cfg)}"
+    new_block = f"SMTP_CONFIG: dict = {repr(stored)}"
     current = _re.sub(
         r"SMTP_CONFIG: dict = \{.*?\}",
         new_block,
@@ -110,6 +122,7 @@ def _write_smtp_config(cfg: dict) -> None:
         flags=_re.DOTALL,
     )
     _atomic_write(_CONFIG_PATH, current)
+    cfg["password"] = password  # keep real password in memory
     _config.SMTP_CONFIG.update(cfg)
     log.info("SMTP_CONFIG written")
 
@@ -398,7 +411,28 @@ class EmailPlugin(ShrimpPlugin):
     def get_router(self):
         return router
 
+    def _inject_credentials(self) -> None:
+        """Load passwords from keyring into the in-memory config.
+
+        Also migrates any existing plaintext passwords out of config.py on
+        first run after this change is deployed.
+        """
+        for account, attr in (("email-imap", "EMAIL_CONFIG"), ("email-smtp", "SMTP_CONFIG")):
+            cfg = getattr(_config, attr)
+            stored = get_credential(account)
+            plaintext = cfg.get("password", "")
+            if not stored and plaintext:
+                # Migrate: move plaintext password into keyring, strip from config.py
+                log.info("Migrating %s password to keyring", account)
+                set_credential(account, plaintext)
+                stored = plaintext
+                writer = _write_email_config if account == "email-imap" else _write_smtp_config
+                writer({**cfg, "password": plaintext})
+            if stored:
+                cfg["password"] = stored
+
     async def on_startup(self) -> None:
+        self._inject_credentials()
         import email_sync
         email_sync.start()
         threading.Thread(
