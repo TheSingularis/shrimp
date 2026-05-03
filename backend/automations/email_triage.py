@@ -43,6 +43,20 @@ def run() -> None:
         log.debug("Email not enabled, skipping")
         return
 
+    try:
+        email_processor.check_ollama()
+    except RuntimeError as e:
+        msg = str(e)
+        log.error("Email triage aborted: %s", msg)
+        notifications.append(
+            title="Email triage: Ollama not configured",
+            body=msg,
+            type="error",
+            priority="high",
+            source="email_triage",
+        )
+        raise
+
     log.info("Email triage poll: fetching inbox...")
     new_emails = email_client.fetch_emails()
     new_ids = {e["id"] for e in new_emails}

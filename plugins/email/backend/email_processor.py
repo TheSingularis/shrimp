@@ -131,6 +131,31 @@ def _parse_triage_markdown(text: str) -> tuple[str, str, list[str]]:
     return urgency, note, actions
 
 
+def check_ollama() -> None:
+    """Raise RuntimeError with a user-readable message if Ollama is unreachable or model is missing."""
+    try:
+        r = httpx.get(f"{config.OLLAMA_HOST}/api/tags", timeout=5.0)
+        r.raise_for_status()
+    except httpx.ConnectError:
+        raise RuntimeError(
+            f"Ollama is not running at {config.OLLAMA_HOST}. "
+            "Start Ollama and try again."
+        )
+    except Exception as e:
+        raise RuntimeError(f"Ollama health check failed: {e}")
+
+    available = [m["name"] for m in r.json().get("models", [])]
+    model = config.OLLAMA_MODEL
+    base = model.split(":")[0]
+    if not any(m == model or m.split(":")[0] == base for m in available):
+        hint = f"ollama pull {model}"
+        raise RuntimeError(
+            f"Ollama model '{model}' not found. "
+            f"Available: {', '.join(available) or 'none'}. "
+            f"Run: {hint}"
+        )
+
+
 async def _llm_generate(prompt: str, timeout: int = 120) -> str:
     """Non-streaming LLM call, returns full response string."""
     parts: list[str] = []
@@ -145,11 +170,14 @@ async def _llm_generate(prompt: str, timeout: int = 120) -> str:
                 "options": {"num_ctx": min(config.NUM_CTX, 4096)},
             },
         ) as resp:
+            resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line.strip():
                     continue
                 try:
                     obj = json.loads(line)
+                    if obj.get("error"):
+                        raise RuntimeError(f"Ollama error: {obj['error']}")
                     parts.append(obj.get("response", ""))
                     if obj.get("done"):
                         break
@@ -168,6 +196,12 @@ async def triage_email(email_id: str) -> AsyncIterator[str]:
     data = email_client.load_email(email_id)
     if data is None:
         yield "Error: Email not found."
+        return
+
+    try:
+        check_ollama()
+    except RuntimeError as e:
+        yield f"Error: {e}"
         return
 
     prompt = _TRIAGE_PROMPT.format(
