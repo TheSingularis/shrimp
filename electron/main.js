@@ -144,29 +144,35 @@ function isBackendRunning() {
 
 function startBackend() {
   const python = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : "python3";
-
-  backendProcess = spawn(
-    python,
-    [
-      "-m",
-      "uvicorn",
-      "main:app",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(BACKEND_PORT),
-    ],
-    {
-      cwd: BACKEND_DIR,
-      env: {
-        ...process.env,
-        ...(USER_CONFIG_DIR ? { SHRIMP_CONFIG_DIR: USER_CONFIG_DIR } : {}),
-        SHRIMP_DATA_DIR: app.getPath("userData"),
-      },
-    },
-  );
+  const backendArgs = [
+    "-m", "uvicorn", "main:app",
+    "--host", "127.0.0.1",
+    "--port", String(BACKEND_PORT),
+  ];
+  const backendEnv = {
+    ...process.env,
+    ...(USER_CONFIG_DIR ? { SHRIMP_CONFIG_DIR: USER_CONFIG_DIR } : {}),
+    SHRIMP_DATA_DIR: app.getPath("userData"),
+  };
 
   const backendLog = getLogStream("backend.log");
+  if (IS_PACKAGED) {
+    const logPath = path.join(app.getPath("logs"), "backend.log");
+    console.log(`[backend] log → ${logPath}`);
+  }
+
+  const logLine = (msg) => {
+    if (backendLog) backendLog.write(msg + "\n");
+    else console.log("[backend]", msg);
+  };
+
+  logLine(`=== backend start ${new Date().toISOString()} ===`);
+  logLine(`python:  ${python}`);
+  logLine(`args:    ${backendArgs.join(" ")}`);
+  logLine(`cwd:     ${BACKEND_DIR}`);
+  logLine(`venv ok: ${fs.existsSync(VENV_PYTHON)}`);
+
+  backendProcess = spawn(python, backendArgs, { cwd: BACKEND_DIR, env: backendEnv });
 
   backendProcess.stdout.on("data", (d) => {
     const line = d.toString().trimEnd();
@@ -186,13 +192,13 @@ function startBackend() {
     )
       return;
     if (backendLog) backendLog.write("[stderr] " + line + "\n");
-    else console.error("[backend]", line);
+    else console.error("[backend stderr]", line);
   });
 
   backendProcess.on("exit", (code) => {
-    if (code !== 0 && !app.isQuitting) {
-      console.error(`[backend] exited with code ${code}`);
-    }
+    const msg = `=== backend exit code ${code} ===`;
+    if (backendLog) backendLog.write(msg + "\n");
+    if (code !== 0 && !app.isQuitting) console.error(`[backend] exited with code ${code}`);
   });
 }
 
