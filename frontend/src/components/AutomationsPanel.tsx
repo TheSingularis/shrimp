@@ -117,11 +117,13 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                     {automation.cron && <span style={{ color: "var(--text-dim)" }}>{cronstrue.toString(automation.cron)}</span>}
                 </div>
 
-                {automation.progress && (
+                {automation.progress && automation.progress.total > 0 && (
                     <div style={{ marginTop: 6 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
-                                {automation.progress.current ?? "…"}
+                                {automation.running
+                                    ? (automation.progress.current ?? "…")
+                                    : `Triaged ${automation.progress.done} email${automation.progress.done !== 1 ? "s" : ""}`}
                             </span>
                             <span style={{ flexShrink: 0 }}>{automation.progress.done}/{automation.progress.total}</span>
                         </div>
@@ -129,7 +131,7 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                             <div style={{
                                 height: "100%",
                                 width: `${Math.round((automation.progress.done / automation.progress.total) * 100)}%`,
-                                background: "var(--accent)",
+                                background: automation.running ? "var(--accent)" : "#10b981",
                                 borderRadius: 2,
                                 transition: "width 0.4s ease",
                             }} />
@@ -165,6 +167,7 @@ export function AutomationsPanel() {
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [loading, setLoading] = useState(true);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     async function refresh() {
         try {
@@ -181,11 +184,18 @@ export function AutomationsPanel() {
 
     useEffect(() => {
         const anyRunning = automations.some(a => a.running);
-        if (anyRunning && !pollRef.current) {
-            pollRef.current = setInterval(refresh, 1500);
-        } else if (!anyRunning && pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
+        if (anyRunning) {
+            if (cooldownRef.current) { clearTimeout(cooldownRef.current); cooldownRef.current = null; }
+            if (!pollRef.current) pollRef.current = setInterval(refresh, 1500);
+        } else if (pollRef.current) {
+            // Keep polling for 3s after job finishes so final state is captured
+            if (!cooldownRef.current) {
+                cooldownRef.current = setTimeout(() => {
+                    clearInterval(pollRef.current!);
+                    pollRef.current = null;
+                    cooldownRef.current = null;
+                }, 3000);
+            }
         }
     }, [automations]);
 
@@ -193,6 +203,7 @@ export function AutomationsPanel() {
         refresh();
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
+            if (cooldownRef.current) clearTimeout(cooldownRef.current);
         };
     }, []);
 

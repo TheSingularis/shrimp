@@ -83,4 +83,8 @@ def run() -> None:
             email_processor._triage_tick()
     finally:
         email_processor._triage_end()
-        _scheduler.set_automation_progress(_JOB_NAME, None)
+        _scheduler.set_automation_progress(_JOB_NAME, {
+            "done": len(to_triage),
+            "total": len(to_triage),
+            "current": None,
+        })
