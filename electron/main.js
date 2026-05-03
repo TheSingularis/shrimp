@@ -15,10 +15,8 @@ const fs = require("fs");
 let mainWindow;
 let tray;
 let backendProcess;
-let ollamaProcess;
 
 const BACKEND_PORT = 8000;
-const OLLAMA_PORT = 11434;
 const ROOT_DIR = path.join(__dirname, "..");
 
 // ── Path resolution (dev vs packaged vs system install) ────────────────────────
@@ -70,65 +68,6 @@ function getLogStream(filename) {
   return fs.createWriteStream(path.join(logDir, filename), { flags: "a" });
 }
 
-// ── Ollama ─────────────────────────────────────────────────────────────────────
-
-function isOllamaRunning() {
-  return new Promise((resolve) => {
-    http
-      .get(`http://127.0.0.1:${OLLAMA_PORT}`, (res) => {
-        resolve(res.statusCode < 500);
-      })
-      .on("error", () => resolve(false));
-  });
-}
-
-function startOllama() {
-  ollamaProcess = spawn("ollama", ["serve"], {
-    env: {
-      ...process.env,
-      OLLAMA_HOST: `0.0.0.0:${OLLAMA_PORT}`,
-      OLLAMA_MODELS: path.join(process.env.HOME || "", ".ollama", "models"),
-      OLLAMA_KEEP_ALIVE: "15m",
-      HSA_OVERRIDE_GFX_VERSION: "12.0.0",
-      ROCR_VISIBLE_DEVICES: "0",
-    },
-  });
-
-  const ollamaLog = getLogStream("ollama.log");
-  function logOllama(data) {
-    const line = data.toString().trimEnd();
-    if (ollamaLog) ollamaLog.write(line + "\n");
-    else console.log("[ollama]", line);
-  }
-
-  ollamaProcess.stdout.on("data", logOllama);
-  ollamaProcess.stderr.on("data", logOllama);
-  ollamaProcess.on("exit", (code) => {
-    if (code !== 0 && !app.isQuitting) {
-      console.error(`[ollama] exited with code ${code}`);
-    }
-  });
-}
-
-function waitForOllama(maxAttempts = 60) {
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    function check() {
-      http
-        .get(`http://127.0.0.1:${OLLAMA_PORT}`, (res) => {
-          if (res.statusCode < 500) return resolve();
-          retry();
-        })
-        .on("error", retry);
-    }
-    function retry() {
-      if (++attempts >= maxAttempts)
-        return reject(new Error("Ollama did not start in time"));
-      setTimeout(check, 500);
-    }
-    check();
-  });
-}
 
 // ── Backend ────────────────────────────────────────────────────────────────────
 
@@ -158,7 +97,7 @@ function startBackend() {
   const backendLog = getLogStream("backend.log");
   if (IS_PACKAGED) {
     const logPath = path.join(app.getPath("logs"), "backend.log");
-    console.log(`[backend] log → ${logPath}`);
+    console.log(`[backend] log -> ${logPath}`);
   }
 
   const logLine = (msg) => {
@@ -365,36 +304,19 @@ if (!gotLock) {
 app.whenReady().then(async () => {
   if (IS_PACKAGED) setupUserConfig();
 
-  const [backendUp, ollamaUp] = await Promise.all([
-    isBackendRunning(),
-    isOllamaRunning(),
-  ]);
-
-  if (ollamaUp) {
-    console.log("[electron] Ollama already running — skipping spawn");
-  } else {
-    startOllama();
-  }
-
+  const backendUp = await isBackendRunning();
   if (backendUp) {
-    console.log("[electron] Backend already running — skipping spawn");
+    console.log("[electron] Backend already running -- skipping spawn");
   } else {
-    // Wait for Ollama first so the backend can reach it on startup
-    if (!ollamaUp) {
-      try {
-        await waitForOllama();
-        console.log("[electron] Ollama ready");
-      } catch (e) {
-        console.error("[electron] Ollama failed to start:", e.message);
-      }
-    }
     startBackend();
   }
 
+  const logPath = IS_PACKAGED ? path.join(app.getPath("logs"), "backend.log") : null;
+
   // Show splash while backend boots
-  let splash = null;
+  let backendStarted = backendUp;
   if (!backendUp) {
-    splash = new BrowserWindow({
+    const splash = new BrowserWindow({
       width: 360,
       height: 220,
       frame: false,
@@ -420,37 +342,71 @@ app.whenReady().then(async () => {
       <h1>SHRIMP*</h1>
       <div class="spinner"></div>
       <div class="bar-track"><div id="bar" class="bar-fill"></div></div>
-      <div id="status" class="status">Starting services\u2026</div>
+      <div id="status" class="status">Starting...</div>
     </body></html>`;
     const splashPath = path.join(app.getPath("temp"), "shrimp-splash.html");
     fs.writeFileSync(splashPath, splashHtml);
     splash.loadFile(splashPath);
-
     await new Promise(r => splash.webContents.once("did-finish-load", r));
 
     try {
       await waitForBackend(60, (attempt, max) => {
-        if (splash && !splash.isDestroyed()) {
+        if (!splash.isDestroyed()) {
           const pct = Math.min(5 + Math.round((attempt / max) * 90), 95);
           splash.webContents.executeJavaScript(
             `document.getElementById('bar').style.width='${pct}%';` +
-            `document.getElementById('status').textContent='Starting services\u2026 ('+attempt+'/'+max+')';`
+            `document.getElementById('status').textContent='Starting... (${attempt}/${max})';`
           ).catch(() => {});
         }
       });
+      backendStarted = true;
+      if (!splash.isDestroyed()) {
+        splash.webContents.executeJavaScript(
+          `document.getElementById('bar').style.width='100%';` +
+          `document.getElementById('status').textContent='Ready';`
+        ).catch(() => {});
+        await new Promise(r => setTimeout(r, 300));
+      }
     } catch (e) {
       console.error("[electron] Backend failed to start:", e.message);
     }
 
-    if (splash && !splash.isDestroyed()) {
-      splash.webContents.executeJavaScript(
-        `document.getElementById('bar').style.width='100%';` +
-        `document.getElementById('status').textContent='Ready';`
-      ).catch(() => {});
-      await new Promise(r => setTimeout(r, 300));
-      splash.close();
-    }
-    splash = null;
+    if (!splash.isDestroyed()) splash.close();
+  }
+
+  if (!backendStarted) {
+    const logLine = logPath
+      ? `<p class="log">${logPath}</p>`
+      : `<p style="color:#555">Run from a terminal to see output</p>`;
+    const errWin = new BrowserWindow({
+      width: 500,
+      height: 280,
+      backgroundColor: "#0D0F17",
+      webPreferences: { contextIsolation: true },
+    });
+    const errHtml = `<!DOCTYPE html><html><head><style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#0D0F17;font-family:sans-serif;color:#8891A8;font-size:13px;
+           padding:32px;display:flex;flex-direction:column;gap:14px}
+      h1{font-size:17px;font-weight:700;color:#FF6B6B}
+      p{line-height:1.5}
+      .label{font-size:11px;color:#555;margin-bottom:2px}
+      .log{font-size:11px;font-family:monospace;color:#666;word-break:break-all}
+      button{align-self:flex-start;margin-top:4px;padding:7px 20px;background:#FF6B6B;
+             color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer}
+      button:hover{background:#e05555}
+    </style></head><body>
+      <h1>Backend failed to start</h1>
+      <p>The Python backend exited unexpectedly.</p>
+      <div class="label">Log file:</div>
+      ${logLine}
+      <button onclick="window.close()">Quit</button>
+    </body></html>`;
+    const errPath = path.join(app.getPath("temp"), "shrimp-error.html");
+    fs.writeFileSync(errPath, errHtml);
+    errWin.loadFile(errPath);
+    errWin.on("closed", () => app.quit());
+    return;
   }
 
   createWindow();
@@ -468,5 +424,4 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   app.isQuitting = true;
   if (backendProcess) backendProcess.kill("SIGTERM");
-  if (ollamaProcess) ollamaProcess.kill("SIGTERM");
 });
