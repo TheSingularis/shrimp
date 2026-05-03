@@ -376,15 +376,24 @@ async def get_email(email_id: str):
 
 @router.post("/{email_id}/triage")
 async def triage_email_route(email_id: str):
+    log.info("triage request: %s", email_id)
     if email_client.load_email(email_id) is None:
+        log.warning("triage: email not found: %s", email_id)
         raise HTTPException(status_code=404, detail="Email not found")
     try:
         email_processor.check_ollama()
     except RuntimeError as e:
+        log.error("triage: Ollama check failed: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
-    result = await email_processor.auto_triage_email(email_id)
+    try:
+        result = await email_processor.auto_triage_email(email_id)
+    except Exception as exc:
+        log.exception("triage: unexpected error for %s: %s", email_id, exc)
+        raise HTTPException(status_code=500, detail=f"Triage error: {exc}")
     if result is None:
+        log.error("triage: no result for %s (LLM returned empty)", email_id)
         raise HTTPException(status_code=500, detail="Triage failed (empty LLM response)")
+    log.info("triage: complete for %s — urgency=%s", email_id, result.get("urgency"))
     data = email_client.load_email(email_id)
     return data
 

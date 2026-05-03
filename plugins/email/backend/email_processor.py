@@ -133,6 +133,7 @@ def _parse_triage_markdown(text: str) -> tuple[str, str, list[str]]:
 
 def check_ollama() -> None:
     """Raise RuntimeError with a user-readable message if Ollama is unreachable or model is missing."""
+    log.info("check_ollama: checking %s for model '%s'", config.OLLAMA_HOST, config.OLLAMA_MODEL)
     try:
         r = httpx.get(f"{config.OLLAMA_HOST}/api/tags", timeout=5.0)
         r.raise_for_status()
@@ -145,6 +146,7 @@ def check_ollama() -> None:
         raise RuntimeError(f"Ollama health check failed: {e}")
 
     available = [m["name"] for m in r.json().get("models", [])]
+    log.info("check_ollama: available models: %s", available)
     model = config.OLLAMA_MODEL
     base = model.split(":")[0]
     if not any(m == model or m.split(":")[0] == base for m in available):
@@ -154,36 +156,55 @@ def check_ollama() -> None:
             f"Available: {', '.join(available) or 'none'}. "
             f"Run: {hint}"
         )
+    log.info("check_ollama: OK (model '%s' available)", model)
 
 
 async def _llm_generate(prompt: str, timeout: int = 120) -> str:
     """Non-streaming LLM call, returns full response string."""
+    log.info("_llm_generate: POST %s/api/generate model=%s prompt=%d chars timeout=%ds",
+             config.OLLAMA_HOST, config.OLLAMA_MODEL, len(prompt), timeout)
     parts: list[str] = []
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream(
-            "POST",
-            f"{config.OLLAMA_HOST}/api/generate",
-            json={
-                "model": config.OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": True,
-                "options": {"num_ctx": min(config.NUM_CTX, 4096)},
-            },
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.strip():
-                    continue
-                try:
-                    obj = json.loads(line)
-                    if obj.get("error"):
-                        raise RuntimeError(f"Ollama error: {obj['error']}")
-                    parts.append(obj.get("response", ""))
-                    if obj.get("done"):
-                        break
-                except json.JSONDecodeError:
-                    pass
-    return "".join(parts).strip()
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{config.OLLAMA_HOST}/api/generate",
+                json={
+                    "model": config.OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": True,
+                    "options": {"num_ctx": min(config.NUM_CTX, 4096)},
+                },
+            ) as resp:
+                log.info("_llm_generate: HTTP %s", resp.status_code)
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        if obj.get("error"):
+                            log.error("_llm_generate: Ollama returned error: %s", obj["error"])
+                            raise RuntimeError(f"Ollama error: {obj['error']}")
+                        parts.append(obj.get("response", ""))
+                        if obj.get("done"):
+                            log.info("_llm_generate: done — %d chars collected", sum(len(p) for p in parts))
+                            break
+                    except json.JSONDecodeError as e:
+                        log.warning("_llm_generate: JSON decode error on line %r: %s", line[:80], e)
+    except httpx.TimeoutException:
+        log.error("_llm_generate: timed out after %ds (model=%s)", timeout, config.OLLAMA_MODEL)
+        raise
+    except httpx.HTTPStatusError as e:
+        log.error("_llm_generate: HTTP error %s from Ollama: %s", e.response.status_code, e)
+        raise
+    except Exception:
+        log.exception("_llm_generate: unexpected error")
+        raise
+    result = "".join(parts).strip()
+    if not result:
+        log.warning("_llm_generate: assembled empty string from %d parts", len(parts))
+    return result
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -286,21 +307,32 @@ async def auto_triage_email(email_id: str) -> dict | None:
         body=(data.get("body", "") or "")[:8000],
     )
 
-    log.debug("auto_triage: calling LLM for %s (prompt ~%d chars)", email_id, len(prompt))
-    raw = await _llm_generate(prompt, timeout=120)
-    if not raw:
-        log.warning("auto_triage: empty LLM response for %s (prompt was %d chars)", email_id, len(prompt))
+    subj = (data.get("subject") or "")[:50]
+    from_ = (data.get("from") or "")[:40]
+    log.info("auto_triage: [%s] '%s' from '%s' — prompt %d chars", email_id[:8], subj, from_, len(prompt))
+    try:
+        raw = await _llm_generate(prompt, timeout=120)
+    except Exception as exc:
+        log.error("auto_triage: LLM call failed for %s: %s", email_id, exc)
         return None
-    log.debug("auto_triage: got %d chars from LLM for %s", len(raw), email_id)
+    if not raw:
+        log.warning("auto_triage: empty LLM response for [%s] '%s'", email_id[:8], subj)
+        return None
 
     urgency, note, actions = _parse_triage_markdown(raw)
+    log.info("auto_triage: [%s] urgency=%s note=%r", email_id[:8], urgency, note[:60] if note else "")
 
     data["triaged"] = True
     data["triage_result"] = raw.strip()
     data["triage_priority"] = urgency
     data["triage_note"] = note
     data["triage_actions"] = actions
-    email_client._save_email(data)
+    try:
+        email_client._save_email(data)
+        log.info("auto_triage: saved [%s]", email_id[:8])
+    except Exception:
+        log.exception("auto_triage: FAILED to save email [%s]", email_id[:8])
+        return None
     email_client.embed_email(data["id"])
 
     return {"urgency": urgency, "note": note}
