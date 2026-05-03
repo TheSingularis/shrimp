@@ -1,3 +1,13 @@
+import os
+import sys
+
+# In a packaged install the backend runs from a root-owned system dir.
+# Prepend the user-writable config dir so `import config` loads the user's
+# saved settings instead of the read-only system default.
+_config_dir = os.environ.get("SHRIMP_CONFIG_DIR")
+if _config_dir:
+    sys.path.insert(0, _config_dir)
+
 import checklist
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware

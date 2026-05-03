@@ -31,6 +31,7 @@ package() {
 
     install -dm755 "${pkgdir}/usr/lib/shrimp"
     cp -r electron frontend backend plugins package.json "${pkgdir}/usr/lib/shrimp/"
+    chmod -R a+rX "${pkgdir}/usr/lib/shrimp/"
 
     install -Dm755 /dev/stdin "${pkgdir}/usr/bin/shrimp" <<'EOF'
 #!/usr/bin/env sh

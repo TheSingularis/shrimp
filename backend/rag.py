@@ -12,6 +12,7 @@ import config
 import chromadb
 import logging
 from pathlib import Path
+from config_utils import get_data_dir
 from datetime import datetime
 
 # llama_index emits this warning once per file when llama-index-readers-file is
@@ -30,8 +31,11 @@ Settings.llm = Ollama(model=config.OLLAMA_MODEL, request_timeout=120.0)
 Settings.embed_model = OllamaEmbedding(model_name=config.EMBED_MODEL)
 Settings.transformations = [SentenceSplitter(chunk_size=512, chunk_overlap=50)]
 
-chroma_client = chromadb.PersistentClient(path=config.CHROMA_PATH)
-log.info("ChromaDB client ready at %s", config.CHROMA_PATH)
+_chroma_path = config.CHROMA_PATH
+if not Path(_chroma_path).is_absolute():
+    _chroma_path = str(get_data_dir() / _chroma_path)
+chroma_client = chromadb.PersistentClient(path=_chroma_path)
+log.info("ChromaDB client ready at %s", _chroma_path)
 
 # ── constants ──────────────────────────────────────────────────────────────────
 
