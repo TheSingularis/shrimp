@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
-import { listAutomations, triggerAutomation, updateAutomation, type Automation } from "../api";
+import { listAutomations, triggerAutomation, updateAutomation, type Automation, type AutomationProgress } from "../api";
 import { formatDate as formatDateShort } from "../utils/email";
 
 import cronstrue from "cronstrue"
@@ -116,6 +116,26 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                     <span>{formatLastRun(automation.last_run)}</span>
                     {automation.cron && <span style={{ color: "var(--text-dim)" }}>{cronstrue.toString(automation.cron)}</span>}
                 </div>
+
+                {automation.progress && (
+                    <div style={{ marginTop: 6 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
+                                {automation.progress.current ?? "…"}
+                            </span>
+                            <span style={{ flexShrink: 0 }}>{automation.progress.done}/{automation.progress.total}</span>
+                        </div>
+                        <div style={{ height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
+                            <div style={{
+                                height: "100%",
+                                width: `${Math.round((automation.progress.done / automation.progress.total) * 100)}%`,
+                                background: "var(--accent)",
+                                borderRadius: 2,
+                                transition: "width 0.4s ease",
+                            }} />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Right: action buttons */}

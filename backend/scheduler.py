@@ -161,25 +161,13 @@ def set_automation_enabled(name: str, enabled: bool) -> bool:
     return True
 
 
-def get_automations() -> list[dict]:
-    return [
-        {
-            "name": name,
-            "description": meta.get("description", ""),
-            "cron": meta.get("cron", ""),
-            "enabled": meta.get("enabled", True),
-            "last_run": meta.get("last_run"),
-            "last_result": meta.get("last_result"),
-            "running": meta.get("running", False),
-        }
-        for name, meta in _automation_registry.items()
-    ]
-
-
-def get_automation(name: str) -> dict | None:
+def set_automation_progress(name: str, progress: dict | None) -> None:
     meta = _automation_registry.get(name)
-    if meta is None:
-        return None
+    if meta is not None:
+        meta["progress"] = progress
+
+
+def _automation_dict(name: str, meta: dict) -> dict:
     return {
         "name": name,
         "description": meta.get("description", ""),
@@ -188,4 +176,16 @@ def get_automation(name: str) -> dict | None:
         "last_run": meta.get("last_run"),
         "last_result": meta.get("last_result"),
         "running": meta.get("running", False),
+        "progress": meta.get("progress"),
     }
+
+
+def get_automations() -> list[dict]:
+    return [_automation_dict(name, meta) for name, meta in _automation_registry.items()]
+
+
+def get_automation(name: str) -> dict | None:
+    meta = _automation_registry.get(name)
+    if meta is None:
+        return None
+    return _automation_dict(name, meta)

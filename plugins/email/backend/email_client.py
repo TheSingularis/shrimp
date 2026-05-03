@@ -404,6 +404,21 @@ def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]
     return items[:limit]
 
 
+def list_untriaged_emails(limit: int = 100) -> list[dict]:
+    """Return cached inbox emails not yet triaged, oldest-first."""
+    items = []
+    for p in _CACHE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            if not data.get("id") or data.get("triaged"):
+                continue
+            items.append({k: data.get(k) for k in ("id", "from", "subject", "date")})
+        except Exception:
+            pass
+    items.sort(key=lambda e: e.get("date") or "")
+    return items[:limit]
+
+
 # ── Semantic search / embeddings ──────────────────────────────────────────────
 
 def _get_embedding(text: str) -> list[float] | None:

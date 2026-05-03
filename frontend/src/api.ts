@@ -507,6 +507,12 @@ export async function deleteNotification(id: string): Promise<void> {
 
 // ── Automations ───────────────────────────────────────────────────────────────
 
+export interface AutomationProgress {
+    done: number;
+    total: number;
+    current: string | null;
+}
+
 export interface Automation {
     name: string;
     description: string;
@@ -515,6 +521,7 @@ export interface Automation {
     last_run: string | null;
     last_result: "ok" | "error" | null;
     running: boolean;
+    progress?: AutomationProgress | null;
 }
 
 export async function listAutomations(): Promise<Automation[]> {
