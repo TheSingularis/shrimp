@@ -16,6 +16,7 @@ backend/credentials.json
 
 # ── Runtime data (local-only, not part of the codebase) ──────────────────────
 backend/chroma_db/
+chroma_db/
 emails/
 notifications/
 conversations/
