@@ -1,205 +1,277 @@
-# SHRIMP* — TODO
+# SHRIMP* — Development Roadmap
 
 ---
 
-## 🔌 Refactor: Plugin System
+## 🔌 Phase 1: Frontend Plugin Dynamic Loading
 
-> Inspired by Obsidian's plugin architecture — make SHRIMP modularly extensible while keeping the core lean.
+> **Goal**: Enable community plugins to register nav items, panels, and settings tabs at runtime.
 
-Split functionality into three layers:
+### Current State
+- Backend plugin system is complete (`plugins/email/`, `plugins/news/`)
+- Frontend uses static imports in `App.tsx`
+- Only hardcoded core plugins have UI
 
-1. **Core** — irreducible kernel: RAG engine, chat pipeline, tool calling loop, scope management, settings. Always on.
-2. **Core Plugins** — first-party features shipped with SHRIMP but disableable. Same API as community plugins.
-3. **Community Plugins** — user-installed modules registering new automations, tools, UI panels, or settings tabs.
+### Implementation Tasks
 
-### Core Plugin Candidates
+#### 1.1 Plugin UI Registry
+- [ ] Define `PluginUI` interface in `frontend/src/plugins/types.ts`:
+  ```typescript
+  interface PluginUI {
+    id: string;
+    navItem?: { label: string; icon: React.ElementType };
+    panel?: React.ComponentType;
+    settingsTab?: React.ComponentType;
+    dashboardCards?: React.ComponentType[];
+  }
+  ```
+- [ ] Create plugin loader hook: `usePluginUI()` that discovers enabled plugins
+- [ ] Implement lazy loading via `import.meta.glob('plugins/*/frontend/*.tsx')`
 
-| Plugin | Source files | Contributes |
-|---|---|---|
-| `email` | `email_client.py`, `email_processor.py`, `email_smtp.py`, `email_idle.py`, `EmailPanel.tsx` | IMAP/SMTP, triage, inbox panel |
-| `automations` | `scheduler.py`, `automations/`, `AutomationsPanel.tsx` | APScheduler, job registry, automations UI |
-| `news_digest` | `automations/news_digest.py` | RSS feeds, interest filtering, checklist items |
-| `daily_digest` | `automations/daily_digest.py` | Morning email summary |
-| `obsidian` | `obsidian_ops.py`, `ObsidianPanel.tsx` | Vault browser, obsidian chat tools |
-| `checklist` | `checklist.py`, `DailyChecklist.tsx` | Focus list, AI triage |
-| `notifications` | `notifications.py`, `NotificationFeed.tsx` | In-app notification feed |
+#### 1.2 Dynamic Navigation Rail
+- [ ] Refactor `App.tsx` nav rail to iterate over registered plugin nav items
+- [ ] Add plugin badge counts (e.g., email unread) as `BadgeCount` components
+- [ ] Ensure routing works for plugin panels (use dynamic route or conditional render)
 
-### Plugin API (sketch)
+#### 1.3 Dynamic Settings Tabs
+- [ ] Refactor `SettingsModal` to accept `settingsTabs: PluginUI[]` prop
+- [ ] Render core tabs (Appearance, Models, Scopes) + plugin tabs
+- [ ] Add "Plugins" management tab (see below)
 
-```python
-# plugins/email/__init__.py
-MANIFEST = {
-    "id": "email",
-    "name": "Email Client",
-    "core": True,
-    "description": "IMAP/SMTP email integration with AI triage",
-    "backend": ["routes", "startup", "tools"],
-    "frontend": ["panel", "settings_tab"],
-}
-```
+#### 1.4 Dynamic Dashboard Cards
+- [ ] Refactor `DashboardHome` to accept `dashboardCards: React.ComponentType[]` prop
+- [ ] Remove hardcoded email sections; use plugin cards instead
+- [ ] Ensure card click navigation routes to plugin panel
 
-Backend hooks: `routes(app)`, `startup()`, `tools() -> list[Tool]`, `settings_schema() -> dict`
-
-Frontend contributions: **Panel** (nav rail entry), **Settings tab**, **Dashboard widget**, **Checklist source**
-
-### Implementation Phases
-
-- **Phase A** *(refactor only, no UX change)* — define manifest interface, move modules into `plugins/` subdirs, wire plugin loader in `main.py`, add `DISABLED_PLUGINS` to config
-- **Phase B** — Plugins tab in SettingsModal; list with name, description, core badge, toggle
-- **Phase C** — Community plugins from `~/.shrimp/plugins/`; drop-in directory, explicit user enable required
-
-### Open Questions
-
-- Frontend dynamic loading — panels are static imports in `App.tsx`; need lazy imports keyed by plugin ID
-- Hot reload vs restart — backend likely needs restart; frontend can conditionally render from fetched plugin list
-- Tool sandboxing — permission model for community plugins accessing files/network?
-- Config ownership — each plugin owns its keys; need collision avoidance and graceful degradation when disabled
-
-**Decision:** Not imminent. Revisit when the monolith feels unwieldy or a clear community use-case emerges.
+### Acceptance Criteria
+- New plugin can add UI by exporting `pluginUI` object in `frontend/index.ts`
+- Frontend auto-discovers and renders plugin UI without code changes
+- Plugin enable/disable toggles hide/show UI components immediately
+- No runtime errors when loading disabled plugins
 
 ---
 
-## 🖥️ Electron — Distributable Package
+## 📧 Phase 2: Email Triage Sync Latency Fix
 
-- [ ] Package as `.AppImage` / `.deb` via `electron-builder`
-  - Bundle Python backend (PyInstaller or shipped venv) + Ollama binary + built frontend
-  - Primary: Linux AppImage/deb — stretch: macOS dmg, Windows exe
+> **Goal**: Eliminate stale UI state in email inbox and digest panels.
 
----
+### Problem
+TODO.md (old) notes: *"Revisit Today's Focus / digest logic — sometimes shows stale 'Inbox clear' while new emails are present"*. The `email_synced` event is not propagated to the frontend.
 
-## 📧 Email — Open Items
+### Implementation Tasks
 
-- [ ] **Revisit Today's Focus / digest logic** — sometimes shows stale "Inbox clear" while new emails are present; needs timestamp or relevance filter
-- [ ] **AI-assisted compose** — "Write for me" button: user describes intent, LLM drafts full email
+#### 2.1 Backend Event Emission
+- [ ] Add SSE endpoint in `main.py`: `GET /events` that streams `email_synced` events
+- [ ] In `plugins/email/backend/email_sync.py`, emit event after IDLE/fetch completes:
+  ```python
+  # Pseudo-code
+  event_bus.emit("email_synced", {"folder": "INBOX", "count": 5})
+  ```
+- [ ] Implement simple in-memory event bus (dict of callbacks) in `backend/event_bus.py`
 
----
+#### 2.2 Frontend Event Subscription
+- [ ] Create `useEventBus()` hook in `frontend/src/hooks/`:
+  ```typescript
+  const { onEvent } = useEventBus();
+  onEvent('email_synced', (data) => { invalidateQueries(['email', 'inbox']) });
+  ```
+- [ ] Refactor `useEmailUnreadCount` hook to subscribe to events instead of polling
+- [ ] Update `DashboardHome` email cards to invalidate cache on event
 
-## 🤖 Automations — Open Items
+#### 2.3 Fallback Polling (if SSE is too complex)
+- [ ] Alternative: Add 5s polling interval for `GET /plugins/email/sync-state`
+- [ ] Use React Query `refetchInterval` instead of manual `setInterval`
+- [ ] Ensure polling stops when tab is inactive (page visibility API)
 
-- [ ] **`file_summary.py`** — append changed-file summaries to `CHANGES.md` on commit; not yet implemented
-- [ ] **`obsidian_maintenance.py`** — registered and scheduled but untested end-to-end; trigger manually and verify notification output
-- [ ] **News digest interest filtering** — test prompt against varied feed types; refine if LLM is too aggressive or too permissive
-
----
-
-## ✏️ Checklist — Open Items
-
-- [ ] **Triage context richness** — prompt currently only has item text + source name; passing email subjects or article summaries would improve classification accuracy
-- [ ] **Manual priority override** — let user click the badge or drag to reorder; currently triage-only
-
----
-
-## 💬 Chat — Open Items
-
-- [ ] **`run_shell_command` tool** — opt-in sandboxed shell execution with whitelist in `config.py`
-- [ ] **`get_calendar_events` tool** — read `.ics` files from configured local calendar directory
-- [ ] **`send_notification` tool** — LLM can post to notification feed from within a chat response
-- [ ] **Fork conversations** — branch from any point into a new tab; requires tree structure instead of flat array
-- [ ] **Shell + filesystem tools** — create, delete, move files via tool calls
-
----
-
-## 🎨 UI / Polish — Open Items
-
-- [ ] **Native right-click context menus** — context-appropriate menus across all panels (chat, email, etc.)
-- [ ] **Monaco diff freezing** — lazy loading + deferred rendering already in place; add Web Workers for diff computation if still needed
-- [ ] **Project templates** — pre-configured project setups; revisit when usage patterns become clearer
+### Acceptance Criteria
+- New email arrives → inbox count updates within 1 second (no manual refresh needed)
+- "Inbox clear" message only shows when truly empty
+- No excessive polling (max 1 request/5s per tab)
+- Works with IDLE long-polling and manual fetch triggers
 
 ---
 
-## 💡 Nice to Have
+## 🎨 Phase 3: Plugin Management UI
 
-- [ ] Hardware-based model recommendations — detect CPU/RAM/VRAM, estimate tokens/sec, suggest suitable models
-- [ ] GPU utilization indicator — live VRAM usage polling `ollama ps`
-- [ ] Index status indicator in header — dot showing whether active scopes are indexed
-- [ ] File edit history — timestamped log of all edits per session
-- [ ] Persist index dates between restarts — "last indexed" accurate after reload
+> **Goal**: Unified view for discovering, enabling/disabling, and configuring plugins.
+
+### Implementation Tasks
+
+#### 3.1 Plugins Settings Tab
+- [ ] Add new tab to `SettingsModal`: "Plugins" (after Advanced)
+- [ ] List all discovered plugins with:
+  - Name, version, description
+  - Category badge (core vs community)
+  - Enable/disable toggle
+  - "Settings" button (opens plugin-specific config)
+- [ ] Fetch plugin list from `GET /api/plugins`
+
+#### 3.2 Plugin Enable/Disable Flow
+- [ ] POST `/api/plugins/{id}` with `{ enabled: false }`
+- [ ] Backend writes to `PLUGINS_CONFIG` in `config.py`
+- [ ] Show "Requires restart" banner if backend plugin was disabled
+- [ ] Frontend hides UI components immediately (no restart needed for frontend-only)
+
+#### 3.3 Community Plugin Directory (Future)
+- [ ] Define `~/.shrimp/plugins/` discovery directory
+- [ ] Add "Install from URL" input for GitHub repo archives
+- [ ] Validate plugin.json schema before installation
+- [ ] Show install progress bar and success/error states
+
+### Acceptance Criteria
+- User can enable/disable any plugin from Settings → Plugins
+- UI updates immediately when toggle is changed
+- Plugin config (credentials, schedules) persists in `config.py`
+- Clear messaging about restart requirements
 
 ---
 
-## 🔧 Code Quality — Pending Refactors
+## 🛡️ Phase 4: Tool Calling Reliability
 
-> From `docs/REFACTORS.md`. Tackle in order — atomic writes first (highest risk if skipped), then response normalization, then asyncio guard.
+> **Goal**: Improve tool calling success rate from 93.8% to >98% and document model compatibility.
 
-- [x] **Atomic config writes** — `main.py:write_config()`, `plugins/email/backend/__init__.py:_write_email_config()`, `plugins/news/backend/__init__.py`
-  - Extract a shared `_atomic_write(path, content)` helper in `main.py` (or a new `config_utils.py`)
-  - Use `tempfile.NamedTemporaryFile` + `os.replace()` — atomic on POSIX, safe on Windows
-  - Replace all `config_path.write_text(current)` calls with the helper (5–6 call sites across 3 files)
-  - Test: kill the process mid-write with `kill -9` and confirm `config.py` is intact
+### Implementation Tasks
 
-- [x] **Normalize email fetch response envelopes** — `plugins/email/backend/__init__.py`
-  - `POST /plugins/email/fetch` returns `{"fetched": N, "emails": [...]}` 
-  - `POST /plugins/email/fetch/{folder}` returns `{"fetched": N, "folder": ..., "message": ...}` (no emails list)
-  - Normalize both to `{"fetched": N, "folder": ..., "emails": [...]}` 
-  - Check `plugins/email/frontend/` for any consumers before changing; update them if needed
+#### 4.1 Model Compatibility Matrix
+- [ ] Create `docs/MODEL_COMPATIBILITY.md` with tested models:
+  - Native function calling (100%): `llama3.1:8b`, `qwen2.5:7b`
+  - Fallback parser (95%): `llama3.1:8b` (text mode), `mistral:7b`
+  - Not recommended: older models without function calling support
+- [ ] Add model detection in Settings → Models page (show "Recommended for tool calling" badge)
 
-- [x] **Guard against `asyncio.run()` in automation threads** — won't do; fails loudly at runtime, documented in PLUGINS.md — convention enforcement
-  - Add a grep check or comment in `scheduler.py:_wrapper()` noting the restriction
-  - Simplest enforcement: add a one-liner to `CLAUDE.md` or a `# NEVER use asyncio.run() here` comment in the wrapper so future AI edits don't regress it
-  - Optional: add a CI grep: `grep -r "asyncio\.run(" plugins/*/backend/ && echo "Use scheduler.run_async() instead" && exit 1`
+#### 4.2 Structured Output Fallback
+- [ ] Experiment with Ollama's `/api/chat format=json` structured output
+- [ ] If model supports JSON mode, use as alternative to function calling
+- [ ] Add feature flag: `USE_STRUCTURED_OUTPUT` (default: false)
+
+#### 4.3 Telemetry and Debugging
+- [ ] Add `GET /debug/tool-calls` endpoint that shows:
+  - Last 10 tool call attempts with success/failure
+  - Model used, iteration count, timeout status
+- [ ] Display in chat UI as collapsible debug panel (dev mode only)
+
+### Acceptance Criteria
+- User can see which models are recommended for tool calling
+- Failed tool calls show clear error message in chat
+- Debug panel helps diagnose model-specific issues
 
 ---
 
-## ✅ Completed
+## 🔐 Phase 5: Plugin Security Model (Future)
 
-**Core chat & UX**
-- Custom prompt instructions (global + per-scope, with LLM auto-generate)
-- Conversation save/load/rename/delete with sidebar
-- Multiple conversation tabs with auto-save
-- Conversation projects — folders, drag-and-drop, color, per-project scopes + instructions
-- Retry button on last assistant message
-- Streaming markdown rendering, stage indicators, tool call markers
-- Tool calling refactor — Ollama native function calling, agentic loop, fallback parser
-- Line-range file reading and editing, smart auto-splice
-- Multi-file diff editor (up to 5 files, per-file approve/reject)
-- Web search tool (`WEB_SEARCH_ENABLED`)
-- Links in chat open in new tab
-- Context window slider in settings
-- Discard / stop-streaming buttons
+> **Goal**: Sandbox community plugins to prevent malicious file/network access.
 
-**Branding & theming**
-- 3 switchable themes (Shrimp, Purple, Blue) with CSS variable system
-- Shrimp icons in header, favicon, welcome screen
-- Lucide React icon standardization
-- SettingsModal (full-window, tabbed) replacing side drawer
-- STYLE_GUIDE.md
+### Implementation Tasks
 
-**Infrastructure**
-- Mobile-responsive layout — 44px touch targets, landscape, <360px ultra-compact
-- Ollama host settings — local vs external, connection validation
-- Language setting (6 options, persisted)
-- Electron dev-mode app — splash screen, tray icon, custom titlebar, `start-electron.sh`
+#### 5.1 Permission System Design
+- [ ] Define permission enum in `plugin_base.py`:
+  ```python
+  class Permission(Enum):
+      READ_FILES = "read_files"
+      WRITE_FILES = "write_files"
+      NETWORK_ACCESS = "network_access"
+      SCHEDULE_JOBS = "schedule_jobs"
+      EXECUTE_COMMANDS = "execute_commands"
+  ```
+- [ ] Add `permissions: list[Permission]` to plugin manifest
 
-**Dashboard & notifications**
-- Notification feed with SSE push, badge, dismiss
-- APScheduler wrapper, automation routes, AutomationsPanel
-- Real `running` state polled from backend; indeterminate bar while active
-- Automation cron + enabled state persisted to `AUTOMATION_CONFIG` in config.py
+#### 5.2 Backend Enforcement
+- [ ] Wrap file ops in `file_ops.py` with permission check:
+  ```python
+  def write_accept(...):
+      if not plugin_has_permission("write_files"):
+          raise PermissionError("Plugin not authorized to write files")
+  ```
+- [ ] Network access: proxy requests through backend with URL whitelist
+- [ ] Command execution: require explicit command whitelist in `config.py`
 
-**Email**
-- IMAP fetch, local JSON store, HTML stripping (`email_client.py`)
-- LLM triage — urgency, action items, notifications (`email_processor.py`)
-- SMTP compose, reply, forward
-- Folder operations — trash, archive, IMAP moves, folder tabs
-- Multi-select + bulk actions — ctrl/shift-click, mark/archive/trash/flag, right-click menu
-- Email search — keyword + semantic
-- IMAP IDLE listener for real-time push
-- Fix: `email_client.py` crash — `record["id"]` self-reference during dict construction
+#### 5.3 UI Permission Warnings
+- [ ] Show permission list when enabling community plugin
+- [ ] Add "⚠️ This plugin can access your files/network" banner
+- [ ] Log all plugin actions to `plugin_audit.log` for review
 
-**Daily Focus Checklist**
-- JSONL store, priority sort, rollover, dedup stubs
-- Card-per-item layout matching flagged email style; left accent border by priority
-- AI triage via `POST /checklist/triage` — urgent/high/normal/low, `UrgencyBadge` per item
-- Auto-triage on load; refresh triggered by automation completion via window event
-- `btn-checkbox` styled like `icon-btn`
+### Acceptance Criteria
+- Community plugins cannot access files without explicit permission
+- User sees clear warning before enabling high-risk plugin
+- Audit log tracks all plugin file/network operations
 
-**News digest**
-- RSS/Atom fetch, 48h dedup window, checklist items with hyperlinked titles
-- LLM interest filtering via `NEWS_INTERESTS` settings field
-- News interests support multiline text (triple-quoted strings in config)
+---
 
-**Obsidian**
-- Vault browser, frontmatter, broken wikilink warnings (`ObsidianPanel.tsx`)
-- Obsidian chat tools: `search_obsidian`, `create_obsidian_page`, `update_obsidian_page`
-- Daily digest job (8am) — unread emails + conversations → summary + daily note
-- *Panel shelved from nav rail; backend/tools intact. Restore nav item + import in `App.tsx` to re-enable.*
+## 📝 Phase 6: Additional Improvements
+
+### 6.1 Conversation History Export
+- [ ] Add "Export conversation" button in conversation context menu
+- [ ] Support formats: JSON (full), Markdown (readable), CSV (messages only)
+- [ ] Include all attachments, tool calls, and edit history
+
+### 6.2 Project Templates
+- [ ] Define `projects/` directory with template JSON files
+- [ ] Pre-configured scopes, custom instructions, and default model per project type
+- [ ] Examples: "Web App", "Research Notes", "Book Draft"
+
+### 6.3 Index Status Indicator
+- [ ] Add dot indicator in header showing if active scopes are indexed
+- [ ] Green = indexed within last 24h, Red = never indexed or stale
+- [ ] Click to re-index immediately
+
+### 6.4 File Edit History Log
+- [ ] Create `data/edits.jsonl` with timestamped edit entries
+- [ ] Track: file path, scope, original hash, new hash, conversation_id
+- [ ] Add "View edit history" panel in settings
+
+---
+
+## 🖥️ Appearance / Display
+
+- [ ] **sRGB toggle restart notification**: After toggling "Force sRGB color profile" in Settings → Appearance, show an inline "Restart required to apply" notice near the toggle (similar to the plugin restart banner in Phase 3.2).
+
+## 📧 Email UX
+
+- [ ] **Remember remote image senders**: When the user clicks "Load images" on an email, persist that sender's address to a whitelist so remote images load automatically for future emails from them.
+
+---
+
+## 🧪 Experimental / Nice to Have
+
+- [ ] **Hardware-based model recommendations**: Detect CPU/RAM/VRAM, estimate tokens/sec
+- [ ] **GPU utilization indicator**: Poll `ollama ps` for live VRAM usage
+- [ ] **Fork conversations**: Branch from any point into new tab (tree structure)
+- [ ] **Shell command tool**: Opt-in sandboxed execution with whitelist
+- [ ] **Calendar events tool**: Read `.ics` files from configured directory
+- [ ] **Send notification tool**: LLM can post to notification feed from chat
+
+---
+
+## 📋 Implementation Notes
+
+### Plugin System Architecture
+- Backend plugins use `importlib` for dynamic loading (already done)
+- Frontend uses `import.meta.glob` for lazy loading (needs implementation)
+- Plugin manifest (`plugin.json`) defines API contributions
+- Settings persistence in `config.py` via regex replacement (atomic writes)
+
+### Event Bus Design
+- Simple in-memory dict: `{ event_name: [callback1, callback2] }`
+- SSE endpoint streams to all connected clients
+- Alternative: polling with React Query `refetchInterval`
+
+### Security Model Design
+- Permission checks happen at API layer, before business logic
+- Community plugins run in same process (no sandboxing) — rely on permission model
+- Audit logging for compliance and debugging
+
+---
+
+## ✅ Completed (Reference)
+
+See `TODO.md.old` for completed items including:
+- Plugin system backend implementation
+- Email plugin with IMAP/SMTP, triage, digest
+- Multi-file editing with line-range support
+- Tool calling architecture (agentic loop)
+- Projects and conversations organization
+- Daily checklist with AI triage
+- Obsidian integration
+- Notification feed with SSE push
+- Electron packaging setup
+
+---

@@ -189,9 +189,13 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                         </p>
                     ) : !em.triaged ? (
                         <p className="text-[11px] italic triage-label" style={{ color: 'var(--color-text-muted)' }}>
-                            {triageStatus?.active
-                                ? `Triaging… (${(triageStatus.queued ?? 0) + (triageStatus.processing ? 1 : 0)} remaining)`
-                                : "Pending triage…"}
+                            {triageStatus?.processing === em.id
+                                ? "Triaging now…"
+                                : (() => {
+                                    const pos = triageStatus?.queue?.indexOf(em.id) ?? -1;
+                                    if (pos >= 0) return `#${pos + 2} in queue`;
+                                    return triageStatus?.active ? "Queued…" : "Pending triage…";
+                                })()}
                         </p>
                     ) : null}
                 </div>
@@ -299,6 +303,7 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
     const [triageStatus, setTriageStatus] = useState<TriageStatus | null>(null);
     const triagePollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const prevActiveRef = useRef(false);
+    const prevProcessingRef = useRef<string | null | undefined>(undefined);
 
     // Multi-select state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -323,11 +328,18 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         return () => { if (triagePollerRef.current) { clearInterval(triagePollerRef.current); triagePollerRef.current = null; } };
     }, [hasUntriaged]);
 
-    // Auto-refresh inbox when a triage batch completes
+    // Refresh list when individual emails finish triage or the whole batch completes
     useEffect(() => {
         if (!triageStatus) return;
-        if (prevActiveRef.current && !triageStatus.active) refresh();
+        if (prevActiveRef.current && !triageStatus.active) {
+            // Whole batch done
+            refresh(activeFolderRef.current);
+        } else if (prevProcessingRef.current && prevProcessingRef.current !== triageStatus.processing) {
+            // One email finished — previous processing ID is now done
+            refresh(activeFolderRef.current);
+        }
         prevActiveRef.current = triageStatus.active;
+        prevProcessingRef.current = triageStatus.processing;
     }, [triageStatus]);
 
     // Load folder list once on mount; persist to localStorage so next mount is instant
@@ -342,14 +354,14 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         activeFolderRef.current = activeFolder;
         const folder = activeFolder;
         const activeRole = folders.find(f => f.display_name === folder)?.role ?? "folder";
-        refresh(folder).then(() => {
+        refresh(folder, { reset: true }).then(() => {
             // Auto-sync non-inbox folders on first visit when empty
             if (activeRole !== "inbox") {
                 setEmails(prev => {
                     if (prev.length === 0) {
                         setFetching(true);
-                        fetchFolder(folder, 100)
-                            .then(() => refresh(folder))
+                        fetchFolder(folder.toUpperCase(), 100)
+                            .then(() => refresh(folder.toUpperCase(), { reset: true }))
                             .catch(console.error)
                             .finally(() => setFetching(false));
                     }
@@ -393,17 +405,30 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         return () => document.removeEventListener("scroll", handler, true);
     }, [contextMenu]);
 
-    async function refresh(folder = activeFolder) {
-        setLoading(true);
+    async function refresh(folder = activeFolder, { reset = false } = {}) {
+        if (reset) setLoading(true);
         try {
-            const result = await getInbox(100, folder);
-            if (activeFolderRef.current === folder) {
+            const result = await getInbox(100, folder.toUpperCase());
+            if (activeFolderRef.current.toLowerCase() !== folder.toLowerCase()) return;
+            if (reset) {
                 setEmails(result);
+            } else {
+                setEmails(prev => {
+                    const prevById = new Map(prev.map(e => [e.id, e]));
+                    const newById = new Map(result.map(e => [e.id, e]));
+                    // Update existing rows in-place, remove deleted
+                    const merged = prev
+                        .filter(e => newById.has(e.id))
+                        .map(e => ({ ...e, ...newById.get(e.id)! }));
+                    // Prepend genuine new arrivals (preserves order from server)
+                    const added = result.filter(e => !prevById.has(e.id));
+                    return added.length > 0 ? [...added, ...merged] : merged;
+                });
             }
         } catch (e) {
             console.error(e);
         } finally {
-            setLoading(false);
+            if (reset) setLoading(false);
         }
     }
 
@@ -609,8 +634,8 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                 onSent={() => {
                     const sentFolder = folders.find(f => f.role === "sent");
                     if (sentFolder) {
-                        fetchFolder(sentFolder.display_name, 50)
-                            .then(() => refresh(sentFolder.display_name))
+                        fetchFolder(sentFolder.display_name.toUpperCase(), 50)
+                            .then(() => refresh(sentFolder.display_name.toUpperCase()))
                             .catch(() => {});
                     }
                 }}
