@@ -8,6 +8,7 @@ export function EmailSettingsSection() {
     const [emailConfig, setEmailConfig] = useState<EmailConfig>({
         enabled: false, imap_host: "", imap_port: 993, imap_ssl: true,
         username: "", password: "", mailbox: "INBOX", fetch_max: 50, poll_interval_minutes: 15,
+        auto_triage: true,
     });
     const [emailSaving, setEmailSaving] = useState(false);
     const [emailTesting, setEmailTesting] = useState(false);
@@ -79,6 +80,15 @@ export function EmailSettingsSection() {
                             onChange={e => setEmailConfig(c => ({ ...c, imap_ssl: e.target.checked }))}
                         />
                         Use SSL
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem" }}>
+                        <input
+                            type="checkbox"
+                            checked={emailConfig.auto_triage}
+                            onChange={e => setEmailConfig(c => ({ ...c, auto_triage: e.target.checked }))}
+                        />
+                        Automatically triage incoming emails
                     </label>
                 </div>
 

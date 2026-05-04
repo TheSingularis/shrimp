@@ -60,8 +60,9 @@ def _idle_session() -> None:
         # Catch anything that arrived since the last run before entering IDLE
         with email_client._fetch_lock:
             new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
-        for em in new_emails:
-            _triage_queue.queue.enqueue(em["id"])
+        if cfg.get("auto_triage", True):
+            for em in new_emails:
+                _triage_queue.queue.enqueue(em["id"])
 
         log.info("IDLE: session active on %s/%s", cfg.get("imap_host"), inbox_mailbox)
 
@@ -96,7 +97,7 @@ def _idle_session() -> None:
                 conn.select(email_client._imap_name(inbox_mailbox))
                 with email_client._fetch_lock:
                     new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
-                if new_emails:
+                if new_emails and cfg.get("auto_triage", True):
                     for em in new_emails:
                         _triage_queue.queue.enqueue(em["id"])
 
@@ -165,7 +166,7 @@ def _sync_once() -> None:
                     )
 
                 if new_emails:
-                    if role == "inbox":
+                    if role == "inbox" and cfg.get("auto_triage", True):
                         for em in new_emails:
                             _triage_queue.queue.enqueue(em["id"])
                     log.info("Sync [%s]: %d new email(s)", display_name, len(new_emails))

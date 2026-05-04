@@ -136,6 +136,15 @@ export default function App() {
     useVisualViewport(appContainerRef);
 
     useEffect(() => {
+        const base = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname || "localhost"}:8000`;
+        const es = new EventSource(`${base}/api/logs/stream`);
+        es.onmessage = (e) => {
+            if (e.data) console.log(`%c[backend]%c ${e.data}`, "color:#6ee7b7;font-weight:bold", "color:inherit");
+        };
+        return () => es.close();
+    }, []);
+
+    useEffect(() => {
         getTheme().then((theme) => {
             document.documentElement.className = `theme-${theme}`;
         }).catch(() => {

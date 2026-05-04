@@ -49,6 +49,7 @@ export interface EmailConfig {
     mailbox: string;
     fetch_max: number;
     poll_interval_minutes: number;
+    auto_triage: boolean;
 }
 
 export interface SmtpConfig {

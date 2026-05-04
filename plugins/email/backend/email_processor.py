@@ -147,7 +147,7 @@ async def _llm_generate(prompt: str, timeout: int = 120) -> str:
                     "model": config.OLLAMA_MODEL,
                     "prompt": prompt,
                     "stream": True,
-                    "options": {"num_ctx": min(config.NUM_CTX, 4096)},
+                    "options": {"num_ctx": config.NUM_CTX},
                 },
             ) as resp:
                 log.info("_llm_generate: HTTP %s", resp.status_code)

@@ -23,6 +23,9 @@ def run() -> None:
     if not cfg.get("enabled"):
         log.debug("Email not enabled, skipping")
         return
+    if not cfg.get("auto_triage", True):
+        log.debug("auto_triage disabled, skipping")
+        return
 
     try:
         email_processor.check_ollama()

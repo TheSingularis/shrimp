@@ -36,6 +36,7 @@ import plugin_loader
 import obsidian_ops
 from config_utils import atomic_write, get_config_path
 from urllib.parse import unquote
+import log_stream as _log_stream
 
 logging.basicConfig(
     level=logging.INFO,
@@ -2445,6 +2446,15 @@ async def notification_stream(request: Request):
     return EventSourceResponse(generator())
 
 
+# ── routes: log stream ────────────────────────────────────────────────────────
+
+
+@app.get("/api/logs/stream")
+async def stream_logs(request: Request):
+    """SSE endpoint — streams shrimp.* log records to the browser DevTools console."""
+    return EventSourceResponse(_log_stream.log_event_generator(request))
+
+
 # ── routes: automations ────────────────────────────────────────────────────────
 
 
@@ -2705,7 +2715,7 @@ async def triage_checklist():
             "POST",
             f"{config.OLLAMA_HOST}/api/generate",
             json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": True,
-                  "options": {"num_ctx": min(config.NUM_CTX, 4096)}},
+                  "options": {"num_ctx": config.NUM_CTX}},
         ) as resp:
             async for line in resp.aiter_lines():
                 if not line.strip():

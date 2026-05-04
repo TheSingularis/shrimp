@@ -405,7 +405,7 @@ def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]
 
 
 def list_untriaged_emails(limit: int = 100) -> list[dict]:
-    """Return cached inbox emails not yet triaged, oldest-first."""
+    """Return cached inbox emails not yet triaged, newest-first."""
     items = []
     for p in _CACHE_DIR.glob("*.json"):
         try:
@@ -415,7 +415,7 @@ def list_untriaged_emails(limit: int = 100) -> list[dict]:
             items.append({k: data.get(k) for k in ("id", "from", "subject", "date")})
         except Exception:
             pass
-    items.sort(key=lambda e: e.get("date") or "")
+    items.sort(key=lambda e: e.get("date") or "", reverse=True)
     return items[:limit]
 
 

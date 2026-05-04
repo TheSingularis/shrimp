@@ -51,6 +51,7 @@ class EmailConfigRequest(BaseModel):
     mailbox: str = "INBOX"
     fetch_max: int = 50
     poll_interval_minutes: int = 15
+    auto_triage: bool = True
 
 
 class SmtpConfigRequest(BaseModel):
@@ -452,11 +453,14 @@ class EmailPlugin(ShrimpPlugin):
 
         await _triage_queue.queue.start()
 
-        backlog = email_client.list_untriaged_emails()
-        for em in backlog:
-            _triage_queue.queue.enqueue(em["id"])
-        if backlog:
-            log.info("startup: enqueued %d untriaged email(s) for triage", len(backlog))
+        if _config.EMAIL_CONFIG.get("auto_triage", True):
+            backlog = email_client.list_untriaged_emails()
+            for em in backlog:
+                _triage_queue.queue.enqueue(em["id"])
+            if backlog:
+                log.info("startup: enqueued %d untriaged email(s) for triage", len(backlog))
+        else:
+            log.info("startup: auto_triage disabled — skipping backfill enqueue")
 
         import email_sync
         email_sync.start()
