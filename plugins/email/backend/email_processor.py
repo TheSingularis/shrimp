@@ -76,18 +76,22 @@ def _parse_triage_markdown(text: str) -> tuple[str, str, list[str]]:
     in_actions = False
 
     for line in text.splitlines():
-        line_l = line.lower()
         stripped = line.strip()
         if re.search(r"\*\*urgency\*\*", line, re.IGNORECASE):
             in_actions = False
-            if "urgent" in line_l:
+            m = re.search(r"\*\*urgency\*\*[:\s]+(.+)", line, re.IGNORECASE)
+            val = m.group(1).lower() if m else ""
+            # Use word boundaries so "follow"→"low", "highlight"→"high", etc. don't match
+            if re.search(r"\burgent\b", val):
                 urgency = "urgent"
-            elif "high" in line_l:
+            elif re.search(r"\bhigh\b", val):
                 urgency = "high"
-            elif "spam" in line_l:
+            elif re.search(r"\bspam\b", val):
                 urgency = "spam"
-            elif "low" in line_l:
+            elif re.search(r"\blow\b", val):
                 urgency = "low"
+            elif re.search(r"\bnormal\b", val):
+                urgency = "normal"
         elif re.search(r"\*\*summary\*\*", line, re.IGNORECASE):
             in_actions = False
             m = re.search(r"\*\*summary\*\*[:\s]+(.+)", line, re.IGNORECASE)

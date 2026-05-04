@@ -405,12 +405,14 @@ def list_emails_by_folder(folder: str = "INBOX", limit: int = 100) -> list[dict]
 
 
 def list_untriaged_emails(limit: int = 100) -> list[dict]:
-    """Return cached inbox emails not yet triaged, newest-first."""
+    """Return cached INBOX emails not yet triaged, newest-first."""
     items = []
     for p in _CACHE_DIR.glob("*.json"):
         try:
             data = json.loads(p.read_text())
             if not data.get("id") or data.get("triaged"):
+                continue
+            if data.get("folder", "INBOX").upper() != "INBOX":
                 continue
             items.append({k: data.get(k) for k in ("id", "from", "subject", "date")})
         except Exception:
@@ -978,7 +980,7 @@ def incremental_fetch(
     fetched: list[dict] = []
     new_highest = highest_uid
 
-    for num in reversed(new_uids):  # process oldest→newest so highest_uid tracks correctly
+    for num in reversed(new_uids):  # newest→oldest so fetched[] and triage queue are newest-first
         try:
             uid_int = int(num)
             _, msg_data = conn.uid("fetch", num, "(FLAGS BODY.PEEK[])")
@@ -1023,7 +1025,7 @@ def incremental_fetch(
                 "read": is_read or mark_read,
                 "triaged": skip_triage,
                 "flagged": is_flagged,
-                "folder": canonical_folder,
+                "folder": canonical_folder.upper(),  # Normalize to uppercase for consistent matching
                 "triage_result": None,
                 "triage_actions": [],
                 "attachments": _extract_attachments(msg, email_id),
@@ -1237,7 +1239,7 @@ def _fetch_from_mailbox(
                 "read": ("\\Seen" in fetch_header) or mark_read,
                 "triaged": skip_triage,
                 "flagged": "\\Flagged" in fetch_header,
-                "folder": canonical_folder,
+                "folder": canonical_folder.upper(),  # Normalize to uppercase for consistent matching
                 "triage_result": None,
                 "triage_actions": [],
                 "attachments": _extract_attachments(msg, email_id),

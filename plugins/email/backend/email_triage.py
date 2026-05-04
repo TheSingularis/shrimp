@@ -12,6 +12,7 @@ import logging
 import config
 import email_client
 import email_processor
+import email_sync
 import notifications
 import triage_queue
 
@@ -40,6 +41,8 @@ def run() -> None:
             source="email_triage",
         )
         return
+
+    email_sync.sync_inbox_now()
 
     backlog = email_client.list_untriaged_emails()
     n = sum(1 for em in backlog if triage_queue.queue.enqueue(em["id"]))

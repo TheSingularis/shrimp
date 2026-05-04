@@ -61,8 +61,8 @@ def _idle_session() -> None:
         with email_client._fetch_lock:
             new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
         if cfg.get("auto_triage", True):
-            for em in new_emails:
-                _triage_queue.queue.enqueue(em["id"])
+            for em in reversed(new_emails):
+                _triage_queue.queue.enqueue(em["id"], front=True)
 
         log.info("IDLE: session active on %s/%s", cfg.get("imap_host"), inbox_mailbox)
 
@@ -75,11 +75,16 @@ def _idle_session() -> None:
 
             conn.sock.settimeout(_IDLE_TIMEOUT_S)
             new_mail = False
+            flags_changed = False
             try:
                 while not _stop_event.is_set():
                     line = conn.readline()
                     if b"EXISTS" in line or b"RECENT" in line:
                         new_mail = True
+                        break
+                    if b"FETCH" in line:
+                        # Server push for flag changes (e.g. \Seen set by another client)
+                        flags_changed = True
                         break
                     if line.startswith(b"IDLE001"):
                         break
@@ -98,8 +103,10 @@ def _idle_session() -> None:
                 with email_client._fetch_lock:
                     new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
                 if new_emails and cfg.get("auto_triage", True):
-                    for em in new_emails:
-                        _triage_queue.queue.enqueue(em["id"])
+                    for em in reversed(new_emails):
+                        _triage_queue.queue.enqueue(em["id"], front=True)
+            elif flags_changed and not _stop_event.is_set():
+                email_client.flag_sync(conn, inbox_mailbox, "INBOX")
 
     finally:
         try:
@@ -167,8 +174,8 @@ def _sync_once() -> None:
 
                 if new_emails:
                     if role == "inbox" and cfg.get("auto_triage", True):
-                        for em in new_emails:
-                            _triage_queue.queue.enqueue(em["id"])
+                        for em in reversed(new_emails):
+                            _triage_queue.queue.enqueue(em["id"], front=True)
                     log.info("Sync [%s]: %d new email(s)", display_name, len(new_emails))
 
                 removed = email_client.expunge_check(conn, imap_name, display_name)
@@ -210,6 +217,40 @@ def _sync_loop() -> None:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
+
+def sync_inbox_now() -> list[dict]:
+    """
+    Blocking INBOX incremental fetch — pulls any emails that arrived since the
+    last sync and caches them locally.  Returns the list of newly-fetched emails.
+
+    Called by email_triage before scanning for untriaged mail so that triage
+    always operates on a current view of the inbox, not a stale cache.
+    """
+    cfg = config.EMAIL_CONFIG
+    if not cfg.get("enabled") or not cfg.get("imap_host"):
+        return []
+    try:
+        conn = email_client._imap_connect()
+    except Exception:
+        log.exception("sync_inbox_now: IMAP connect failed")
+        return []
+    try:
+        inbox_mailbox = cfg.get("mailbox", "INBOX")
+        conn.select(email_client._imap_name(inbox_mailbox))
+        with email_client._fetch_lock:
+            new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
+        if new_emails:
+            log.info("sync_inbox_now: fetched %d new email(s)", len(new_emails))
+        return new_emails
+    except Exception:
+        log.exception("sync_inbox_now: fetch failed")
+        return []
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
 
 def start() -> None:
     """Start IDLE and periodic sync daemon threads. No-op if email is not configured."""

@@ -41,10 +41,11 @@ class TriageQueue:
                 self._event.set()
         log.info("triage_queue: worker started")
 
-    def enqueue(self, email_id: str, priority: bool = False) -> bool:
+    def enqueue(self, email_id: str, priority: bool = False, front: bool = False) -> bool:
         """
         Add email to the queue. Thread-safe; safe to call from background threads.
         Returns False if the email is already queued or currently processing (dedup).
+        front=True prepends to the normal queue (use for real-time IDLE arrivals).
         """
         with self._lock:
             if email_id in self._queued or email_id == self._processing:
@@ -52,6 +53,8 @@ class TriageQueue:
             self._queued.add(email_id)
             if priority:
                 self._priority.appendleft(email_id)
+            elif front:
+                self._normal.appendleft(email_id)
             else:
                 self._normal.append(email_id)
         log.info("triage_queue: enqueued [%s] priority=%s", email_id[:8], priority)
@@ -74,10 +77,12 @@ class TriageQueue:
 
     def get_status(self) -> dict:
         with self._lock:
+            ordered = list(self._priority) + list(self._normal)
             return {
                 "active": self._processing is not None or bool(self._priority or self._normal),
                 "processing": self._processing,
                 "queued": len(self._queued),
+                "queue": ordered,
             }
 
     async def _worker(self) -> None:
