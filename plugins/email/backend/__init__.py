@@ -18,12 +18,13 @@ import config as _config
 from config_utils import atomic_write as _atomic_write, get_data_dir as _get_data_dir
 from credentials import get_credential, set_credential
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import email_client
 import email_processor
 import email_smtp
+import triage_queue as _triage_queue
 from plugin_base import ShrimpPlugin, PluginJob
 
 log = logging.getLogger("shrimp.plugin.email")
@@ -264,7 +265,7 @@ async def refresh_all_emails():
 
 @router.get("/triage/status")
 async def email_triage_status():
-    return email_processor.get_triage_status()
+    return _triage_queue.queue.get_status()
 
 
 @router.get("/sync-state")
@@ -386,16 +387,20 @@ async def triage_email_route(email_id: str):
         log.error("triage: Ollama check failed: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     try:
-        result = await email_processor.auto_triage_email(email_id)
+        result = await asyncio.wait_for(
+            _triage_queue.queue.triage_now(email_id), timeout=120
+        )
+    except asyncio.TimeoutError:
+        log.error("triage: timed out for %s", email_id)
+        raise HTTPException(status_code=504, detail="Triage timed out")
     except Exception as exc:
-        log.exception("triage: unexpected error for %s: %s", email_id, exc)
-        raise HTTPException(status_code=500, detail=f"Triage error: {exc}")
+        log.exception("triage: unexpected error for %s", email_id)
+        raise HTTPException(status_code=500, detail=str(exc))
     if result is None:
         log.error("triage: no result for %s (LLM returned empty)", email_id)
-        raise HTTPException(status_code=500, detail="Triage failed (empty LLM response)")
+        raise HTTPException(status_code=500, detail="Triage failed — check terminal for LLM errors")
     log.info("triage: complete for %s — urgency=%s", email_id, result.get("urgency"))
-    data = email_client.load_email(email_id)
-    return data
+    return email_client.load_email(email_id)
 
 
 # ── Routes: digest ────────────────────────────────────────────────────────────
@@ -444,6 +449,15 @@ class EmailPlugin(ShrimpPlugin):
 
     async def on_startup(self) -> None:
         self._inject_credentials()
+
+        await _triage_queue.queue.start()
+
+        backlog = email_client.list_untriaged_emails()
+        for em in backlog:
+            _triage_queue.queue.enqueue(em["id"])
+        if backlog:
+            log.info("startup: enqueued %d untriaged email(s) for triage", len(backlog))
+
         import email_sync
         email_sync.start()
         threading.Thread(

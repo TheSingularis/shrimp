@@ -190,7 +190,7 @@ function EmailRow({ em, active, selected, onClick, onFlag, triageStatus, onConte
                     ) : !em.triaged ? (
                         <p className="text-[11px] italic triage-label" style={{ color: 'var(--color-text-muted)' }}>
                             {triageStatus?.active
-                                ? `Triaging ${triageStatus.done}/${triageStatus.total}…`
+                                ? `Triaging… (${(triageStatus.queued ?? 0) + (triageStatus.processing ? 1 : 0)} remaining)`
                                 : "Pending triage…"}
                         </p>
                     ) : null}

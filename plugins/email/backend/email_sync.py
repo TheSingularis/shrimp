@@ -22,8 +22,7 @@ import threading
 
 import config
 import email_client
-import email_processor
-import scheduler as _scheduler
+import triage_queue as _triage_queue
 
 log = logging.getLogger("shrimp.email_sync")
 
@@ -35,31 +34,6 @@ _RECONNECT_MAX_S  = 300
 _stop_event = threading.Event()
 _idle_thread: threading.Thread | None = None
 _sync_thread: threading.Thread | None = None
-
-
-# ── Triage helpers ─────────────────────────────────────────────────────────────
-
-def _triage_one(email_id: str) -> None:
-    try:
-        result = _scheduler.run_async(
-            email_processor.auto_triage_email(email_id), timeout=120
-        )
-        if result:
-            log.info("Triaged [%s]: %s", result["urgency"], email_id)
-    except Exception:
-        log.exception("Triage failed for %s", email_id)
-
-
-def _triage_batch(new_emails: list[dict]) -> None:
-    if not new_emails:
-        return
-    email_processor._triage_begin(len(new_emails))
-    try:
-        for em in new_emails:
-            _triage_one(em["id"])
-            email_processor._triage_tick()
-    finally:
-        email_processor._triage_end()
 
 
 # ── IDLE session (INBOX only) ──────────────────────────────────────────────────
@@ -86,8 +60,8 @@ def _idle_session() -> None:
         # Catch anything that arrived since the last run before entering IDLE
         with email_client._fetch_lock:
             new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
-        if new_emails:
-            _triage_batch(new_emails)
+        for em in new_emails:
+            _triage_queue.queue.enqueue(em["id"])
 
         log.info("IDLE: session active on %s/%s", cfg.get("imap_host"), inbox_mailbox)
 
@@ -123,7 +97,8 @@ def _idle_session() -> None:
                 with email_client._fetch_lock:
                     new_emails = email_client.incremental_fetch(conn, inbox_mailbox, "INBOX", cfg)
                 if new_emails:
-                    _triage_batch(new_emails)
+                    for em in new_emails:
+                        _triage_queue.queue.enqueue(em["id"])
 
     finally:
         try:
@@ -189,9 +164,10 @@ def _sync_once() -> None:
                         mark_read=mark_read, skip_triage=skip_triage,
                     )
 
-                if new_emails and role == "inbox":
-                    _triage_batch(new_emails)
-                elif new_emails:
+                if new_emails:
+                    if role == "inbox":
+                        for em in new_emails:
+                            _triage_queue.queue.enqueue(em["id"])
                     log.info("Sync [%s]: %d new email(s)", display_name, len(new_emails))
 
                 removed = email_client.expunge_check(conn, imap_name, display_name)

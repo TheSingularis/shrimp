@@ -1,14 +1,14 @@
 """
 LLM-driven email triage.
-Classifies urgency, extracts action items, and streams a readable report.
-Both interactive and background triage use the same prompt and parse logic.
+Classifies urgency, extracts action items, and produces a readable report.
+All triage calls go through auto_triage_email(); the queue in triage_queue.py
+handles serialization and manual/background dispatch.
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
-from typing import AsyncIterator
 
 import httpx
 import config
@@ -16,32 +16,6 @@ import email_client
 import notifications
 
 log = logging.getLogger("shrimp.email_processor")
-
-# ── Triage progress state ───────────────────────────────────────────────────────
-import threading as _threading
-
-_triage_lock = _threading.Lock()
-_triage_state: dict = {"active": False, "done": 0, "total": 0}
-
-
-def get_triage_status() -> dict:
-    with _triage_lock:
-        return dict(_triage_state)
-
-
-def _triage_begin(total: int) -> None:
-    with _triage_lock:
-        _triage_state.update({"active": True, "done": 0, "total": total})
-
-
-def _triage_tick() -> None:
-    with _triage_lock:
-        _triage_state["done"] += 1
-
-
-def _triage_end() -> None:
-    with _triage_lock:
-        _triage_state.update({"active": False, "done": 0, "total": 0})
 
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
@@ -208,85 +182,6 @@ async def _llm_generate(prompt: str, timeout: int = 120) -> str:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
-
-async def triage_email(email_id: str) -> AsyncIterator[str]:
-    """
-    Stream a readable triage report for an email (used by the UI).
-    Also saves triage_priority, triage_note, and triage_actions as structured fields.
-    """
-    data = email_client.load_email(email_id)
-    if data is None:
-        yield "Error: Email not found."
-        return
-
-    try:
-        check_ollama()
-    except RuntimeError as e:
-        yield f"Error: {e}"
-        return
-
-    prompt = _TRIAGE_PROMPT.format(
-        folder=data.get("folder", "Inbox"),
-        from_=data.get("from", ""),
-        subject=data.get("subject", ""),
-        date=data.get("date", ""),
-        attachments=_attachment_context(data),
-        body=data.get("body", "")[:8000],
-    )
-
-    full_response = ""
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream(
-                "POST",
-                f"{config.OLLAMA_HOST}/api/generate",
-                json={
-                    "model": config.OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": True,
-                    "options": {"num_ctx": min(config.NUM_CTX, 8192)},
-                },
-            ) as resp:
-                async for line in resp.aiter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        chunk = json.loads(line)
-                        token = chunk.get("response", "")
-                        if token:
-                            full_response += token
-                            yield token
-                        if chunk.get("done"):
-                            break
-                    except json.JSONDecodeError:
-                        pass
-
-    except Exception as e:
-        log.exception("Triage LLM call failed for %s", email_id)
-        yield f"\n\nError during triage: {e}"
-        return
-
-    urgency, note, actions = _parse_triage_markdown(full_response)
-
-    data["triaged"] = True
-    data["triage_result"] = full_response.strip()
-    data["triage_priority"] = urgency
-    data["triage_note"] = note
-    data["triage_actions"] = actions
-    email_client._save_email(data)
-    # Refresh embedding now that triage_note/actions are available
-    email_client.embed_email(data["id"])
-
-    notif_priority = "high" if urgency == "urgent" else ("low" if urgency in ("low", "spam") else "normal")
-    notifications.append(
-        title=f"Email triaged: {data.get('subject', '(no subject)')}",
-        body=f"From: {data.get('from', '')} — Urgency: {urgency}",
-        type="email_triage",
-        priority=notif_priority,
-        source="email_triage",
-        actions=[{"label": "Open Email", "route": f"/email?id={email_id}"}],
-    )
-
 
 async def auto_triage_email(email_id: str) -> dict | None:
     """

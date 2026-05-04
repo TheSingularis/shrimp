@@ -117,27 +117,6 @@ function AutomationRow({ automation, onRefresh }: { automation: Automation; onRe
                     {automation.cron && <span style={{ color: "var(--text-dim)" }}>{cronstrue.toString(automation.cron)}</span>}
                 </div>
 
-                {automation.progress && automation.progress.total > 0 && (
-                    <div style={{ marginTop: 6 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
-                                {automation.running
-                                    ? (automation.progress.current ?? "…")
-                                    : `Triaged ${automation.progress.done} email${automation.progress.done !== 1 ? "s" : ""}`}
-                            </span>
-                            <span style={{ flexShrink: 0 }}>{automation.progress.done}/{automation.progress.total}</span>
-                        </div>
-                        <div style={{ height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-                            <div style={{
-                                height: "100%",
-                                width: `${Math.round((automation.progress.done / automation.progress.total) * 100)}%`,
-                                background: automation.running ? "var(--accent)" : "#10b981",
-                                borderRadius: 2,
-                                transition: "width 0.4s ease",
-                            }} />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Right: action buttons */}

@@ -69,7 +69,7 @@ export interface EmailFolder {
     role: "inbox" | "sent" | "trash" | "archive" | "folder";
 }
 
-export interface TriageStatus { active: boolean; done: number; total: number; }
+export interface TriageStatus { active: boolean; processing: string | null; queued: number; }
 
 export interface DigestData {
     date: string | null;
