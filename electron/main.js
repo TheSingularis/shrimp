@@ -12,6 +12,32 @@ const path = require("path");
 const http = require("http");
 const fs = require("fs");
 
+// Prevent GTK/system theme from tinting the window background color.
+// Without this, system electron (AUR) inherits the GTK color scheme and
+// blends it with backgroundColor, causing a visible tint vs the bundled build.
+// Reads electron-prefs.json from userData; defaults to true if file is missing/unreadable.
+function readElectronPrefs() {
+  try {
+    const prefsPath = path.join(app.getPath("userData"), "electron-prefs.json");
+    return JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeElectronPref(key, value) {
+  const prefsPath = path.join(app.getPath("userData"), "electron-prefs.json");
+  const prefs = readElectronPrefs();
+  prefs[key] = value;
+  fs.mkdirSync(path.dirname(prefsPath), { recursive: true });
+  fs.writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+}
+
+const electronPrefs = readElectronPrefs();
+if (electronPrefs.forceColorProfile !== false) {
+  app.commandLine.appendSwitch("force-color-profile", "srgb");
+}
+
 let mainWindow;
 let tray;
 let backendProcess;
@@ -195,6 +221,11 @@ function createWindow() {
     else mainWindow.maximize();
   });
   ipcMain.on("window-close", () => mainWindow.close()); // close handler hides to tray
+
+  ipcMain.handle("electron-prefs:get", () => readElectronPrefs());
+  ipcMain.handle("electron-prefs:set", (_e, key, value) => {
+    writeElectronPref(key, value);
+  });
 
   // Notify renderer of maximize state changes
   mainWindow.on("maximize",   () => mainWindow.webContents.send("window-maximized"));

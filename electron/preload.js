@@ -13,10 +13,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         const onUnmax = () => cb(false);
         ipcRenderer.on('window-maximized',   onMax);
         ipcRenderer.on('window-unmaximized', onUnmax);
-        // Return cleanup
         return () => {
             ipcRenderer.removeListener('window-maximized',   onMax);
             ipcRenderer.removeListener('window-unmaximized', onUnmax);
         };
     },
+    getElectronPrefs: () => ipcRenderer.invoke('electron-prefs:get'),
+    setElectronPref:  (key, value) => ipcRenderer.invoke('electron-prefs:set', key, value),
 });

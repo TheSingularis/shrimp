@@ -127,6 +127,7 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
     const [generatingDescription, setGeneratingDescription] = useState<string | null>(null);
     const [currentTheme, setCurrentTheme] = useState("blue-purple");
     const [currentLanguage, setCurrentLanguage] = useState("English");
+    const [forceColorProfile, setForceColorProfile] = useState(true);
     const [ollamaUrl, setOllamaUrl] = useState("localhost:11434");
     const [ollamaError, setOllamaError] = useState("");
     const [ollamaSuccess, setOllamaSuccess] = useState(false);
@@ -148,6 +149,9 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
             document.documentElement.className = `theme-${theme}`;
         }).catch(() => {});
         getLanguage().then(setCurrentLanguage).catch(() => {});
+        window.electronAPI?.getElectronPrefs().then((prefs: Record<string, unknown>) => {
+            setForceColorProfile(prefs.forceColorProfile !== false);
+        }).catch(() => {});
         getOllamaHostSetting()
             .then((data) => {
                 if (data.mode === "local" || !data.external_url) {
@@ -531,6 +535,30 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                                     </button>
                                 </div>
                             </section>
+
+                            {window.__shrimp__?.isElectron && (
+                                <section className="drawer-section">
+                                    <h2>DISPLAY</h2>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: "0.85rem" }}>Force sRGB color profile</p>
+                                            <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                                Prevents GTK theme from tinting window colors on Linux. Restart required.
+                                            </p>
+                                        </div>
+                                        <button
+                                            className={`toggle-btn ${forceColorProfile ? "on" : "off"}`}
+                                            onClick={async () => {
+                                                const next = !forceColorProfile;
+                                                setForceColorProfile(next);
+                                                await window.electronAPI?.setElectronPref("forceColorProfile", next);
+                                            }}
+                                        >
+                                            {forceColorProfile ? "on" : "off"}
+                                        </button>
+                                    </div>
+                                </section>
+                            )}
 
                             <section className="drawer-section">
                                 <h2>LANGUAGE</h2>
