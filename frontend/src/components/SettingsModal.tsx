@@ -131,7 +131,7 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
     const [ollamaUrl, setOllamaUrl] = useState("localhost:11434");
     const [ollamaError, setOllamaError] = useState("");
     const [ollamaSuccess, setOllamaSuccess] = useState(false);
-    const { manifests: pluginManifests, togglePlugin } = usePluginManager();
+    const { manifests: pluginManifests, togglePlugin, restartPending, clearRestartPending } = usePluginManager();
     useEffect(() => {
         if (!open) return;
         getModels().then((data) => {
@@ -920,6 +920,39 @@ export function SettingsModal({ open, onClose, onScopesChanged, plugins = [] }: 
                     {activeTab === "plugins" && (
                         <section className="drawer-section">
                             <h2>INSTALLED PLUGINS</h2>
+                            {restartPending && (
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: "1rem",
+                                    padding: "0.6rem 0.875rem",
+                                    borderRadius: "0 6px 6px 0",
+                                    background: "var(--accent-dim)",
+                                    borderLeft: "3px solid var(--accent)",
+                                }}>
+                                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                        Backend restart required to apply plugin changes.
+                                    </span>
+                                    <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                                        <button className="btn-ghost" onClick={clearRestartPending}>
+                                            Later
+                                        </button>
+                                        <button
+                                            className="btn-primary"
+                                            onClick={() => {
+                                                if (window.__shrimp__?.isElectron) {
+                                                    window.electronAPI?.relaunch();
+                                                } else {
+                                                    window.location.reload();
+                                                }
+                                            }}
+                                        >
+                                            Restart Now
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="scope-list">
                                 {pluginManifests.map((manifest) => (
                                     <div key={manifest.id} className="scope-row">

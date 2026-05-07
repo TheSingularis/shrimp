@@ -19,12 +19,16 @@ import { loadPlugins } from "./loader";
 interface PluginManagerValue {
     manifests: PluginManifest[];
     togglePlugin: (id: string, enabled: boolean) => Promise<void>;
+    restartPending: boolean;
+    clearRestartPending: () => void;
 }
 
 const PluginContext = createContext<ShrimpPluginFrontend[]>([]);
 const PluginManagerContext = createContext<PluginManagerValue>({
     manifests: [],
     togglePlugin: async () => {},
+    restartPending: false,
+    clearRestartPending: () => {},
 });
 
 const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname || "localhost"}:8000`;
@@ -32,6 +36,7 @@ const BASE = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname 
 export function PluginProvider({ children }: { children: React.ReactNode }) {
     const [allPlugins, setAllPlugins] = useState<ShrimpPluginFrontend[]>([]);
     const [manifests, setManifests] = useState<PluginManifest[]>([]);
+    const [restartPending, setRestartPending] = useState(false);
 
     useEffect(() => {
         fetch(`${BASE}/api/plugins`)
@@ -60,10 +65,12 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     );
 
     async function togglePlugin(id: string, enabled: boolean) {
+        const manifest = manifests.find((m) => m.id === id);
         // Optimistic update
         setManifests((prev) => prev.map((m) => (m.id === id ? { ...m, enabled } : m)));
         try {
             await setPluginEnabled(id, enabled);
+            if (manifest?.has_backend) setRestartPending(true);
         } catch {
             // Rollback
             setManifests((prev) => prev.map((m) => (m.id === id ? { ...m, enabled: !enabled } : m)));
@@ -71,8 +78,8 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     }
 
     const managerValue = useMemo<PluginManagerValue>(
-        () => ({ manifests, togglePlugin }),
-        [manifests],
+        () => ({ manifests, togglePlugin, restartPending, clearRestartPending: () => setRestartPending(false) }),
+        [manifests, restartPending],
     );
 
     return (

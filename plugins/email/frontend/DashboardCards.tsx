@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Star, Sparkles } from "lucide-react";
-import { getInbox, getFlaggedEmails, setEmailFlag, getDigest, type EmailMeta, type DigestData } from "./api";
+import { getInbox, getUnreadCount, getFlaggedEmails, setEmailFlag, getDigest, type EmailMeta, type DigestData } from "./api";
 import { triggerAutomation } from "@core/api";
 import { senderName, formatDate } from "@core/utils/email";
 import { PRIORITY_ORDER, UrgencyBadge, toUrgencyLevel } from "@core/utils/urgency";
@@ -31,8 +31,8 @@ export function useEmailUnreadCount(): number {
         let cancelled = false;
         async function poll() {
             try {
-                const emails = await getInbox(200);
-                if (!cancelled) setCount(emails.filter(e => !e.read).length);
+                const n = await getUnreadCount();
+                if (!cancelled) setCount(n);
             } catch {
                 // ignore
             }

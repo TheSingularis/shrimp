@@ -282,6 +282,7 @@ async def list_plugins():
     for m in manifests:
         entry = dict(m)
         entry["enabled"] = plugins_cfg.get(m["id"], {}).get("enabled", True)
+        entry["has_backend"] = plugin_loader.get(m["id"]) is not None
         result.append(entry)
     return {"plugins": result}
 

@@ -10,6 +10,7 @@ declare global {
             onMaximizeChange: (cb: (maximized: boolean) => void) => () => void;
             getElectronPrefs: () => Promise<Record<string, unknown>>;
             setElectronPref: (key: string, value: unknown) => Promise<void>;
+            relaunch: () => void;
         };
         __shrimp__?: { isElectron: boolean };
     }

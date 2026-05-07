@@ -371,6 +371,24 @@ def _discover_special_folders() -> dict[str, str]:
         return {}
 
 
+def count_unread(folder: str = "INBOX") -> int:
+    """Count unread emails in a folder from cache without loading full metadata."""
+    norm = folder.upper()
+    count = 0
+    for p in _CACHE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            if not data.get("id"):
+                continue
+            if (data.get("folder") or "INBOX").upper() != norm:
+                continue
+            if not data.get("read"):
+                count += 1
+        except Exception:
+            pass
+    return count
+
+
 def list_emails(limit: int = 50) -> list[dict]:
     """Return cached emails newest-first (metadata only, no body)."""
     items: list[dict] = []

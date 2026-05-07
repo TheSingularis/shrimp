@@ -2,51 +2,41 @@
 
 ---
 
-## 🔌 Phase 1: Frontend Plugin Dynamic Loading
+## 🔌 Phase 1: Frontend Plugin Dynamic Loading ✅
 
 > **Goal**: Enable community plugins to register nav items, panels, and settings tabs at runtime.
 
 ### Current State
 - Backend plugin system is complete (`plugins/email/`, `plugins/news/`)
-- Frontend uses static imports in `App.tsx`
-- Only hardcoded core plugins have UI
+- Frontend plugin system fully implemented and smoke-tested
 
 ### Implementation Tasks
 
 #### 1.1 Plugin UI Registry
-- [ ] Define `PluginUI` interface in `frontend/src/plugins/types.ts`:
-  ```typescript
-  interface PluginUI {
-    id: string;
-    navItem?: { label: string; icon: React.ElementType };
-    panel?: React.ComponentType;
-    settingsTab?: React.ComponentType;
-    dashboardCards?: React.ComponentType[];
-  }
-  ```
-- [ ] Create plugin loader hook: `usePluginUI()` that discovers enabled plugins
-- [ ] Implement lazy loading via `import.meta.glob('plugins/*/frontend/*.tsx')`
+- [x] Define `PluginUI` interface in `frontend/src/plugins/types.ts`
+- [x] Create plugin loader hook: `usePluginUI()` that discovers enabled plugins
+- [x] Implement lazy loading via `import.meta.glob('plugins/*/frontend/*.tsx')`
 
 #### 1.2 Dynamic Navigation Rail
-- [ ] Refactor `App.tsx` nav rail to iterate over registered plugin nav items
-- [ ] Add plugin badge counts (e.g., email unread) as `BadgeCount` components
-- [ ] Ensure routing works for plugin panels (use dynamic route or conditional render)
+- [x] Refactor `App.tsx` nav rail to iterate over registered plugin nav items
+- [x] Add plugin badge counts (e.g., email unread) as per-plugin components
+- [x] Ensure routing works for plugin panels (conditional render)
 
 #### 1.3 Dynamic Settings Tabs
-- [ ] Refactor `SettingsModal` to accept `settingsTabs: PluginUI[]` prop
-- [ ] Render core tabs (Appearance, Models, Scopes) + plugin tabs
-- [ ] Add "Plugins" management tab (see below)
+- [x] Refactor `SettingsModal` to accept plugin settings sections
+- [x] Render core tabs (Appearance, Models, Scopes) + plugin tabs
+- [x] Add "Plugins" management tab
 
 #### 1.4 Dynamic Dashboard Cards
-- [ ] Refactor `DashboardHome` to accept `dashboardCards: React.ComponentType[]` prop
-- [ ] Remove hardcoded email sections; use plugin cards instead
-- [ ] Ensure card click navigation routes to plugin panel
+- [x] Refactor `DashboardHome` to accept `dashboardCards: React.ComponentType[]` prop
+- [x] Remove hardcoded email sections; use plugin cards instead
+- [x] Ensure card click navigation routes to plugin panel
 
 ### Acceptance Criteria
-- New plugin can add UI by exporting `pluginUI` object in `frontend/index.ts`
-- Frontend auto-discovers and renders plugin UI without code changes
-- Plugin enable/disable toggles hide/show UI components immediately
-- No runtime errors when loading disabled plugins
+- [x] New plugin can add UI by exporting default `ShrimpPluginFrontend` in `frontend/index.tsx`
+- [x] Frontend auto-discovers and renders plugin UI without code changes
+- [x] Plugin enable/disable toggles hide/show UI components immediately
+- [x] No runtime errors when loading disabled plugins
 
 ---
 
@@ -97,19 +87,16 @@ TODO.md (old) notes: *"Revisit Today's Focus / digest logic — sometimes shows 
 ### Implementation Tasks
 
 #### 3.1 Plugins Settings Tab
-- [ ] Add new tab to `SettingsModal`: "Plugins" (after Advanced)
-- [ ] List all discovered plugins with:
-  - Name, version, description
-  - Category badge (core vs community)
-  - Enable/disable toggle
-  - "Settings" button (opens plugin-specific config)
-- [ ] Fetch plugin list from `GET /api/plugins`
+- [x] Add new tab to `SettingsModal`: "Plugins" (after Advanced)
+- [x] List all discovered plugins with name, version, description, category, enable/disable toggle
+- [x] Fetch plugin list from `GET /api/plugins`
 
 #### 3.2 Plugin Enable/Disable Flow
-- [ ] POST `/api/plugins/{id}` with `{ enabled: false }`
-- [ ] Backend writes to `PLUGINS_CONFIG` in `config.py`
-- [ ] Show "Requires restart" banner if backend plugin was disabled
-- [ ] Frontend hides UI components immediately (no restart needed for frontend-only)
+- [x] PUT `/api/plugins/{id}` with `{ enabled: bool }`
+- [x] Backend writes to `PLUGINS_CONFIG` in `config.py`
+- [x] Show "Requires restart" banner when a backend plugin is toggled (Electron: full relaunch; browser: page reload)
+- [x] Frontend hides UI components immediately (no restart needed for frontend-only)
+- [x] `has_backend` field exposed on `/api/plugins` response so frontend knows which plugins need a restart
 
 #### 3.3 Community Plugin Directory (Future)
 - [ ] Define `~/.shrimp/plugins/` discovery directory
@@ -118,10 +105,10 @@ TODO.md (old) notes: *"Revisit Today's Focus / digest logic — sometimes shows 
 - [ ] Show install progress bar and success/error states
 
 ### Acceptance Criteria
-- User can enable/disable any plugin from Settings → Plugins
-- UI updates immediately when toggle is changed
-- Plugin config (credentials, schedules) persists in `config.py`
-- Clear messaging about restart requirements
+- [x] User can enable/disable any plugin from Settings → Plugins
+- [x] UI updates immediately when toggle is changed
+- [x] Plugin config persists in `config.py`
+- [x] Clear messaging about restart requirements
 
 ---
 
@@ -226,6 +213,8 @@ TODO.md (old) notes: *"Revisit Today's Focus / digest logic — sometimes shows 
 
 ## 📧 Email UX
 
+- [x] **Accurate unread badge count**: Badge and panel header now read from `/plugins/email/unread-count` (full cache scan, no limit) instead of filtering a page of loaded emails.
+- [x] **Email list pagination**: "Load more" button appends next 100 emails; previously emails beyond position 100 were cached but unreachable in the UI.
 - [ ] **Remember remote image senders**: When the user clicks "Load images" on an email, persist that sender's address to a whitelist so remote images load automatically for future emails from them.
 
 ---

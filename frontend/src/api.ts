@@ -667,6 +667,7 @@ export interface PluginManifest {
     description?: string;
     category?: string;
     enabled: boolean;
+    has_backend?: boolean;
 }
 
 export async function getPluginManifests(): Promise<PluginManifest[]> {

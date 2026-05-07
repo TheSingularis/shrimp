@@ -221,6 +221,11 @@ function createWindow() {
     else mainWindow.maximize();
   });
   ipcMain.on("window-close", () => mainWindow.close()); // close handler hides to tray
+  ipcMain.on("app:relaunch", () => {
+    app.isQuitting = true;
+    app.relaunch();
+    app.quit();
+  });
 
   ipcMain.handle("electron-prefs:get", () => readElectronPrefs());
   ipcMain.handle("electron-prefs:set", (_e, key, value) => {

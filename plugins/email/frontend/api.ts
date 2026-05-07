@@ -145,6 +145,12 @@ export async function sendEmail(params: {
 
 // ── Inbox / folders ───────────────────────────────────────────────────────────
 
+export async function getUnreadCount(folder = "INBOX"): Promise<number> {
+    const res = await fetch(`${EMAIL}/unread-count?folder=${encodeURIComponent(folder)}`);
+    if (!res.ok) throw new Error("Failed to get unread count");
+    return (await res.json()).count;
+}
+
 export async function getInbox(limit = 50, folder = "INBOX"): Promise<EmailMeta[]> {
     const res = await fetch(`${EMAIL}/inbox?limit=${limit}&folder=${encodeURIComponent(folder)}`);
     if (!res.ok) throw new Error("Failed to get inbox");

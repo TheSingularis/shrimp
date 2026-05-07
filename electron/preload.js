@@ -20,4 +20,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     getElectronPrefs: () => ipcRenderer.invoke('electron-prefs:get'),
     setElectronPref:  (key, value) => ipcRenderer.invoke('electron-prefs:set', key, value),
+    relaunch:         () => ipcRenderer.send('app:relaunch'),
 });

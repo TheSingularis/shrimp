@@ -205,6 +205,13 @@ async def send_email(req: SendEmailRequest):
 # ── Routes: inbox / folders ───────────────────────────────────────────────────
 
 
+@router.get("/unread-count")
+async def get_unread_count(folder: str = "INBOX"):
+    loop = asyncio.get_event_loop()
+    count = await loop.run_in_executor(None, email_client.count_unread, folder)
+    return {"count": count}
+
+
 @router.get("/inbox")
 async def get_inbox(limit: int = 50, folder: str = "INBOX"):
     loop = asyncio.get_event_loop()

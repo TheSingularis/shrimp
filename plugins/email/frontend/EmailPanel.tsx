@@ -8,7 +8,7 @@ function cleanTriageNote(note: string | undefined, maxLen = 90): string | undefi
     clean = clean.charAt(0).toUpperCase() + clean.slice(1);
     return clean.length > maxLen ? clean.slice(0, maxLen - 1) + "…" : clean;
 }
-import { getInbox, fetchInbox, fetchFolder, getFolders, searchEmails, getEmail, setEmailFlag, setEmailRead, archiveEmail, trashEmail, junkEmail, getTriageStatus, type EmailMeta, type EmailFull, type TriageStatus, type EmailFolder } from "./api";
+import { getInbox, getUnreadCount, fetchInbox, fetchFolder, getFolders, searchEmails, getEmail, setEmailFlag, setEmailRead, archiveEmail, trashEmail, junkEmail, getTriageStatus, type EmailMeta, type EmailFull, type TriageStatus, type EmailFolder } from "./api";
 import { EmailDetail } from "./EmailDetail";
 import { ComposeModal } from "./ComposeModal";
 import { senderName, relativeTime } from "@core/utils/email";
@@ -285,6 +285,9 @@ function loadCachedFolders(): EmailFolder[] {
 
 export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = {}) {
     const [emails, setEmails] = useState<EmailMeta[]>([]);
+    const [loadedLimit, setLoadedLimit] = useState(100);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedEmail, setSelectedEmail] = useState<EmailFull | null>(null);
     const [loading, setLoading] = useState(true);
@@ -354,7 +357,8 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         activeFolderRef.current = activeFolder;
         const folder = activeFolder;
         const activeRole = folders.find(f => f.display_name === folder)?.role ?? "folder";
-        refresh(folder, { reset: true }).then(() => {
+        setLoadedLimit(100);
+        refresh(folder, { reset: true, limit: 100 }).then(() => {
             // Auto-sync non-inbox folders on first visit when empty
             if (activeRole !== "inbox") {
                 setEmails(prev => {
@@ -405,22 +409,22 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
         return () => document.removeEventListener("scroll", handler, true);
     }, [contextMenu]);
 
-    async function refresh(folder = activeFolder, { reset = false } = {}) {
+    async function refresh(folder = activeFolder, { reset = false, limit }: { reset?: boolean; limit?: number } = {}) {
         if (reset) setLoading(true);
+        const fetchLimit = limit ?? loadedLimit;
         try {
-            const result = await getInbox(100, folder.toUpperCase());
+            const result = await getInbox(fetchLimit, folder.toUpperCase());
             if (activeFolderRef.current.toLowerCase() !== folder.toLowerCase()) return;
+            setHasMore(result.length === fetchLimit);
             if (reset) {
                 setEmails(result);
             } else {
                 setEmails(prev => {
                     const prevById = new Map(prev.map(e => [e.id, e]));
                     const newById = new Map(result.map(e => [e.id, e]));
-                    // Update existing rows in-place, remove deleted
                     const merged = prev
                         .filter(e => newById.has(e.id))
                         .map(e => ({ ...e, ...newById.get(e.id)! }));
-                    // Prepend genuine new arrivals (preserves order from server)
                     const added = result.filter(e => !prevById.has(e.id));
                     return added.length > 0 ? [...added, ...merged] : merged;
                 });
@@ -429,6 +433,21 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
             console.error(e);
         } finally {
             if (reset) setLoading(false);
+        }
+    }
+
+    async function handleLoadMore() {
+        setLoadingMore(true);
+        const nextLimit = loadedLimit + 100;
+        try {
+            const result = await getInbox(nextLimit, activeFolder.toUpperCase());
+            setHasMore(result.length === nextLimit);
+            setLoadedLimit(nextLimit);
+            setEmails(result);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingMore(false);
         }
     }
 
@@ -624,7 +643,14 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
     }
 
     const displayedEmails = searchResults ?? emails;
-    const unreadCount = emails.filter(e => !e.read).length;
+    const [totalUnread, setTotalUnread] = useState(0);
+    useEffect(() => {
+        if (activeFolder.toUpperCase() !== "INBOX") { setTotalUnread(0); return; }
+        getUnreadCount().then(setTotalUnread).catch(() => {});
+        const handler = () => getUnreadCount().then(setTotalUnread).catch(() => {});
+        window.addEventListener('email:read-changed', handler);
+        return () => window.removeEventListener('email:read-changed', handler);
+    }, [activeFolder, emails]);
 
     return (
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -694,9 +720,9 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                         <div className="flex items-center gap-2 px-3 py-2.5">
                             <span className="font-semibold text-sm flex-1">
                                 {activeFolder}
-                                {!searchResults && folders.find(f => f.display_name === activeFolder)?.role === "inbox" && unreadCount > 0 && (
+                                {!searchResults && folders.find(f => f.display_name === activeFolder)?.role === "inbox" && totalUnread > 0 && (
                                     <span className="font-normal text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
-                                        {unreadCount}
+                                        {totalUnread}
                                     </span>
                                 )}
                                 {searchResults && (
@@ -925,6 +951,18 @@ export function EmailPanel({ initialEmailId, onEmailOpened }: EmailPanelProps = 
                                         onContextMenu={handleContextMenu}
                                     />
                                 ))}
+                                {!searchResults && hasMore && (
+                                    <div style={{ padding: "0.75rem", borderTop: "1px solid var(--border)", textAlign: "center" }}>
+                                        <button
+                                            className="btn-ghost"
+                                            onClick={handleLoadMore}
+                                            disabled={loadingMore}
+                                            style={{ fontSize: "0.8rem" }}
+                                        >
+                                            {loadingMore ? "Loading…" : "Load more"}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
